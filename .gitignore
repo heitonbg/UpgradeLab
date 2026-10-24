@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+pc_upgrade.db
+.env
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
