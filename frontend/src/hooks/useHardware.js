@@ -4,6 +4,7 @@ import { getHardware } from '../api/hardware'
 export function useHardware() {
   const [cpus, setCpus] = useState([])
   const [gpus, setGpus] = useState([])
+  const [rams, setRams] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -15,6 +16,7 @@ export function useHardware() {
         if (!alive) return
         setCpus(data.filter((h) => h.type === 'CPU'))
         setGpus(data.filter((h) => h.type === 'GPU'))
+        setRams(data.filter((h) => h.type === 'RAM'))
         setError(null)
       })
       .catch((e) => alive && setError(e))
@@ -22,5 +24,5 @@ export function useHardware() {
     return () => { alive = false }
   }, [])
 
-  return { cpus, gpus, loading, error }
+  return { cpus, gpus, rams, loading, error }
 }

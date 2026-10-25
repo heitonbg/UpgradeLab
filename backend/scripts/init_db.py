@@ -66,9 +66,31 @@ def seed() -> None:
                         raw_score=raw_score,
                         normalized_score=_normalize(raw_score, lo, hi),
                         cores=item.get("cores"),
-                        avg_price=_generate_price(raw_score, hw_type) # <-- ГЕНЕРИРУЕМ ЦЕНУ
+                        avg_price=_generate_price(raw_score, hw_type),
+                        vram=item.get("vram"),
+                        socket=item.get("socket"),
                     )
                 )
+        
+        # Добавляем RAM
+        if "ram" in data:
+            ram_items = data["ram"]
+            if ram_items:
+                scores = [int(item["score"]) for item in ram_items]
+                lo, hi = min(scores), max(scores)
+                for item in ram_items:
+                    raw_score = int(item["score"])
+                    db.add(
+                        Hardware(
+                            type="RAM",
+                            name=item["name"],
+                            raw_score=raw_score,
+                            normalized_score=_normalize(raw_score, lo, hi),
+                            ram_type=item.get("type"),
+                            ram_capacity_gb=item.get("capacity_gb"),
+                            ram_channels=item.get("channels"),
+                        )
+                    )
         db.commit()
         total = db.query(Hardware).count()
         print(f"OK. Загружено записей Hardware: {total}")

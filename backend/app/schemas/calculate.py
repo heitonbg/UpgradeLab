@@ -16,6 +16,11 @@ class CalcMode(str, Enum):
     MODE_1080P_HIGH = "1080p_high"
     MODE_1440P_HIGH = "1440p_high"
 
+class AIOption(str, Enum):
+    OFF = "off"
+    LIGHT = "light"  # Stable Diffusion XL, локальные LLM 7B
+    HEAVY = "heavy"  # Training, большие LLM, ComfyUI
+
 class Bottleneck(str, Enum):
     CPU = "CPU"
     GPU = "GPU"
@@ -23,8 +28,13 @@ class Bottleneck(str, Enum):
 class CalculateRequest(BaseModel):
     cpu_id: int = Field(gt=0)
     gpu_id: int = Field(gt=0)
+    ram_id: int | None = Field(default=None, gt=0)
+    ram_manual: dict | None = Field(default=None)  # {type, capacity_gb, channels}
     game: GameName
     mode: CalcMode
+    budget: int | None = Field(default=None, ge=0)
+    ai_mode: AIOption = Field(default=AIOption.OFF)
+    sell_mode: str = Field(default="budget_only", pattern="^(budget_only|budget_plus_sell)$")
 
 class CalculateResponse(BaseModel):
     bottleneck: Bottleneck
@@ -32,6 +42,13 @@ class CalculateResponse(BaseModel):
     upgraded_fps: int
     recommendation: str
     avg_price: int
+    within_budget: bool = False
+    upgrade_component: str | None = None
+    ai_warning: str | None = None
+    current_component_price: int = 0
+    total_budget: int = 0
+    mode: str = "budget_only"
+    is_maxed_out: bool = False
 
 class AutodetectRequest(BaseModel):
     cpu_name: str

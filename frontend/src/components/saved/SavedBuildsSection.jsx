@@ -25,6 +25,16 @@ export function SavedBuildsSection({ builds, onClear }) {
               <div className="text-accent">
                 {b.current_fps} → {b.upgraded_fps} FPS ({b.bottleneck})
               </div>
+              {b.total_budget > 0 && (
+                <div className="text-xs text-gray-400 pt-1">
+                  Бюджет: {b.total_budget.toLocaleString('ru-RU')} ₽
+                  {b.current_component_price > 0 && (
+                    <span className="block text-gray-500">
+                      (+{b.current_component_price.toLocaleString('ru-RU')} ₽ от продажи)
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

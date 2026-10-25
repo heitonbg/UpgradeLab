@@ -8,7 +8,7 @@ import { SavedBuildsSection } from './components/saved/SavedBuildsSection'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('calculator');
-  const { cpus, gpus, loading: hwLoading, error: hwError } = useHardware()
+  const { cpus, gpus, rams, loading: hwLoading, error: hwError } = useHardware()
   const { listings, loading: lstLoading, error: lstError, add: addListing } = useListings()
   const { builds, save, clear } = useSavedBuilds()
 
@@ -42,6 +42,7 @@ export default function App() {
             <CalculatorSection
               cpus={cpus}
               gpus={gpus}
+              rams={rams}
               hardwareLoading={hwLoading}
               onFindOnMarketplace={() => setActiveTab('marketplace')}
               onSaveBuild={(result) => { if(result) save(result) }}

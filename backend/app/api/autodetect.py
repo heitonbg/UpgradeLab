@@ -31,18 +31,52 @@ def _find_gpu_by_renderer(db, raw_string: str) -> Hardware | None:
     clean = raw_string.lower()
     for junk in ["angle (", "direct3d11", "vs_5_0", "ps_5_0", "d3d11", "nvidia,", "amd,", "intel,", "opengl", "direct3d9ex"]:
         clean = clean.replace(junk, "")
+    
     stmt = select(Hardware).where(Hardware.type == "GPU")
     all_gpus = list(db.scalars(stmt))
+    
+    # Извлекаем ключевые паттерны из renderer
+    # Например: "NVIDIA GeForce RTX 3060/PCIe/SSE2" -> rtx, 3060
+    # "NVIDIA GeForce GTX 1050 Ti" -> gtx, 1050, ti
+    import re
+    model_numbers = re.findall(r'\d{3,4}', clean)  # Извлекаем числа типа 3060, 1050
+    model_suffixes = [w for w in clean.split() if w in ['ti', 'super', 'xt', 'se', 'fe', 'non-plus']]
+    
     best_match = None
-    max_matches = 0
-    words = [w for w in clean.split() if len(w) > 2]
+    best_score = 0
+    
     for gpu in all_gpus:
         gpu_name_lower = gpu.name.lower()
-        matches = sum(1 for w in words if w in gpu_name_lower)
-        if matches > max_matches:
-            max_matches = matches
+        score = 0
+        
+        # 1. Приоритет: точное совпадение модели (3060, 1050 Ti, etc.)
+        for num in model_numbers:
+            # Ищем число в названии GPU
+            gpu_nums = re.findall(r'\d{3,4}', gpu_name_lower)
+            for gn in gpu_nums:
+                if gn == num:
+                    score += 100  # Высокий приоритет за совпадение модели
+        
+        # 2. Суффиксы (Ti, Super, XT)
+        for suffix in model_suffixes:
+            if suffix in gpu_name_lower:
+                score += 50
+        
+        # 3. Общее совпадение слов
+        words = [w for w in clean.split() if len(w) > 2]
+        for word in words:
+            if word in gpu_name_lower:
+                score += 5
+        
+        # 4. Приоритет более длинных совпадений
+        if clean in gpu_name_lower:
+            score += 200
+        
+        if score > best_score:
+            best_score = score
             best_match = gpu
-    return best_match if max_matches >= 1 else None
+    
+    return best_match if best_score >= 50 else None
 
 @router.post("/detect-gpu", response_model=GpuDetectResponse)
 def detect_gpu(payload: GpuDetectRequest, db: DBSession):
