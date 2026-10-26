@@ -1,10 +1,44 @@
 @echo off
-title PC Info
-
-powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQAgAD0AIAAnAFMAaQBsAGUAbgB0AGwAeQBDAG8AbgB0AGkAbgB1AGUAJwAKACQAYwBwAHUAIAA9ACAARwBlAHQALQBDAGkAbQBJAG4AcwB0AGEAbgBjAGUAIABXAGkAbgAzADIAXwBQAHIAbwBjAGUAcwBzAG8AcgAKACQAZwBwAHUAIAA9ACAARwBlAHQALQBDAGkAbQBJAG4AcwB0AGEAbgBjAGUAIABXAGkAbgAzADIAXwBWAGkAZABlAG8AQwBvAG4AdAByAG8AbABsAGUAcgAKACQAbwBzACAAIAA9ACAARwBlAHQALQBDAGkAbQBJAG4AcwB0AGEAbgBjAGUAIABXAGkAbgAzADIAXwBPAHAAZQByAGEAdABpAG4AZwBTAHkAcwB0AGUAbQAKACQAdABvAHQAYQBsAEcAQgAgAD0AIABbAG0AYQB0AGgAXQA6ADoAUgBvAHUAbgBkACgAJABvAHMALgBUAG8AdABhAGwAVgBpAHMAaQBiAGwAZQBNAGUAbQBvAHIAeQBTAGkAegBlACAALwAgADEATQBCACwAIAAyACkACgAkAGYAcgBlAGUARwBCACAAIAA9ACAAWwBtAGEAdABoAF0AOgA6AFIAbwB1AG4AZAAoACQAbwBzAC4ARgByAGUAZQBQAGgAeQBzAGkAYwBhAGwATQBlAG0AbwByAHkAIAAvACAAMQBNAEIALAAgADIAKQAKACQAdQBzAGUAZABHAEIAIAAgAD0AIABbAG0AYQB0AGgAXQA6ADoAUgBvAHUAbgBkACgAJAB0AG8AdABhAGwARwBCACAALQAgACQAZgByAGUAZQBHAEIALAAgADIAKQAKACQAdQBzAGUAZABQAGMAdAAgAD0AIABbAG0AYQB0AGgAXQA6ADoAUgBvAHUAbgBkACgAKAAoACQAdABvAHQAYQBsAEcAQgAgAC0AIAAkAGYAcgBlAGUARwBCACkAIAAvACAAJAB0AG8AdABhAGwARwBCACkAIAAqACAAMQAwADAALAAgADEAKQAKACQAdABlAHgAdAAgAD0AIAAiAD0APQA9ACAAQwBQAFUAIAA9AD0APQBgAHIAYABuACIACgBmAG8AcgBlAGEAYwBoACAAKAAkAGMAIABpAG4AIAAkAGMAcAB1ACkAIAB7AAoAIAAgACQAdABlAHgAdAAgACsAPQAgACIAHAQ+BDQENQQ7BEwEOgAgACQAKAAkAGMALgBOAGEAbQBlACkAYAByAGAAbgAiAAoAIAAgACQAdABlAHgAdAAgACsAPQAgACIALwQ0BDUEQAQ6ACAAJAAoACQAYwAuAE4AdQBtAGIAZQByAE8AZgBDAG8AcgBlAHMAKQAsACAAPwQ+BEIEPgQ6BD4EMgQ6ACAAJAAoACQAYwAuAE4AdQBtAGIAZQByAE8AZgBMAG8AZwBpAGMAYQBsAFAAcgBvAGMAZQBzAHMAbwByAHMAKQBgAHIAYABuACIACgAgACAAJAB0AGUAeAB0ACAAKwA9ACAAIgAXBDAEMwRABEMENwQ6BDAEOgAgACQAKAAkAGMALgBMAG8AYQBkAFAAZQByAGMAZQBuAHQAYQBnAGUAKQAlAGAAcgBgAG4AYAByAGAAbgAiAAoAfQAKACQAdABlAHgAdAAgACsAPQAgACIAPQA9AD0AIAASBDgENAQ1BD4EOgQwBEAEQgQwBCAAPQA9AD0AYAByAGAAbgAiAAoAZgBvAHIAZQBhAGMAaAAgACgAJABnACAAaQBuACAAJABnAHAAdQApACAAewAKACAAIAAkAHQAZQB4AHQAIAArAD0AIAAiABwEPgQ0BDUEOwRMBDoAIAAkACgAJABnAC4ATgBhAG0AZQApAGAAcgBgAG4AIgAKACAAIAAkAHQAZQB4AHQAIAArAD0AIAAiABQEQAQwBDkEMgQ1BEAEOgAgACQAKAAkAGcALgBEAHIAaQB2AGUAcgBWAGUAcgBzAGkAbwBuACkAYAByAGAAbgAiAAoAIAAgACQAdABlAHgAdAAgACsAPQAgACIAIAQwBDcEQAQ1BEgENQQ9BDgENQQ6ACAAJAAoACQAZwAuAFYAaQBkAGUAbwBNAG8AZABlAEQAZQBzAGMAcgBpAHAAdABpAG8AbgApAGAAcgBgAG4AYAByAGAAbgAiAAoAfQAKACQAdABlAHgAdAAgACsAPQAgACIAPQA9AD0AIAAeBD8ENQRABDAEQgQ4BDIEPQQwBE8EIAA/BDAEPARPBEIETAQgAD0APQA9AGAAcgBgAG4AIgAKACQAdABlAHgAdAAgACsAPQAgACIAEgRBBDUEMwQ+BDoAIAAkAHQAbwB0AGEAbABHAEIAIABHAEIAYAByAGAAbgAiAAoAJAB0AGUAeAB0ACAAKwA9ACAAIgAYBEEEPwQ+BDsETAQ3BD4EMgQwBD0EPgQ6ACAAJAB1AHMAZQBkAEcAQgAgAEcAQgAgACgAJAB1AHMAZQBkAFAAYwB0ACUAKQBgAHIAYABuACIACgAkAHQAZQB4AHQAIAArAD0AIAAiACEEMgQ+BDEEPgQ0BD0EPgQ6ACAAJABmAHIAZQBlAEcAQgAgAEcAQgBgAHIAYABuACIACgAkAHQAZQB4AHQAIAB8ACAAUwBlAHQALQBDAGwAaQBwAGIAbwBhAHIAZAAKAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAkAHQAZQB4AHQACgA=
-
-echo.
-echo ============================================
-echo  Информация скопирована в буфер обмена!
-echo ============================================
+setlocal
+title UpgradeLab - Hardware report
+set "UPGRADELAB_SCRIPT=%~f0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$content = Get-Content -LiteralPath $env:UPGRADELAB_SCRIPT -Raw; & ([scriptblock]::Create(($content -split ('#' + ' POWERSHELL'), 2)[1]))"
+if errorlevel 1 echo Could not create the report. Please select your hardware manually.
 pause
+exit /b
+# POWERSHELL
+$ErrorActionPreference = 'Stop'
+try {
+    $cpus = @(Get-CimInstance Win32_Processor | ForEach-Object { @{ name = $_.Name.Trim(); cores = $_.NumberOfCores } })
+    $gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object { @{ name = $_.Name.Trim() } })
+    $memoryModules = @(Get-CimInstance Win32_PhysicalMemory)
+    $modules = @($memoryModules | ForEach-Object {
+        $typeCode = if ($_.SMBIOSMemoryType) { [int]$_.SMBIOSMemoryType } else { [int]$_.MemoryType }
+        $type = switch ($typeCode) { 24 { 'DDR3' } 26 { 'DDR4' } 34 { 'DDR5' } default { $null } }
+        @{ capacity_gb = [math]::Round($_.Capacity / 1GB, 2); type = $type; speed_mhz = $_.ConfiguredClockSpeed }
+    })
+    $knownTypes = @($modules | ForEach-Object { $_.type } | Where-Object { $_ } | Select-Object -Unique)
+    $memoryType = if ($knownTypes.Count -eq 1 -and @($modules | Where-Object { -not $_.type }).Count -eq 0) { $knownTypes[0] } else { $null }
+    $report = @{
+        version = 2
+        cpus = $cpus
+        gpus = $gpus
+        memory = @{
+            capacity_gb = [math]::Round(($memoryModules | Measure-Object Capacity -Sum).Sum / 1GB, 2)
+            type = $memoryType
+            channels = $null
+            module_count = $modules.Count
+            modules = $modules
+        }
+    }
+    $json = $report | ConvertTo-Json -Depth 6
+    $folder = Split-Path -Parent $env:UPGRADELAB_SCRIPT
+    $outputPath = Join-Path $folder 'UpgradeLab-hardware.json'
+    [System.IO.File]::WriteAllText($outputPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host 'Report saved:' $outputPath
+    Write-Host 'Return to UpgradeLab and upload the JSON file.'
+    Write-Host 'Only hardware models and memory parameters are collected. No data is sent over the network.'
+} catch {
+    Write-Error $_
+    exit 1
+}

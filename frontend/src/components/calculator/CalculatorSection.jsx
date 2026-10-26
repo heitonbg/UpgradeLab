@@ -11,7 +11,7 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const handleCalculate = async ({ cpuId, gpuId, ramId, game, mode, budget, aiMode, sellMode, manualCpu, manualGpu }) => {
+  const handleCalculate = async ({ cpuId, gpuId, ramId, ramManual, game, mode, budget, aiMode, sellMode, manualCpu, manualGpu }) => {
     setLoading(true)
     setError(null)
     try {
@@ -45,30 +45,38 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         setLoading(false)
         return
       }
+      if (!finalCpuId || !finalGpuId) {
+        setError('Модель не найдена в каталоге. Выберите комплектующие из списка.')
+        return
+      }
 
-      const data = await calculateUpgrade({
+      const payload = {
         cpu_id: finalCpuId,
         gpu_id: finalGpuId,
         ram_id: ramId,
+        ram_manual: ramManual,
         game,
         mode,
         budget,
         ai_mode: aiMode,
         sell_mode: sellMode,
-      })
+      }
+      const data = await calculateUpgrade(payload)
       const cpu = cpus.find((c) => c.id === finalCpuId)
       const gpu = gpus.find((g) => g.id === finalGpuId)
-      const ram = rams.find((r) => r.id === ramId)
+      const ram = rams.find((r) => r.id === Number(ramId))
       
       setResult({
         ...data,
+        config: payload,
+        budget,
         cpuName: cpu?.name ?? manualCpu ?? 'CPU',
         gpuName: gpu?.name ?? manualGpu ?? 'GPU',
         cpuSocket: cpu?.socket,
-        ramType: ram?.ram_type,
-        ramCapacity: ram?.ram_capacity_gb,
+        ramType: ram?.ram_type ?? ramManual?.type,
+        ramCapacity: ram?.ram_capacity_gb ?? ramManual?.capacity_gb,
         game,
-        mode,
+        graphicsMode: mode,
       })
     } catch (e) {
       setError(e.message ?? 'Не удалось рассчитать')
@@ -80,8 +88,6 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
 
   return (
     <section className="space-y-6">
-      <h2 className="text-lg font-medium text-accent">Калькулятор апгрейда</h2>
-
       {hardwareLoading ? (
         <Spinner label="Загружаю комплектующие..." />
       ) : (

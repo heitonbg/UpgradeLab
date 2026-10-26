@@ -4,10 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        dark: '#0e0f12',
-        card: '#16181d',
-        accent: '#7cf5a8',
-        border: '#23262d',
+        dark: '#101114',
+        card: '#181a1f',
+        accent: '#e9bc78',
+        border: '#30333b',
       },
     },
   },

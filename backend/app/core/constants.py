@@ -42,6 +42,3 @@ GAME_PROFILES = {
         CalcMode.MODE_1440P_HIGH: {"cpu": 0.006, "gpu": 0.004, "overhead": 0.95},
     },
 }
-
-UPGRADE_GAIN = 1.35
-MOCK_AVG_PRICE_RUB = 7000

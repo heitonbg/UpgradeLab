@@ -8,8 +8,8 @@ export function Button({
     'transition disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none ' +
     'focus:ring-2 focus:ring-accent/40'
   const variants = {
-    primary: 'bg-accent text-black hover:opacity-90',
-    secondary: 'bg-card text-gray-200 border border-border hover:bg-border/50',
+    primary: 'primary-btn',
+    secondary: 'secondary-btn',
     ghost: 'text-gray-300 hover:text-white',
     danger: 'text-red-400 hover:text-red-300',
   }

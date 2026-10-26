@@ -18,6 +18,5 @@ def create(db: Session, payload: ListingCreate) -> Listing:
         description=payload.description,
     )
     db.add(listing)
-    db.commit()
-    db.refresh(listing)
+    db.flush()
     return listing

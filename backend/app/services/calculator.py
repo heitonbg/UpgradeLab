@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from app.core.constants import GAME_PROFILES, MOCK_AVG_PRICE_RUB
+from app.core.constants import GAME_PROFILES
 from app.schemas.calculate import AIOption, Bottleneck, CalcMode, GameName
 
 
@@ -17,6 +17,7 @@ class CalculateResult:
     total_budget: int = 0
     mode: str = "budget_only"
     is_maxed_out: bool = False
+    upgrade_id: int | None = None
 
 
 def calculate(
@@ -42,16 +43,6 @@ def calculate(
 ) -> CalculateResult:
     profile = GAME_PROFILES[game][mode]
 
-    # 1. Считаем потолок FPS для каждого компонента
-    cpu_cap = cpu_raw * profile["cpu"]
-    gpu_cap = gpu_raw * profile["gpu"]
-
-    # 2. Определяем ограничитель
-    bottleneck = Bottleneck.CPU if cpu_cap < gpu_cap else Bottleneck.GPU
-    limiting = min(cpu_cap, gpu_cap)
-
-    current_fps = max(1, round(limiting * profile["overhead"]))
-
     # 2.5. Учитываем влияние RAM на производительность
     ram_boost = 1.0
     if ram_type and ram_channels:
@@ -67,7 +58,11 @@ def calculate(
         elif ram_type == "DDR3":
             ram_boost -= 0.05  # DDR3 замедляет современные системы
     
-    current_fps = round(current_fps * ram_boost)
+    # Memory affects CPU throughput; it must not increase a GPU-limited result.
+    cpu_cap = cpu_raw * profile["cpu"] * ram_boost
+    gpu_cap = gpu_raw * profile["gpu"]
+    bottleneck = Bottleneck.CPU if cpu_cap < gpu_cap else Bottleneck.GPU
+    current_fps = max(1, round(min(cpu_cap, gpu_cap) * profile["overhead"]))
 
     # 2.6. Расчёт общего бюджета (продажа + бюджет)
     effective_budget = budget or 0
@@ -84,35 +79,26 @@ def calculate(
     else:
         total_budget = effective_budget
 
-    # 3. Проверка на "топовое железо" по сырым баллам PassMark
-    # Топовый игровой CPU (9950X3D) ~ 70 000; Топовая GPU (5090) ~ 45 000
-    is_cpu_maxed = cpu_raw > 45000
-    is_gpu_maxed = gpu_raw > 35000
-    
-    is_maxed_out = is_cpu_maxed and is_gpu_maxed
-    
-    if is_maxed_out:
-        upgrade_gain = 1.05  # Прирост будет минимальным
-    else:
-        upgrade_gain = 1.35  # Стандартный прирост 35%
-
-    upgraded_fps = max(current_fps + 1, round(current_fps * upgrade_gain))
+    compatible_cpus = [c for c in (all_cpus or []) if c.get("raw_score", 0) > cpu_raw
+                       and cpu_socket and "BGA" not in cpu_socket.upper() and c.get("socket") == cpu_socket]
+    better_gpus = [g for g in (all_gpus or []) if g.get("raw_score", 0) > gpu_raw]
+    is_maxed_out = not compatible_cpus and not better_gpus
+    upgraded_fps = current_fps
 
     # 4. Формируем умные рекомендации
     if is_maxed_out:
         rec = (
-            f"У вас установлены топовые комплектующие. В игре {game.value} ({mode.value}) "
-            f"система упирается в программные ограничения движка. "
-            f"Дальнейший апгрейд железа не даст ощутимого прироста FPS."
+            f"Для игры {game.value} ({mode.value}) в текущем каталоге нет более быстрых "
+            f"комплектующих, подходящих для этой сборки."
         )
     elif bottleneck is Bottleneck.CPU:
-        diff = round((gpu_cap - cpu_cap) / gpu_cap * 100)
+        diff = round((gpu_cap - cpu_cap) / max(gpu_cap, 1) * 100)
         rec = (
             f"В режиме «{mode.value}» для игры {game.value} процессор ограничивает "
             f"видеокарту на {diff}%. Чтобы поднять FPS, обновите CPU."
         )
     else:
-        diff = round((cpu_cap - gpu_cap) / cpu_cap * 100)
+        diff = round((cpu_cap - gpu_cap) / max(cpu_cap, 1) * 100)
         rec = (
             f"В режиме «{mode.value}» для игры {game.value} видеокарта упирается в свой потолок "
             f"(отставание от CPU: {diff}%). Апгрейд GPU даст больший прирост."
@@ -173,70 +159,70 @@ def calculate(
     # 6. Поиск апгрейда в рамках бюджета
     within_budget = False
     upgrade_component = None
-    upgrade_socket_mismatch = False
+    upgrade_id = None
     
     # Используем total_budget если sell_mode = budget_plus_sell
     search_budget = total_budget if sell_mode == "budget_plus_sell" else effective_budget
+    has_budget_limit = budget is not None or sell_mode == "budget_plus_sell"
     
-    if search_budget and search_budget > 0 and not is_maxed_out:
+    if not is_maxed_out:
         if bottleneck is Bottleneck.CPU and all_cpus:
-            # Ищем CPU с лучшим баллом, который вписывается в бюджет И совместим по сокету
-            for cpu in all_cpus:
-                if cpu["raw_score"] <= cpu_raw:
-                    continue
-                price = cpu.get("avg_price", 0) or 0
-                if price <= search_budget:
-                    # Проверяем совместимость сокета
-                    if cpu_socket and cpu.get("socket") and cpu["socket"] != cpu_socket:
-                        upgrade_socket_mismatch = True
-                    upgrade_component = f"{cpu['name']} ({price:,} ₽)"
-                    within_budget = True
-                    break
+            candidates = compatible_cpus
+            if has_budget_limit:
+                candidates = [c for c in candidates if c.get("avg_price") and c["avg_price"] <= search_budget]
+            def cpu_fps(item):
+                return round(min(item["raw_score"] * profile["cpu"] * ram_boost, gpu_cap) * profile["overhead"])
+            candidates = [c for c in candidates if cpu_fps(c) > current_fps]
+            if candidates:
+                chosen = max(candidates, key=lambda c: (cpu_fps(c), -(c.get("avg_price") or float("inf")), -c["raw_score"]))
+                upgrade_id = chosen.get("id")
+                upgraded_fps = max(current_fps, round(min(chosen["raw_score"] * profile["cpu"] * ram_boost, gpu_cap) * profile["overhead"]))
+                upgrade_component = chosen['name'] + (f" ({chosen['avg_price']:,} ₽)" if chosen.get('avg_price') else " (цена неизвестна)")
+                within_budget = has_budget_limit
         elif bottleneck is Bottleneck.GPU and all_gpus:
-            for gpu in all_gpus:
-                if gpu["raw_score"] <= gpu_raw:
-                    continue
-                price = gpu.get("avg_price", 0) or 0
-                if price <= search_budget:
-                    upgrade_component = f"{gpu['name']} ({price:,} ₽)"
-                    within_budget = True
-                    break
+            candidates = better_gpus
+            if has_budget_limit:
+                candidates = [g for g in candidates if g.get("avg_price") and g["avg_price"] <= search_budget]
+            def gpu_fps(item):
+                return round(min(cpu_cap, item["raw_score"] * profile["gpu"]) * profile["overhead"])
+            candidates = [g for g in candidates if gpu_fps(g) > current_fps]
+            if candidates:
+                chosen = max(candidates, key=lambda g: (gpu_fps(g), -(g.get("avg_price") or float("inf")), -g["raw_score"]))
+                upgrade_id = chosen.get("id")
+                upgraded_fps = max(current_fps, round(min(cpu_cap, chosen["raw_score"] * profile["gpu"]) * profile["overhead"]))
+                upgrade_component = chosen['name'] + (f" ({chosen['avg_price']:,} ₽)" if chosen.get('avg_price') else " (цена неизвестна)")
+                within_budget = has_budget_limit
         
         if upgrade_component:
+            rec += f" Рекомендуемый апгрейд: {upgrade_component}."
+        elif has_budget_limit:
             if bottleneck is Bottleneck.CPU:
-                rec += f" Рекомендуемый апгрейд: {upgrade_component}."
-                if upgrade_socket_mismatch:
-                    rec += " ⚠️ Внимание: новый CPU требует другую материнскую плату (несовместимый сокет)!"
-            else:
-                rec += f" Рекомендуемый апгрейд: {upgrade_component}."
-        else:
-            if bottleneck is Bottleneck.CPU:
-                better_cpus = [c for c in all_cpus if c.get('raw_score', 0) > cpu_raw]
-                if better_cpus:
-                    min_price = min((c.get('avg_price', 0) or 99999) for c in better_cpus)
+                priced = [c["avg_price"] for c in compatible_cpus if c.get("avg_price")]
+                if priced:
+                    min_price = min(priced)
                     rec += f" Рекомендуемые CPU начинаются от ~{min_price:,} ₽. Ваш бюджет нужно увеличить."
                 else:
-                    rec += " Все улучшенные CPU дороже вашего бюджета."
+                    rec += " Нет совместимого CPU с подтверждённой ценой в этом бюджете."
             else:
-                better_gpus = [g for g in all_gpus if g.get('raw_score', 0) > gpu_raw]
-                if better_gpus:
-                    min_price = min((g.get('avg_price', 0) or 99999) for g in better_gpus)
+                priced = [g["avg_price"] for g in better_gpus if g.get("avg_price")]
+                if priced:
+                    min_price = min(priced)
                     rec += f" Рекомендуемые GPU начинаются от ~{min_price:,} ₽. Ваш бюджет нужно увеличить."
                 else:
-                    rec += " Все улучшенные GPU дороже вашего бюджета."
+                    rec += " Нет более быстрой GPU с подтверждённой ценой в этом бюджете."
         
         # Рекомендация по RAM
-        if ram_type and ram_type != "DDR5" and ram_channels == 1:
-            rec += " 💡 Переход на DDR5 + двухканальный режим может дать +10-15% FPS в играх."
-        elif ram_type and ram_type == "DDR3":
-            rec += " 💡 DDR3 сильно ограничивает современные CPU. Рекомендуется DDR4/DDR5."
+        if ram_type and ram_channels == 1:
+            rec += " Проверьте возможность двухканального режима RAM на вашей плате."
+        if ram_type == "DDR3":
+            rec += " Замена памяти на DDR4/DDR5 может потребовать новую материнскую плату."
 
     return CalculateResult(
         bottleneck=bottleneck,
         current_fps=current_fps,
         upgraded_fps=upgraded_fps,
         recommendation=rec,
-        avg_price=MOCK_AVG_PRICE_RUB,
+        avg_price=(min((c.get("avg_price") for c in (compatible_cpus if bottleneck is Bottleneck.CPU else better_gpus) if c.get("avg_price")), default=0)),
         within_budget=within_budget,
         upgrade_component=upgrade_component,
         ai_warning=ai_warning,
@@ -244,4 +230,5 @@ def calculate(
         total_budget=total_budget,
         mode=sell_mode,
         is_maxed_out=is_maxed_out,
+        upgrade_id=upgrade_id,
     )

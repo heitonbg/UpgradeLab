@@ -1,429 +1,68 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '../ui/Button'
-import { Select } from '../ui/Select'
+import { HardwareSearch } from '../ui/HardwareSearch'
 import { Modal } from '../ui/Modal'
 import { GAMES, MODES } from '../../constants/game'
 import { AutoDetectButton } from '../AutoDetectButton'
+import { matchHardware, parseSystemReport } from '../../lib/hardware'
 
-export function CalculatorForm({ cpus, gpus, rams, onSubmit, loading }) {
-  const [cpuId, setCpuId] = useState('')
-  const [gpuId, setGpuId] = useState('')
-  const [ramId, setRamId] = useState('')
+export function CalculatorForm({ cpus, gpus, onSubmit, loading }) {
+  const [cpuId, setCpuId] = useState(null)
+  const [gpuId, setGpuId] = useState(null)
+  const [memory, setMemory] = useState({ capacity_gb: '', type: '', channels: '' })
   const [game, setGame] = useState(GAMES[0].value)
-  const [mode, setMode] = useState(MODES[0].value) // 1080p Low по умолчанию
+  const [mode, setMode] = useState(MODES[0].value)
   const [budget, setBudget] = useState('')
-  const [aiMode, setAiMode] = useState('off') // off, light, heavy
-  const [sellMode, setSellMode] = useState('budget_only') // budget_only, budget_plus_sell
-  const [manualInput, setManualInput] = useState(false) // Режим ручного ввода
-  const [manualCpu, setManualCpu] = useState('')
-  const [manualGpu, setManualGpu] = useState('')
-  const [showScriptPaste, setShowScriptPaste] = useState(false)
-  const [scriptText, setScriptText] = useState('')
-  const [scriptError, setScriptError] = useState('')
-  const [manualRamGb, setManualRamGb] = useState('16')
-  const [manualRamType, setManualRamType] = useState('DDR4')
-  const [manualRamChannels, setManualRamChannels] = useState('2')
+  const [aiMode, setAiMode] = useState('off')
+  const [sellMode, setSellMode] = useState('budget_only')
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [error, setError] = useState('')
+  const [importInfo, setImportInfo] = useState('')
+  const fileInput = useRef(null)
 
-  // Автоопределение RAM по ручному вводу
-  const manualRamMatch = rams.find(r => 
-    r.ram_capacity_gb === parseInt(manualRamGb) &&
-    r.ram_type === manualRamType &&
-    r.ram_channels === parseInt(manualRamChannels)
-  )
-
-  const handleAutoDetect = (detectedCpu, detectedGpu) => {
-    if (detectedCpu) setCpuId(String(detectedCpu));
-    if (detectedGpu) setGpuId(String(detectedGpu));
-  };
-
-  const parseScriptOutput = () => {
-    setScriptError('')
+  function importReport(raw) {
     try {
-      let foundCpu = null
-      let foundGpu = null
-      let foundRam = null
-      let currentSection = null
-      let currentModel = ''
-
-      const lines = scriptText.split('\n')
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim()
-        
-        // Определяем разделы (=== CPU ===, === Видеокарта ===, и т.д.)
-        if (line.match(/^={3,}\s*(CPU|Процессор|Процессор:|Процессор)\s*={3,}$/i)) {
-          currentSection = 'cpu'
-          currentModel = ''
-          continue
-        }
-        if (line.match(/^={3,}\s*(GPU|Видеокарта|Видеокарта:|Видеокарта)\s*={3,}$/i)) {
-          currentSection = 'gpu'
-          currentModel = ''
-          continue
-        }
-        if (line.match(/^={3,}\s*(RAM|ОЗУ|Оперативная\s+память|Оперативная\s+память:)\s*={3,}$/i)) {
-          currentSection = 'ram'
-          currentModel = ''
-          continue
-        }
-        
-        // Пропускаем пустые строки и разделители
-        if (!line || line.match(/^={3,}$/)) {
-          continue
-        }
-        
-        // Парсим в зависимости от текущего раздела
-        if (currentSection === 'cpu' && line.match(/^(Модель|Model|CPU|Процессор)\s*:/i)) {
-          const cpuName = line.replace(/^(Модель|Model|CPU|Процессор)\s*:/i, '').trim()
-          // Убираем лишние символы типа (tm), (r)
-          const cleanCpuName = cpuName.replace(/\(tm\)|\(r\)|\*|™|®/gi, '').trim()
-          foundCpu = cpus.find(c => 
-            c.name.toLowerCase().includes(cleanCpuName.toLowerCase()) ||
-            cleanCpuName.toLowerCase().includes(c.name.toLowerCase()) ||
-            c.name.toLowerCase().includes(cpuName.toLowerCase())
-          )
-          // Если не нашли точное совпадение, ищем по базовому названию (без FX, Ryzen и т.д.)
-          if (!foundCpu) {
-            const baseName = cleanCpuName.replace(/^[A-Z\s]+\s*/i, '').trim()
-            foundCpu = cpus.find(c => 
-              c.name.toLowerCase().includes(baseName.toLowerCase()) ||
-              baseName.toLowerCase().includes(c.name.toLowerCase())
-            )
-          }
-        }
-        
-        if (currentSection === 'gpu' && line.match(/^(Модель|Model|GPU|Видеокарта)\s*:/i)) {
-          const gpuName = line.replace(/^(Модель|Model|GPU|Видеокарта)\s*:/i, '').trim()
-          foundGpu = gpus.find(g => 
-            g.name.toLowerCase().includes(gpuName.toLowerCase()) ||
-            gpuName.toLowerCase().includes(g.name.toLowerCase())
-          )
-        }
-        
-        if (currentSection === 'ram' && line.match(/^(Всего|Total|Объём|Объем)\s*:/i)) {
-          const ramLine = line.replace(/^(Всего|Total|Объём|Объем)\s*:/i, '').trim()
-          // Формат: "7.96 GB" или "7.96 ГБ" или "8 ГБ"
-          let ramMatch = ramLine.match(/([\d.]+)\s*(ГБ|GB|GB)\b/i)
-          if (ramMatch) {
-            const capacity = Math.round(parseFloat(ramMatch[1]))
-            // Ищем ближайший объём (с погрешностью ±2 ГБ)
-            foundRam = rams.find(r => 
-              Math.abs(r.ram_capacity_gb - capacity) <= 2
-            )
-            // Если не нашли с погрешностью, ищем точное совпадение
-            if (!foundRam) {
-              foundRam = rams.find(r => r.ram_capacity_gb === capacity)
-            }
-          }
-        }
-      }
-
-      if (foundCpu) setCpuId(String(foundCpu.id))
-      if (foundGpu) setGpuId(String(foundGpu.id))
-      if (foundRam) setRamId(String(foundRam.id))
-      
-      if (!foundCpu || !foundGpu) {
-        let missing = []
-        if (!foundCpu) missing.push('CPU')
-        if (!foundGpu) missing.push('GPU')
-        setScriptError(`Не удалось определить: ${missing.join(', ')}. Проверьте формат данных.`)
-        return
-      }
-      
-      setShowScriptPaste(false)
-      setScriptText('')
-      
-      let message = `✅ Определено:\n`
-      message += `🔹 CPU: ${foundCpu.name}\n`
-      message += `🔹 GPU: ${foundGpu.name}`
-      if (foundRam) {
-        message += `\n🔹 RAM: ${foundRam.name}`
-      }
-      alert(message)
-    } catch (e) {
-      setScriptError('Ошибка парсинга: ' + e.message)
-    }
+      const report = parseSystemReport(raw)
+      const cpu = report.cpus.map(c=>matchHardware(cpus, c.name)).find(Boolean)
+      const gpu = report.gpus.map(g=>matchHardware(gpus, g.name)).find(Boolean)
+      // Clear prior values: an unrecognized model must not leave an old choice.
+      setCpuId(cpu?.id ?? null)
+      setGpuId(gpu?.id ?? null)
+      const mem = report.memory || {}
+      const capacity = Number(mem.capacity_gb)
+      setMemory({ capacity_gb: Number.isFinite(capacity) && capacity >= 2 && capacity <= 512 ? capacity : '', type: ['DDR3','DDR4','DDR5'].includes(mem.type) ? mem.type : '', channels: [1,2].includes(Number(mem.channels)) ? Number(mem.channels) : '' })
+      const parts = [cpu ? `CPU: ${cpu.name}` : `CPU: ${report.cpus[0]?.name || 'не определён'} — выберите модель`, gpu ? `GPU: ${gpu.name}` : `GPU: ${report.gpus.map(g=>g.name).join(', ') || 'не определён'} — выберите модель`]
+      if (capacity >= 2) parts.push(`RAM: ${capacity} ГБ${mem.type ? ` ${mem.type}` : ''}. Канальный режим проверьте самостоятельно.`)
+      setImportInfo(parts.join('\n'))
+      setError('');setPasteOpen(false);setText('')
+    } catch (e) { setError(e.message || 'Не удалось прочитать отчёт.') }
   }
 
-  const canSubmit = (manualInput ? (manualCpu && manualGpu) : (cpuId && gpuId)) && !loading
+  async function importFile(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (file.size > 100000) { setError('Слишком большой файл. Выберите отчёт UpgradeLab до 100 КБ.'); return }
+    try { importReport(await file.text()) } catch { setError('Не удалось прочитать файл.') }
+    event.target.value = ''
+  }
 
-  return (
-    <div className="space-y-5">
-      <AutoDetectButton cpus={cpus} gpus={gpus} onDetect={handleAutoDetect} />
+  function submit(event) {
+    event.preventDefault()
+    if (!cpuId || !gpuId || loading) return
+    onSubmit({ cpuId, gpuId, ramId: null, ramManual: memory.capacity_gb ? { capacity_gb: Number(memory.capacity_gb), type: memory.type || null, channels: memory.channels ? Number(memory.channels) : null } : null, game, mode, budget: budget === '' ? null : Number(budget), aiMode, sellMode })
+  }
 
-      {/* Кнопки загрузки данных */}
-      <div className="flex gap-2">
-        <a
-          href="/scripts/run.bat"
-          download="run.bat"
-          className="flex-1 px-3 py-2 rounded-md text-xs font-medium bg-card border border-border text-gray-400 hover:text-white hover:border-accent/30 transition text-center"
-        >
-          📥 Скачать скрипт (Windows)
-        </a>
-        <button
-          onClick={() => setShowScriptPaste(true)}
-          className="flex-1 px-3 py-2 rounded-md text-xs font-medium bg-card border border-border text-gray-400 hover:text-white hover:border-accent/30 transition"
-        >
-          📋 Вставить из скрипта
-        </button>
-        <button
-          onClick={() => {
-            setManualInput(!manualInput)
-            setScriptText('')
-          }}
-          className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition ${
-            manualInput
-              ? 'bg-accent text-black'
-              : 'bg-card border border-border text-gray-400 hover:text-white hover:border-accent/30'
-          }`}
-        >
-          {manualInput ? 'Выбор из списка' : 'Ввести вручную'}
-        </button>
-      </div>
-
-      {manualInput ? (
-        <div className="space-y-4 animate-fade-in">
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Процессор (название)</label>
-            <input
-              type="text"
-              value={manualCpu}
-              onChange={(e) => setManualCpu(e.target.value)}
-              placeholder="Например: AMD Ryzen 5 3600"
-              className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Видеокарта (название)</label>
-            <input
-              type="text"
-              value={manualGpu}
-              onChange={(e) => setManualGpu(e.target.value)}
-              placeholder="Например: NVIDIA GeForce RTX 3060 12GB"
-              className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-            />
-          </div>
-          <p className="text-xs text-gray-500">
-            ⚠️ Для точного расчёта лучше выбрать из списка
-          </p>
-        </div>
-      ) : (
-        <form
-        className="space-y-6"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (!canSubmit) return
-          const b = Number(budget)
-          if (manualInput) {
-            if (!manualCpu || !manualGpu) {
-              alert('Заполните оба поля')
-              return
-            }
-            onSubmit({ 
-              manualCpu,
-              manualGpu,
-              game, 
-              mode, 
-              budget: b > 0 ? b : null, 
-              aiMode,
-              sellMode,
-            })
-          } else {
-            onSubmit({ 
-              cpuId: Number(cpuId), 
-              gpuId: Number(gpuId),
-              ramId: ramId || manualRamMatch?.id || null,
-              ramManual: !ramId ? {
-                type: manualRamType,
-                capacity_gb: parseInt(manualRamGb),
-                channels: parseInt(manualRamChannels),
-              } : null,
-              game, 
-              mode, 
-              budget: b > 0 ? b : null, 
-              aiMode,
-              sellMode,
-            })
-          }
-        }}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Процессор (CPU)"
-            value={cpuId}
-            onChange={(e) => setCpuId(e.target.value)}
-            placeholder="— выберите CPU —"
-            options={cpus.map((c) => ({ value: c.id, label: c.name }))}
-          />
-          <Select
-            label="Видеокарта (GPU)"
-            value={gpuId}
-            onChange={(e) => setGpuId(e.target.value)}
-            placeholder="— выберите GPU —"
-            options={gpus.map((g) => ({ value: g.id, label: g.name }))}
-          />
-        </div>
-
-        <Select
-          label="Оперативная память (RAM)"
-          value={ramId}
-          onChange={(e) => setRamId(e.target.value)}
-          placeholder="— выберите RAM —"
-          options={rams.map((r) => ({ 
-            value: r.id, 
-            label: `${r.name} (${r.ram_capacity_gb} ГБ ${r.ram_type}, ${r.ram_channels === 2 ? '2ch' : '1ch'})` 
-          }))}
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Игра</label>
-            <select
-              value={game}
-              onChange={(e) => setGame(e.target.value)}
-              className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              {GAMES.map((g) => (
-                <option key={g.value} value={g.value}>{g.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Режим и разрешение</label>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              {MODES.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm text-gray-400 mb-2">
-            Бюджет на апгрейд, ₽ <span className="text-gray-600">(необязательно)</span>
-          </label>
-          <input
-            type="number"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-            placeholder="Например: 15000"
-            min="0"
-            step="1000"
-            className="w-full max-w-xs bg-card border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-          />
-        </div>
-
-        <div>
-          <p className="text-sm font-medium text-accent mb-2">ИИ-режим</p>
-          <p className="text-xs text-gray-500 mb-2">
-            Если планируете запускать нейросети — Stable Diffusion, локальные LLM
-          </p>
-          <div className="flex flex-wrap gap-3">
-            {[
-              { value: 'off', label: 'Выкл' },
-              { value: 'light', label: 'Лёгкий (SD 1.5, LLM 3B)' },
-              { value: 'heavy', label: 'Тяжёлый (SDXL, LLM 7B+)' },
-            ].map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
-                <input
-                  type="radio"
-                  name="aiMode"
-                  value={opt.value}
-                  checked={aiMode === opt.value}
-                  onChange={(e) => setAiMode(e.target.value)}
-                  className="accent-accent"
-                />
-                {opt.label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-medium text-accent mb-2">Режим расчёта бюджета</p>
-          <p className="text-xs text-gray-500 mb-2">
-            Хотите продать старый компонент и добавить к бюджету?
-          </p>
-          <div className="flex flex-col gap-2">
-            <label className="flex items-start gap-3 text-xs text-gray-300 cursor-pointer p-2 rounded-md border border-border hover:border-accent/30 transition">
-              <input
-                type="radio"
-                name="sellMode"
-                value="budget_only"
-                checked={sellMode === 'budget_only'}
-                onChange={(e) => setSellMode(e.target.value)}
-                className="accent-accent mt-0.5"
-              />
-              <div>
-                <div className="font-medium">Только бюджет</div>
-                <div className="text-gray-500 mt-0.5">Ищу апгрейд на {budget ? Number(budget).toLocaleString('ru-RU') + ' ₽' : 'указанный бюджет'}</div>
-              </div>
-            </label>
-            <label className="flex items-start gap-3 text-xs text-gray-300 cursor-pointer p-2 rounded-md border border-border hover:border-accent/30 transition">
-              <input
-                type="radio"
-                name="sellMode"
-                value="budget_plus_sell"
-                checked={sellMode === 'budget_plus_sell'}
-                onChange={(e) => setSellMode(e.target.value)}
-                className="accent-accent mt-0.5"
-              />
-              <div>
-                <div className="font-medium">Бюджет + продажа старого</div>
-                <div className="text-gray-500 mt-0.5">Продам старый компонент и добавлю к бюджету</div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <Button type="submit" disabled={!canSubmit}>
-          {loading ? 'Расчёт...' : 'Рассчитать узкое место'}
-        </Button>
-        </form>
-      )}
-
-      {/* Модальное окно вставки данных из скрипта */}
-      <Modal 
-        open={showScriptPaste} 
-        onClose={() => { setShowScriptPaste(false); setScriptText(''); setScriptError('') }} 
-        title="Вставить данные из скрипта"
-        size="lg"
-      >
-        <div className="space-y-3">
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3">
-            <p className="text-xs text-blue-300 font-medium mb-2">Как запустить на Windows:</p>
-            <ol className="text-xs text-gray-400 list-decimal list-inside space-y-1">
-              <li>Скачайте <code className="bg-dark px-1 rounded">run.bat</code> выше</li>
-              <li>Дважды кликните по <code className="bg-dark px-1 rounded">run.bat</code></li>
-              <li>Результат автоматически скопируется в буфер</li>
-              <li>Вставьте сюда (Ctrl+V)</li>
-            </ol>
-          </div>
-          <p className="text-xs text-gray-500">
-            Или вставьте результат сюда:
-          </p>
-          <textarea
-            value={scriptText}
-            onChange={(e) => setScriptText(e.target.value)}
-            placeholder="=== CPU ===&#10;Модель: AMD FX-6100&#10;&#10;=== Видеокарта ===&#10;Модель: NVIDIA GTX 1050 Ti&#10;&#10;=== Оперативная память ===&#10;Всего: 8 GB..."
-            rows={6}
-            className="w-full bg-dark border border-border rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/40"
-          />
-          {scriptError && <p className="text-xs text-red-400">{scriptError}</p>}
-          <div className="flex gap-3">
-            <Button onClick={parseScriptOutput} disabled={!scriptText.trim()}>
-              Определить комплектующие
-            </Button>
-            <Button variant="secondary" onClick={() => { setShowScriptPaste(false); setScriptText('') }}>
-              Отмена
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
-  )
+  return <div className="configuration-panel">
+    <div className="detect-panel"><div><h3>Заполнить из данных компьютера</h3><p>Windows-скрипт прочитает модели CPU, GPU и установленную память. Запустите его, затем загрузите полученный JSON-файл.</p></div><div className="detect-actions"><a href="/scripts/run.bat" download="UpgradeLab-detect.bat" className="secondary-btn">Скачать скрипт</a><button type="button" className="secondary-btn" onClick={()=>fileInput.current?.click()}>Загрузить отчёт</button><button type="button" className="text-btn" onClick={()=>{setError('');setPasteOpen(true)}}>Вставить текст</button></div><input ref={fileInput} type="file" accept=".json,.txt,application/json" hidden onChange={importFile}/></div>
+    {importInfo && <p className="import-summary" role="status">{importInfo}</p>}
+    {error && !pasteOpen && <p className="error" role="alert">{error}</p>}
+    <form onSubmit={submit} className="configuration-form">
+      <fieldset><legend>Комплектующие</legend><p className="field-hint">Начните вводить модель: например, fx6100, rtx3060 или i5 12400f.</p><div className="form-grid"><HardwareSearch label="Процессор" items={cpus} value={cpuId} onChange={setCpuId} placeholder="Найти процессор"/><HardwareSearch label="Видеокарта" items={gpus} value={gpuId} onChange={setGpuId} placeholder="Найти видеокарту"/></div><AutoDetectButton onDetect={(_, id)=>setGpuId(id)}/></fieldset>
+      <fieldset><legend>Оперативная память</legend><p className="field-hint">Укажите параметры памяти. Неизвестные значения можно оставить пустыми.</p><div className="form-grid three-columns"><label>Общий объём, ГБ<input type="number" min="2" max="512" step="1" placeholder="Например, 8" value={memory.capacity_gb} onChange={e=>setMemory({...memory,capacity_gb:e.target.value})}/></label><label>Тип памяти<select value={memory.type} onChange={e=>setMemory({...memory,type:e.target.value})}><option value="">Неизвестен</option>{['DDR3','DDR4','DDR5'].map(t=><option key={t}>{t}</option>)}</select></label><label>Канальный режим<select value={memory.channels} onChange={e=>setMemory({...memory,channels:e.target.value})}><option value="">Неизвестен</option><option value="1">Один канал</option><option value="2">Два канала</option></select></label></div></fieldset>
+      <fieldset><legend>Сценарий и бюджет</legend><div className="form-grid"><label>Игра<select value={game} onChange={e=>setGame(e.target.value)}>{GAMES.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select></label><label>Разрешение и графика<select value={mode} onChange={e=>setMode(e.target.value)}>{MODES.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label><label>Бюджет на апгрейд, ₽<input type="number" min="0" max="10000000" step="100" placeholder="Без ограничения" value={budget} onChange={e=>setBudget(e.target.value)}/></label><label>Использование нейросетей<select value={aiMode} onChange={e=>setAiMode(e.target.value)}><option value="off">Не планирую</option><option value="light">Генерация изображений, небольшие LLM</option><option value="heavy">SDXL, крупные модели</option></select></label></div><label className="checkbox-label"><input type="checkbox" checked={sellMode==='budget_plus_sell'} onChange={e=>setSellMode(e.target.checked?'budget_plus_sell':'budget_only')}/><span>Добавить к бюджету цену продажи старого компонента<small>При наличии свежей цены на вторичном рынке.</small></span></label></fieldset>
+      <div className="form-submit"><p>Выберите CPU и GPU из найденных моделей.</p><Button type="submit" disabled={!cpuId || !gpuId || loading}>{loading ? 'Рассчитываем…' : 'Рассчитать производительность'}</Button></div>
+    </form>
+    <Modal open={pasteOpen} onClose={()=>setPasteOpen(false)} title="Импорт конфигурации"><p className="field-hint">Вставьте JSON нового скрипта или текстовый отчёт предыдущей версии.</p><textarea className="report-input" rows="10" value={text} onChange={e=>setText(e.target.value)} placeholder={'{"cpus": [{"name": "AMD FX-6100"}], ...}'}/>{error && <p className="error" role="alert">{error}</p>}<div className="detect-actions"><Button disabled={!text.trim()} onClick={()=>importReport(text)}>Заполнить конфигурацию</Button><Button variant="secondary" onClick={()=>setPasteOpen(false)}>Отмена</Button></div></Modal>
+  </div>
 }

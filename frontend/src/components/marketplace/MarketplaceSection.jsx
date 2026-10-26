@@ -5,9 +5,8 @@ import { ListingGrid } from './ListingGrid'
 import { ListingForm } from './ListingForm'
 import { ListingDetail } from './ListingDetail'
 
-export function MarketplaceSection({ listings, loading, error, onCreate }) {
+export function MarketplaceSection({ listings, loading, error, onCreate, user, onLogin }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [conditionFilter, setConditionFilter] = useState('all')
@@ -16,15 +15,8 @@ export function MarketplaceSection({ listings, loading, error, onCreate }) {
   const [selectedListing, setSelectedListing] = useState(null)
 
   const handleCreate = async (data) => {
-    setIsSubmitting(true)
-    try {
-      await onCreate(data)
-      setIsModalOpen(false)
-    } catch (e) {
-      alert(e.message)
-    } finally {
-      setIsSubmitting(false)
-    }
+    await onCreate(data)
+    setIsModalOpen(false)
   }
 
   // Фильтрация
@@ -61,8 +53,8 @@ export function MarketplaceSection({ listings, loading, error, onCreate }) {
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-white">Биржа комплектующих</h2>
-        <Button onClick={() => setIsModalOpen(true)}>+ Создать лот</Button>
+        <h2 className="text-lg font-medium text-white">Объявления</h2>
+        <Button onClick={() => user ? setIsModalOpen(true) : onLogin()}>{user ? '+ Создать лот' : 'Войти для публикации'}</Button>
       </div>
 
       {/* Фильтры */}
@@ -127,12 +119,13 @@ export function MarketplaceSection({ listings, loading, error, onCreate }) {
       <ListingGrid 
         listings={filteredListings} 
         loading={loading} 
+        emptyMessage={listings?.length ? 'По заданным фильтрам ничего не найдено.' : undefined}
         onClick={(listing) => setSelectedListing(listing)}
       />
 
       {/* Модальное окно создания лота */}
       <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Новый лот">
-        <ListingForm onSubmit={handleCreate} loading={isSubmitting} />
+        <ListingForm onSubmit={handleCreate} onCancel={() => setIsModalOpen(false)} />
       </Modal>
 
       {/* Модальное окно деталей лота */}

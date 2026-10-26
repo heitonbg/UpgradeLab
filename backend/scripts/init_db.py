@@ -1,5 +1,4 @@
 import json
-import random
 from pathlib import Path
 from app.db.base import Base, engine, SessionLocal
 from app.db.models import Hardware
@@ -12,23 +11,6 @@ def _normalize(score: int, lo: int, hi: int) -> int:
         return 55
     value = 10 + (score - lo) * 90 / (hi - lo)
     return max(10, min(100, round(value)))
-
-
-def _generate_price(raw_score: int, hw_type: str) -> int:
-    """Генерирует правдоподобную цену на основе PassMark"""
-    if hw_type == "CPU":
-        # Условно: 1000 баллов = 1500 руб.
-        base_price = int((raw_score / 1000) * 1500)
-    else:
-        # Видеокарты дороже: 1000 баллов = 2000 руб.
-        base_price = int((raw_score / 1000) * 2000)
-        
-    # Добавляем случайный разброс +/- 10%, чтобы цены не были одинаковыми
-    variation = random.uniform(0.9, 1.1)
-    final_price = int(base_price * variation)
-    
-    # Округляем до сотен (например, 12345 -> 12300)
-    return (final_price // 100) * 100
 
 
 def seed() -> None:
@@ -48,8 +30,9 @@ def seed() -> None:
 
     db = SessionLocal()
     try:
-        db.query(Hardware).delete()
-        db.commit()
+        if db.query(Hardware).limit(1).first():
+            print("Каталог уже заполнен; существующие ID и сохранённые сборки сохранены.")
+            return
 
         for hw_type, key in (("CPU", "cpus"), ("GPU", "gpus")):
             items = data.get(key, [])
@@ -66,7 +49,7 @@ def seed() -> None:
                         raw_score=raw_score,
                         normalized_score=_normalize(raw_score, lo, hi),
                         cores=item.get("cores"),
-                        avg_price=_generate_price(raw_score, hw_type),
+                        avg_price=None,
                         vram=item.get("vram"),
                         socket=item.get("socket"),
                     )
@@ -94,7 +77,7 @@ def seed() -> None:
         db.commit()
         total = db.query(Hardware).count()
         print(f"OK. Загружено записей Hardware: {total}")
-        print("Цены сгенерированы на основе PassMark.")
+        print("Для цен запустите python -m scripts.refresh_prices.")
     finally:
         db.close()
 

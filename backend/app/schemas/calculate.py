@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Literal
 from pydantic import BaseModel, Field
 
 class GameName(str, Enum):
@@ -25,11 +26,17 @@ class Bottleneck(str, Enum):
     CPU = "CPU"
     GPU = "GPU"
 
+class RamManual(BaseModel):
+    type: Literal["DDR3", "DDR4", "DDR5"] | None = None
+    capacity_gb: int = Field(ge=2, le=512)
+    channels: Literal[1, 2] | None = None
+
+
 class CalculateRequest(BaseModel):
     cpu_id: int = Field(gt=0)
     gpu_id: int = Field(gt=0)
     ram_id: int | None = Field(default=None, gt=0)
-    ram_manual: dict | None = Field(default=None)  # {type, capacity_gb, channels}
+    ram_manual: RamManual | None = None
     game: GameName
     mode: CalcMode
     budget: int | None = Field(default=None, ge=0)
@@ -49,6 +56,7 @@ class CalculateResponse(BaseModel):
     total_budget: int = 0
     mode: str = "budget_only"
     is_maxed_out: bool = False
+    upgrade_price: dict | None = None
 
 class AutodetectRequest(BaseModel):
     cpu_name: str

@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "cpus": [{"name": "AMD FX(tm)-6100 Six-Core Processor"}],
+  "gpus": [{"name": "NVIDIA GeForce GTX 1050 Ti"}],
+  "memory": {"capacity_gb": 8, "type": "DDR3", "channels": null, "module_count": 2}
+}
