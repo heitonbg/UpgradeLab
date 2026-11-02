@@ -32,6 +32,9 @@ class Listing(Base):
     price: Mapped[str] = mapped_column(String(50), nullable=False)
     contact: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    listing_type: Mapped[str] = mapped_column(String(20), default="sale", server_default="sale")
+    exchange_for: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False, index=True
     )
@@ -75,3 +78,39 @@ class SavedBuild(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     data: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ResetRequestLimit(Base):
+    __tablename__ = "reset_request_limits"
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class StoreOffer(Base):
+    __tablename__ = "store_offers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), index=True)
+    url: Mapped[str] = mapped_column(Text, unique=True)
+    name: Mapped[str] = mapped_column(String(300))
+    category: Mapped[str] = mapped_column(String(20), index=True)
+    price_rub: Mapped[int] = mapped_column(Integer)
+    condition: Mapped[str] = mapped_column(String(10), default="new")
+    hardware_id: Mapped[int | None] = mapped_column(ForeignKey("hardware.id"), nullable=True, index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    origin: Mapped[str] = mapped_column(String(20))
+    attributes: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class OfferSearch(Base):
+    __tablename__ = "offer_searches"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime)
+    statuses: Mapped[str] = mapped_column(Text)

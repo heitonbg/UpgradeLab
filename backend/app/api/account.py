@@ -11,9 +11,10 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from app.api.deps import DBSession
-from app.db.models import User, LoginSession, SavedBuild
+from app.db.models import User, LoginSession, SavedBuild, PasswordReset
 from app.schemas.calculate import CalculateRequest
 from app.core.config import settings
+from app.services.builds import BuildRequest, assemble
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -27,7 +28,7 @@ class Credentials(BaseModel):
     @classmethod
     def valid_email(cls, value):
         value = value.strip().lower()
-        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value) or value.endswith("@identity.invalid"):
             raise ValueError("Укажите корректный email")
         return value
 
@@ -137,6 +138,7 @@ def update_password(payload: PasswordUpdate, db: DBSession, user: AuthUser, resp
     salt = secrets.token_hex(16)
     user.password_hash = salt + ":" + password_hash(payload.new_password, salt)
     db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
+    db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id))
     return sign_in(db, user, response)
 
 
@@ -150,16 +152,20 @@ def logout(db: DBSession, user: AuthUser, response: Response, upgrade_session: s
 
 
 @router.get("/builds")
-def builds(db: DBSession, user: AuthUser):
+def builds(db: DBSession, user: AuthUser, response: Response):
+    response.headers["Cache-Control"] = "no-store"
     return [{"id": b.id, "created_at": b.created_at, **json.loads(b.data)} for b in
             db.scalars(select(SavedBuild).where(SavedBuild.user_id == user.id).order_by(SavedBuild.id.desc()))]
 
 
 @router.post("/builds", status_code=201)
-def save_build(payload: CalculateRequest, db: DBSession, user: AuthUser):
+def save_build(payload: BuildRequest | CalculateRequest, db: DBSession, user: AuthUser):
     from app.api.calculate import post_calculate
-    result = post_calculate(payload, db)
-    build = SavedBuild(user_id=user.id, data=json.dumps({"config": payload.model_dump(mode="json"), "result": result.model_dump(mode="json")}, ensure_ascii=False))
+    result = assemble(payload, db) if isinstance(payload, BuildRequest) else post_calculate(payload.model_copy(update={'refresh_avito_prices': False}), db).model_dump(mode="json")
+    if result.get('status') == 'partial':
+        raise HTTPException(400, 'Полная сборка пока не найдена. Для сохранения выберите готовую конфигурацию после подбора.')
+    config={**payload.model_dump(mode="json"),**result.get('actual_config',{})}
+    build = SavedBuild(user_id=user.id, data=json.dumps({"config": config, "result": result}, ensure_ascii=False, default=str))
     db.add(build)
     db.commit()
     return {"id": build.id}

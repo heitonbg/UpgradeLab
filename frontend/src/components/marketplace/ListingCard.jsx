@@ -1,23 +1,15 @@
+import { Icon } from '../ui/Icon'
+import { CATEGORIES, listingCategory, listingPrice } from '../../lib/marketplace'
+
 export function ListingCard({ listing }) {
-  const isGpu = /gpu|видеокарт|rtx|gtx|geforce|radeon|rx\s*\d/i.test(listing.title)
-  const date = new Date(listing.created_at).toLocaleString('ru-RU', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  })
-  return (
-    <div className="bg-card border border-border hover:border-accent/40 rounded-2xl p-5 space-y-3 min-h-[180px] transition-colors">
-      <div className="text-[11px] text-gray-400">{isGpu ? 'Видеокарта' : 'Комплектующее'}</div>
-      <div className="flex items-start justify-between gap-2">
-        <div className="font-medium">{listing.title}</div>
-        <span className="text-xs px-2 py-0.5 rounded bg-border text-gray-300 shrink-0">
-          {listing.condition}
-        </span>
-      </div>
-      <div className="text-xl text-accent font-bold">{listing.price}</div>
-      {listing.description && (
-        <p className="text-xs text-gray-500 pt-1">{listing.description}</p>
-      )}
-      <div className="text-[11px] text-gray-500 pt-2 border-t border-border flex justify-between"><span>{date}</span><span>Подробнее</span></div>
-    </div>
-  )
+  const category=listingCategory(listing)
+  const label=CATEGORIES.find(([key])=>key===category)?.[1]||'Комплектующее'
+  const icon={cpu:'chip',gpu:'gpu',storage:'drive',psu:'shield',cooler:'fan'}[category]||'box'
+  const price=listingPrice(listing)
+  const exchange=listing.listing_type==='exchange'
+  const date=new Date(listing.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'short'})
+  return <article className="listing-tile">
+    <div className={`listing-media ${listing.photo_url?'has-photo':''}`}>{listing.photo_url?<img src={listing.photo_url} alt={listing.title} loading="lazy" referrerPolicy="no-referrer"/>:<Icon name={icon} size={60}/>}<span className={`listing-deal ${exchange?'is-exchange':''}`}>{exchange?'Обмен':'Продажа'}</span></div>
+    <div className="listing-tile-body"><div className="listing-meta"><span>{label}</span><span className="condition-badge">{listing.condition}</span></div><h3>{listing.title}</h3><p className="listing-value">{exchange?'Обмен':price!==null?`${price.toLocaleString('ru-RU')} ₽`:listing.price}</p>{exchange?<p className="listing-excerpt">На: {listing.exchange_for}</p>:<p className="listing-excerpt">{listing.description||'Описание и контакты — в объявлении.'}</p>}<div className="listing-tile-foot"><span>{date}</span><span>Смотреть<Icon name="arrow" size={15}/></span></div></div>
+  </article>
 }

@@ -16,5 +16,8 @@ class HardwareOut(BaseModel):
     price_date: datetime | None = None
     price_market: str | None = None
     price_url: str | None = None
+    sample_count: int | None = None
+    average_method: str | None = None
+    price_origin: str | None = None
 
     model_config = {"from_attributes": True}

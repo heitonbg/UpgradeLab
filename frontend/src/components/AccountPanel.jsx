@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { request } from '../api/client'
+import { ForgotPassword } from './PasswordRecovery'
 
-export function AuthForm({ onAuth }) {
-  const [register, setRegister] = useState(false)
+export function AuthForm({ onAuth, initialMode = 'login' }) {
+  const [register, setRegister] = useState(initialMode === 'register')
   const [form, setForm] = useState({ name: '', email: '', password: '', remember_me: true })
   const [confirmation, setConfirmation] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [recovering,setRecovering] = useState(false)
   async function submit(event) {
     event.preventDefault();setError('')
     if (register && form.password !== confirmation) { setError('Пароли не совпадают.');return }
@@ -16,11 +18,14 @@ export function AuthForm({ onAuth }) {
     catch(e) { setError(e.message) }
     finally { setBusy(false) }
   }
+  if(recovering)return <ForgotPassword onBack={()=>setRecovering(false)}/>
   return <div className="auth-layout"><div className="auth-intro"><p className="eyebrow">Личный кабинет</p><h1>Ваши сборки.<br/>Ваши объявления.</h1><p>Один аккаунт для расчётов и биржи комплектующих. Данные хранятся на сервере и доступны после входа.</p></div><form className="panel auth-form" onSubmit={submit}><div className="auth-tabs"><button type="button" className={!register?'selected':''} onClick={()=>{setRegister(false);setError('')}}>Вход</button><button type="button" className={register?'selected':''} onClick={()=>{setRegister(true);setError('')}}>Регистрация</button></div><h2>{register?'Создать аккаунт':'Войти в аккаунт'}</h2>
+
     {register && <label>Имя<input required minLength="2" maxLength="80" autoComplete="name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ваше имя"/></label>}
     <label>Email<input required type="email" maxLength="254" autoComplete="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="mail@example.com"/></label>
     <label>Пароль<div className="password-field"><input required type={showPassword?'text':'password'} minLength={register?8:1} maxLength="128" autoComplete={register?'new-password':'current-password'} value={form.password} onChange={e=>setForm({...form,password:e.target.value})} placeholder={register?'Не менее 8 символов':'Ваш пароль'}/><button type="button" onClick={()=>setShowPassword(!showPassword)} aria-label={showPassword?'Скрыть пароль':'Показать пароль'}>{showPassword?'Скрыть':'Показать'}</button></div></label>
     {register && <label>Повторите пароль<input required type={showPassword?'text':'password'} minLength="8" maxLength="128" autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)}/></label>}
+    {!register&&<button type="button" className="text-btn" onClick={()=>setRecovering(true)}>Забыли пароль?</button>}
     <label className="checkbox-label"><input type="checkbox" checked={form.remember_me} onChange={e=>setForm({...form,remember_me:e.target.checked})}/><span>Запомнить меня на 30 дней</span></label>
     {error && <p className="error" role="alert">{error}</p>}<button className="primary-btn" disabled={busy}>{busy?'Подождите…':register?'Зарегистрироваться':'Войти'}</button></form></div>
 }

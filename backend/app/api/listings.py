@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Response
 from app.api.deps import DBSession
 from app.api.account import AuthUser
 from app.db.models import Listing, ListingOwner
@@ -24,7 +24,8 @@ def create_listing(payload: ListingCreate, db: DBSession, user: AuthUser):
 
 
 @router.get("/my/listings", response_model=list[ListingOut])
-def my_listings(db: DBSession, user: AuthUser):
+def my_listings(db: DBSession, user: AuthUser, response: Response):
+    response.headers["Cache-Control"] = "no-store"
     return list(db.scalars(select(Listing).join(ListingOwner).where(ListingOwner.user_id == user.id).order_by(Listing.id.desc())))
 
 

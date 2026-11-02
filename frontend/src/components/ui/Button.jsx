@@ -1,6 +1,8 @@
 export function Button({
   variant = 'primary',
   className = '',
+  loading = false,
+  children,
   ...props
 }) {
   const base =
@@ -13,5 +15,5 @@ export function Button({
     ghost: 'text-gray-300 hover:text-white',
     danger: 'text-red-400 hover:text-red-300',
   }
-  return <button className={`${base} ${variants[variant]} ${className}`} {...props} />
+  return <button className={`${base} ${variants[variant]} ${className}`} {...props} disabled={loading || props.disabled} aria-busy={loading || undefined}>{loading && <span className="loading-ring" aria-hidden="true"/>}{children}</button>
 }

@@ -5,7 +5,8 @@ const STORAGE_KEY = 'pc-upgrade:saved-builds'
 function read() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    const data = raw ? JSON.parse(raw) : []
+    return Array.isArray(data) ? data.filter(b=>b&&typeof b==='object'&&b.config) : []
   } catch {
     return []
   }
@@ -23,17 +24,18 @@ export function useSavedBuilds() {
   }, [])
 
   const persist = (next) => {
-    setBuilds(next)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    setBuilds(next)
   }
 
   const save = useCallback((build) => {
-    const entry = { id: `${Date.now()}`, createdAt: new Date().toISOString(), ...build }
+    const entry = { ...build, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
     persist([entry, ...read()])
     return entry
   }, [])
 
   const clear = useCallback(() => persist([]), [])
+  const remove = useCallback(id=>persist(read().filter(build=>build.id!==id)), [])
 
-  return { builds, save, clear }
+  return { builds, save, clear, remove }
 }

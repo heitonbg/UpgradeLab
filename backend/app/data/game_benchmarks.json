@@ -1,0 +1,466 @@
+{
+  "version": 1,
+  "collected_at": "2026-10-28",
+  "games": {
+    "Baldur's Gate 3": {
+      "source": "https://www.notebookcheck.net/Baldur-s-Gate-3-tech-review-Laptop-and-desktop-benchmarks.739444.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2023,
+      "reference_preset": "Ultra",
+      "high_preset": "High",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": 162.2,
+          "1080p_high": 108.5,
+          "1080p_ultra": 106.3,
+          "1440p_ultra": 73.6
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": 145.3,
+          "1080p_high": 98.1,
+          "1080p_ultra": 98.2,
+          "1440p_ultra": 63.9
+        },
+        {
+          "gpu": "GeForce RTX 4060",
+          "key": "rtx4060",
+          "score": 19480,
+          "1080p_low": 138.8,
+          "1080p_high": 99.3,
+          "1080p_ultra": 96.9,
+          "1440p_ultra": 64.1
+        },
+        {
+          "gpu": "GeForce RTX 3060",
+          "key": "rtx3060",
+          "score": 16885,
+          "1080p_low": 131.0,
+          "1080p_high": 86.7,
+          "1080p_ultra": 85.45,
+          "1440p_ultra": 59.4
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": 159.6,
+          "1080p_high": 84.7,
+          "1080p_ultra": 70.7,
+          "1440p_ultra": 48.5
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": 110.2,
+          "1080p_high": 73.4,
+          "1080p_ultra": 71.9,
+          "1440p_ultra": 48.8
+        }
+      ]
+    },
+    "Hogwarts Legacy": {
+      "source": "https://www.notebookcheck.net/Hogwarts-Legacy-review-notebook-and-desktop-benchmarks.697419.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2023,
+      "reference_preset": "Ultra",
+      "high_preset": "High",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": 170.0,
+          "1080p_high": 98.8,
+          "1080p_ultra": 73.5,
+          "1440p_ultra": 52.5
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": 156.2,
+          "1080p_high": 99.3,
+          "1080p_ultra": 80.5,
+          "1440p_ultra": 56.5
+        },
+        {
+          "gpu": "GeForce RTX 4060",
+          "key": "rtx4060",
+          "score": 19480,
+          "1080p_low": 148.1,
+          "1080p_high": 85.1,
+          "1080p_ultra": 62.85,
+          "1440p_ultra": 44.6
+        },
+        {
+          "gpu": "GeForce RTX 3060",
+          "key": "rtx3060",
+          "score": 16885,
+          "1080p_low": null,
+          "1080p_high": null,
+          "1080p_ultra": 56.4,
+          "1440p_ultra": 39.7
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": 124.5,
+          "1080p_high": 68.8,
+          "1080p_ultra": 58.1,
+          "1440p_ultra": 40.7
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": 115.9,
+          "1080p_high": 69.4,
+          "1080p_ultra": 53.2,
+          "1440p_ultra": 37.2
+        }
+      ]
+    },
+    "Starfield": {
+      "source": "https://www.notebookcheck.net/Starfield-in-test-Laptop-and-desktop-benchmarks.755131.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2023,
+      "reference_preset": "Ultra",
+      "high_preset": "High",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": 81.1,
+          "1080p_high": 58.3,
+          "1080p_ultra": 53.7,
+          "1440p_ultra": 43.2
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": 78.4,
+          "1080p_high": 55.7,
+          "1080p_ultra": 50.4,
+          "1440p_ultra": 41.2
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": 54.9,
+          "1080p_high": 39.9,
+          "1080p_ultra": 35.7,
+          "1440p_ultra": 29.0
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": 61.6,
+          "1080p_high": 42.3,
+          "1080p_ultra": 38.4,
+          "1440p_ultra": 29.8
+        }
+      ]
+    },
+    "Helldivers 2": {
+      "source": "https://www.notebookcheck.net/Helldivers-2-tech-review-Laptop-and-desktop-benchmarks.803248.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2024,
+      "reference_preset": "Ultra",
+      "high_preset": "High",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": 142.8,
+          "1080p_high": 101.9,
+          "1080p_ultra": 99.5,
+          "1440p_ultra": 68.1
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": 168.2,
+          "1080p_high": 117.1,
+          "1080p_ultra": 115.0,
+          "1440p_ultra": 82.7
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": 124.5,
+          "1080p_high": 79.5,
+          "1080p_ultra": 77.8,
+          "1440p_ultra": 54.1
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": 93.0,
+          "1080p_high": 67.4,
+          "1080p_ultra": 66.0,
+          "1440p_ultra": 42.9
+        }
+      ]
+    },
+    "Forza Horizon 5": {
+      "source": "https://www.notebookcheck.net/Forza-Horizon-5-Performance-Analysis.579037.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2021,
+      "reference_preset": "Extreme",
+      "high_preset": "High",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": null,
+          "1080p_high": 200.0,
+          "1080p_ultra": 105.0,
+          "1440p_ultra": 89.0
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": null,
+          "1080p_high": 158.0,
+          "1080p_ultra": 99.0,
+          "1440p_ultra": 86.0
+        },
+        {
+          "gpu": "GeForce RTX 4060",
+          "key": "rtx4060",
+          "score": 19480,
+          "1080p_low": null,
+          "1080p_high": 221.0,
+          "1080p_ultra": 117.0,
+          "1440p_ultra": 80.0
+        },
+        {
+          "gpu": "GeForce RTX 3060",
+          "key": "rtx3060",
+          "score": 16885,
+          "1080p_low": null,
+          "1080p_high": 110.0,
+          "1080p_ultra": 66.0,
+          "1440p_ultra": 56.5
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": null,
+          "1080p_high": 108.0,
+          "1080p_ultra": 66.0,
+          "1440p_ultra": 56.0
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": null,
+          "1080p_high": 149.0,
+          "1080p_ultra": 77.0,
+          "1440p_ultra": 60.0
+        }
+      ]
+    },
+    "Resident Evil 4 Remake": {
+      "source": "https://www.notebookcheck.net/Resident-Evil-4-Remake-review-Laptop-and-desktop-benchmarks.705146.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2023,
+      "reference_preset": "Max",
+      "high_preset": "Prioritize Graphics",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": 257.0,
+          "1080p_high": 124.3,
+          "1080p_ultra": null,
+          "1440p_ultra": null
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": 171.9,
+          "1080p_high": 121.4,
+          "1080p_ultra": null,
+          "1440p_ultra": null
+        },
+        {
+          "gpu": "GeForce RTX 4060",
+          "key": "rtx4060",
+          "score": 19480,
+          "1080p_low": 154.0,
+          "1080p_high": 99.6,
+          "1080p_ultra": null,
+          "1440p_ultra": null
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": 117.6,
+          "1080p_high": 82.2,
+          "1080p_ultra": null,
+          "1440p_ultra": null
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": 125.4,
+          "1080p_high": 81.3,
+          "1080p_ultra": null,
+          "1440p_ultra": null
+        }
+      ]
+    },
+    "The Witcher 3 Next-Gen": {
+      "source": "https://www.notebookcheck.net/The-Witcher-3-v4-00-Notebook-and-desktop-benchmarks.683164.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2023,
+      "reference_preset": "Ultra",
+      "high_preset": "High",
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_low": 237.0,
+          "1080p_high": 163.2,
+          "1080p_ultra": 130.8,
+          "1440p_ultra": 95.5
+        },
+        {
+          "gpu": "GeForce RTX 3060 Ti",
+          "key": "rtx3060ti",
+          "score": 20210,
+          "1080p_low": 252.5,
+          "1080p_high": 171.25,
+          "1080p_ultra": 138.35,
+          "1440p_ultra": 99.55
+        },
+        {
+          "gpu": "GeForce RTX 4060",
+          "key": "rtx4060",
+          "score": 19480,
+          "1080p_low": 224.0,
+          "1080p_high": 148.7,
+          "1080p_ultra": 117.25,
+          "1440p_ultra": 80.75
+        },
+        {
+          "gpu": "GeForce RTX 3060",
+          "key": "rtx3060",
+          "score": 16885,
+          "1080p_low": 211.0,
+          "1080p_high": 136.4,
+          "1080p_ultra": 107.5,
+          "1440p_ultra": 78.1
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_low": 191.8,
+          "1080p_high": 125.8,
+          "1080p_ultra": 100.2,
+          "1440p_ultra": 71.3
+        },
+        {
+          "gpu": "Radeon RX 6600",
+          "key": "rx6600",
+          "score": 15034,
+          "1080p_low": 153.7,
+          "1080p_high": 104.7,
+          "1080p_ultra": 89.1,
+          "1440p_ultra": 57.1
+        }
+      ]
+    },
+    "PUBG: Battlegrounds": {
+      "source": "https://www.notebookcheck.net/Playerunknown-s-Battlegrounds-Laptop-and-Desktop-Benchmarks.239672.0.html",
+      "publisher": "Notebookcheck",
+      "year": 2017,
+      "reference_preset": "Ultra",
+      "high_preset": "High",
+      "archive": true,
+      "samples": [
+        {
+          "gpu": "Radeon RX 5700 XT",
+          "key": "rx5700xt",
+          "score": 16023,
+          "1080p_high": 166.0,
+          "1080p_ultra": 139.0,
+          "4k_ultra": 52.5
+        },
+        {
+          "gpu": "GeForce RTX 2060 Super",
+          "key": "rtx2060super",
+          "score": 16456,
+          "1080p_high": 142.5,
+          "1080p_ultra": 123.0,
+          "4k_ultra": 49.4
+        },
+        {
+          "gpu": "GeForce GTX 1660 Super",
+          "key": "gtx1660super",
+          "score": 12656,
+          "1080p_high": 139.0,
+          "1080p_ultra": 104.0,
+          "4k_ultra": 35.8
+        }
+      ]
+    },
+    "Overwatch 2": {
+      "source": "https://www.computerbase.de/artikel/grafikkarten/amd-radeon-generationen-vergleich-2023.86243/seite-3",
+      "publisher": "ComputerBase",
+      "year": 2023,
+      "high_preset": "Максимальные",
+      "high_is_reference_only": true,
+      "samples": [
+        {
+          "gpu": "Radeon RX 6700 XT",
+          "key": "rx6700xt",
+          "score": 19713,
+          "1080p_high": 327.2,
+          "1440p_high": 226.6
+        },
+        {
+          "gpu": "Radeon RX 5700 XT",
+          "key": "rx5700xt",
+          "score": 16023,
+          "1080p_high": 251.3,
+          "1440p_high": 169.2
+        },
+        {
+          "gpu": "Radeon RX 7800 XT",
+          "key": "rx7800xt",
+          "score": 24480,
+          "1080p_high": 482.6,
+          "1440p_high": 343.6
+        }
+      ]
+    }
+  }
+}

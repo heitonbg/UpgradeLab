@@ -6,7 +6,23 @@ export class ApiError extends Error {
   }
 }
 
-export async function request(path, { method = 'GET', body } = {}) {
+let pendingRequests = 0
+const requestListeners = new Set()
+export const getPendingRequests = () => pendingRequests
+export const subscribeRequests = listener => {
+  requestListeners.add(listener)
+  return () => requestListeners.delete(listener)
+}
+function publishRequests() { requestListeners.forEach(listener => listener()) }
+
+export async function request(path, options = {}) {
+  pendingRequests += 1
+  publishRequests()
+  try { return await performRequest(path, options) }
+  finally { pendingRequests -= 1; publishRequests() }
+}
+
+async function performRequest(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',

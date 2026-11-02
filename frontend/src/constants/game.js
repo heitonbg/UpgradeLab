@@ -7,6 +7,12 @@ export const GAMES = [
   { value: 'Valorant', label: 'Valorant' },
   { value: 'Apex Legends', label: 'Apex Legends' },
   { value: 'Red Dead Redemption 2', label: 'Red Dead Redemption 2' },
+  ...[
+    'PUBG: Battlegrounds', 'Call of Duty: Warzone', 'Overwatch 2',
+    "Baldur's Gate 3", 'Hogwarts Legacy', 'Starfield', 'Forza Horizon 5',
+    'The Witcher 3 Next-Gen', 'Helldivers 2', 'Resident Evil 4 Remake',
+  ].map(value => ({ value, label: value })),
+  { value: 'Мир танков', label: 'Мир танков', aliases: ['танки', 'wot', 'tanki', 'миртанков', 'world of tanks'] },
 ];
 
 export const MODES = [

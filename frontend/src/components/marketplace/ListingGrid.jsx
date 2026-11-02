@@ -1,20 +1,10 @@
 import { ListingCard } from './ListingCard'
+import { LoadingPanel } from '../ui/LoadingPanel'
+import { Icon } from '../ui/Icon'
+import { Button } from '../ui/Button'
 
-export function ListingGrid({ listings, loading, onClick, emptyMessage }) {
-  if (loading) return <p className="text-sm text-gray-400">Загрузка лотов...</p>
-  if (!listings || listings.length === 0) {
-    return <p className="text-sm text-gray-500 p-6 border border-border rounded-xl">{emptyMessage || 'Пока нет лотов. Создайте первый!'}</p>
-  }
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {listings.map((l) => (
-        <button key={l.id} type="button" onClick={() => onClick?.(l)} className="text-left cursor-pointer w-full">
-          <ListingCard listing={l} />
-        </button>
-      ))}
-      <div className="text-xs text-gray-600 md:col-span-2 pt-1">
-        Показано: {listings.length} лотов
-      </div>
-    </div>
-  )
+export function ListingGrid({ listings, loading, onClick, emptyMessage, hasFilters, onReset, onCreate }) {
+  if(loading)return <LoadingPanel title="Загружаем объявления" cards/>
+  if(!listings?.length)return <div className="market-empty"><span className="empty-icon"><Icon name={hasFilters?'search':'box'} size={36}/></span><p className="eyebrow">{hasFilters?'Уточним поиск':'Биржа UpgradeLab'}</p><h3>{hasFilters?'По этим условиям ничего не нашлось':'Здесь появится ваш следующий апгрейд'}</h3><p>{emptyMessage||(hasFilters?'Попробуйте другое название или уберите часть фильтров.':'Пока объявлений нет. Вы можете первым предложить комплектующую на продажу или обмен.')}</p>{hasFilters?<Button type="button" variant="secondary" onClick={onReset}>Сбросить фильтры</Button>:<Button type="button" onClick={onCreate}><Icon name="plus" size={16}/>Разместить объявление</Button>}</div>
+  return <div className="market-grid result-reveal">{listings.map(listing=><button key={listing.id} type="button" onClick={()=>onClick?.(listing)} className="listing-open" aria-label={`Открыть объявление: ${listing.title}`}><ListingCard listing={listing}/></button>)}</div>
 }

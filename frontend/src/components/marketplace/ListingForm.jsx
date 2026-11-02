@@ -7,21 +7,33 @@ const INITIAL = {
   price: '',
   contact: '',
   description: '',
+  listing_type: 'sale',
+  exchange_for: '',
+  photo_url: '',
 }
 
-export function ListingForm({ onSubmit, onCancel }) {
-  const [form, setForm] = useState(INITIAL)
+export function ListingForm({ onSubmit, onCancel, initial }) {
+  const [form, setForm] = useState({...INITIAL,...initial})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  async function photo(event) {
+    const file=event.target.files?.[0]
+    if(!file)return
+    if(file.size>1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type)){setError('Выберите JPEG, PNG или WebP до 1 МБ.');return}
+    const reader=new FileReader()
+    reader.onload=()=>{setForm(f=>({...f,photo_url:reader.result}));setError(null)}
+    reader.onerror=()=>setError('Не удалось прочитать фото')
+    reader.readAsDataURL(file)
+  }
 
   const handle = async (e) => {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
     try {
-      await onSubmit(form)
+      await onSubmit({...form,price:form.listing_type==='exchange'?'Обмен':form.price,exchange_for:form.listing_type==='exchange'?form.exchange_for:null,photo_url:form.photo_url||null})
       setForm(INITIAL)
     } catch (err) {
       setError(err.message ?? 'Не удалось создать лот')
@@ -31,7 +43,8 @@ export function ListingForm({ onSubmit, onCancel }) {
   }
 
   return (
-    <form onSubmit={handle} className="space-y-3">
+    <form onSubmit={handle} className="listing-form space-y-3">
+      <label>Тип объявления<select value={form.listing_type} onChange={set('listing_type')}><option value="sale">Продажа</option><option value="exchange">Обмен на компонент или услугу</option></select></label>
       <input
         required
         value={form.title}
@@ -49,13 +62,18 @@ export function ListingForm({ onSubmit, onCancel }) {
           <option>Новое</option>
         </select>
         <input
-          required
+          required={form.listing_type==='sale'}
+          disabled={form.listing_type==='exchange'}
           value={form.price}
           onChange={set('price')}
           placeholder="Цена, ₽ или «Обмен»"
           className="bg-dark border border-border rounded-md px-3 py-2 text-sm"
         />
       </div>
+      {form.listing_type==='exchange'&&<label>Что хотите получить<input required maxLength="500" value={form.exchange_for} onChange={set('exchange_for')} placeholder="Например: настройка ПК или Ryzen 5 с доплатой"/></label>}
+      <label>Фото JPEG, PNG или WebP, до 1 МБ<input type="file" accept="image/jpeg,image/png,image/webp" onChange={photo}/></label>
+      <label>Или HTTPS-ссылка на фото<input type="url" value={form.photo_url.startsWith('data:')?'':form.photo_url} onChange={set('photo_url')} placeholder="https://…"/></label>
+      {form.photo_url&&<div><img className="listing-photo" src={form.photo_url} alt="Фото лота"/><button type="button" onClick={()=>setForm({...form,photo_url:''})}>Убрать фото</button></div>}
       <input
         required
         value={form.contact}

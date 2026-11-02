@@ -3,16 +3,16 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import assert from 'node:assert/strict'
 
-const pages=await (await fetch('http://127.0.0.1:9223/json')).json()
+const pages=await (await fetch(`http://127.0.0.1:${process.env.UI_DEBUG_PORT||9223}/json`)).json()
 const page=pages.find(p=>p.type==='page')
 const ws=new WebSocket(page.webSocketDebuggerUrl)
 await new Promise(resolve=>ws.addEventListener('open',resolve,{once:true}))
 let next=0
 const pending=new Map()
 ws.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.id){const promise=pending.get(data.id);pending.delete(data.id);data.error?promise.reject(new Error(data.error.message)):promise.resolve(data.result)}})
-function send(method,params={}){return new Promise((resolve,reject)=>{const id=++next;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))})}
+function send(method,params={}){return new Promise((resolve,reject)=>{const id=++next;const timer=setTimeout(()=>{pending.delete(id);reject(new Error(`DevTools timed out: ${method}`))},15000);pending.set(id,{resolve:value=>{clearTimeout(timer);resolve(value)},reject:error=>{clearTimeout(timer);reject(error)}});ws.send(JSON.stringify({id,method,params}))})}
 async function evaluate(expression){const result=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(result.exceptionDetails)throw new Error(JSON.stringify(result.exceptionDetails));return result.result.value}
-async function until(expression){for(let i=0;i<80;i++){if(await evaluate(`Boolean(${expression})`))return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error(`Timed out: ${expression}`)}
+async function until(expression,timeout=8000){const deadline=Date.now()+timeout;while(Date.now()<deadline){if(await evaluate(`Boolean(${expression})`))return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error(`Timed out: ${expression}`)}
 const artifacts=fileURLToPath(new URL('../../.artifacts/',import.meta.url))
 await mkdir(artifacts,{recursive:true})
 try {
@@ -39,11 +39,83 @@ try {
   assert.equal(await evaluate(`document.documentElement.scrollWidth > innerWidth`),false)
   const mobile=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true})
   await writeFile(`${artifacts}/configuration-mobile.png`,Buffer.from(mobile.data,'base64'))
+  if(process.env.UI_PROJECT_CHECK==='1') {
+    await evaluate(`document.querySelector('.account-chip').click()`)
+    await until(`document.querySelector('.auth-form') || document.querySelector('.account-toolbar')`)
+    if(await evaluate(`Boolean(document.querySelector('.account-toolbar'))`)){
+      await evaluate(`document.querySelector('.account-toolbar button').click()`)
+      await until(`document.querySelector('.auth-form')`)
+    }
+    await evaluate(`document.querySelectorAll('.side-nav button')[0].click()`)
+    for(let step=0;step<3;step++) await evaluate(`document.querySelector('.upgrade-flow .flow-footer .primary-btn').click()`)
+    await evaluate(`document.querySelector('.upgrade-flow .flow-footer .primary-btn').click()`)
+    await until(`document.querySelector('.fps-comparison')`)
+    assert.match(await evaluate(`document.querySelector('.fps-comparison').textContent`),/Сейчас.*FPS.*FPS.*Прирост/)
+    await evaluate(`Array.from(document.querySelectorAll('.result-actions button')).find(button=>button.textContent==='Сохранить расчёт').click()`)
+    await until(`document.querySelector('.auth-form')`)
+    const email=`server-build-${Date.now()}@example.test`
+    await evaluate(`document.querySelectorAll('.auth-tabs button')[1].click()`)
+    const fill=async(expression,text)=>{await evaluate(`(()=>{const input=${expression};input.focus();input.select()})()`);await send('Input.insertText',{text})}
+    await fill(`document.querySelector('[autocomplete=name]')`,'Server Build Check')
+    await fill(`document.querySelector('[autocomplete=email]')`,email)
+    await fill(`document.querySelectorAll('[autocomplete=new-password]')[0]`,'server-build-password')
+    await fill(`document.querySelectorAll('[autocomplete=new-password]')[1]`,'server-build-password')
+    await evaluate(`document.querySelector('.auth-form .primary-btn').click()`)
+    await until(`document.querySelector('.account-toolbar') && document.querySelector('.saved-account-build')`)
+    assert.equal(await evaluate(`(async()=>{const response=await fetch('/api/builds');return (await response.json()).length})()`),1)
+    await evaluate(`(async()=>{const build=(await (await fetch('/api/builds')).json())[0];localStorage.setItem('pc-upgrade:saved-builds',JSON.stringify([{...build.result,config:build.config,id:'legacy-import',createdAt:new Date().toISOString()}]))})()`)
+    await evaluate(`window.__beforeProjectReload=true`)
+    await send('Page.reload')
+    await until(`!window.__beforeProjectReload && document.querySelector('.saved-account-build')`)
+    assert.match(await evaluate(`document.body.textContent`),/Сохранённые сборки и расчёты/)
+    await evaluate(`document.querySelector('.account-chip').click()`)
+    await until(`document.querySelector('.account-toolbar')`)
+    await until(`Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='Перенести в мой аккаунт')`)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Перенести в мой аккаунт').click()`)
+    await until(`document.querySelector('.notice')?.textContent.includes('Перенесено в ваш аккаунт: 1')`)
+    assert.equal(await evaluate(`JSON.parse(localStorage.getItem('pc-upgrade:saved-builds')).length`),0)
+    assert.equal(await evaluate(`(async()=>{return (await (await fetch('/api/builds')).json()).length})()`),2)
+    await evaluate(`localStorage.removeItem('pc-upgrade:saved-builds')`)
+    await evaluate(`document.querySelector('.account-toolbar button').click()`)
+    await until(`document.querySelector('.auth-form')`)
+    await fill(`document.querySelector('[autocomplete=email]')`,email)
+    await fill(`document.querySelector('[autocomplete=current-password]')`,'server-build-password')
+    await evaluate(`document.querySelector('.auth-form .primary-btn').click()`)
+    await until(`document.querySelector('.account-toolbar') && document.querySelector('.saved-account-build')`)
+    await evaluate(`document.querySelectorAll('.side-nav button')[0].click()`)
+    await evaluate(`document.querySelectorAll('.scenario-switch button')[1].click()`)
+    await evaluate(`(()=>{const input=document.querySelector('#assembly-form [name=build_budget]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'1000000');input.dispatchEvent(new Event('input',{bubbles:true}))})()`)
+    await evaluate(`document.querySelector('#assembly-form .flow-footer .primary-btn').click()`)
+    await evaluate(`document.querySelector('#assembly-form [name=auto_parts]').click()`)
+    await until(`document.querySelector('#assembly-form input[minlength=\"2\"]')`)
+    await evaluate(`(()=>{const form=document.querySelector('#assembly-form');const fill=(element,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,value);element.dispatchEvent(new Event('input',{bubbles:true}))};fill(form.querySelector('input[type=number]'),'1000000');for(const input of form.querySelectorAll('input[minlength="2"]'))fill(input,'Test supporting part');for(const input of form.querySelectorAll('input[min="0"]'))fill(input,'1000')})()`)
+    for(let step=0;step<2;step++) await evaluate(`document.querySelector('#assembly-form .flow-footer .primary-btn').click()`)
+    await evaluate(`document.querySelector('#assembly-form').requestSubmit()`)
+    await until(`document.querySelector('.build-parts')`)
+    assert.equal(await evaluate(`document.querySelectorAll('.build-parts .account-item').length`),8)
+    assert.equal(await evaluate(`document.documentElement.scrollWidth > innerWidth`),false)
+    await evaluate(`document.querySelector('.build-choice-card .primary-btn')?.click()`)
+    await until(`!document.querySelector('[role=dialog]')`)
+    const gpuName=await evaluate(`document.querySelectorAll('.build-parts .part-information > strong')[1].textContent`)
+    await evaluate(`Array.from(document.querySelectorAll('.build-parts .account-item'))[1].querySelectorAll('button')[1].click()`)
+    await until(`document.querySelector('input[aria-label="Поиск объявлений"]')`)
+    assert.equal(await evaluate(`document.querySelector('input[aria-label="Поиск объявлений"]').value`),gpuName)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('Разместить объявление')).click()`)
+    await until(`document.querySelector('[role=dialog]')`)
+    assert.match(await evaluate(`document.querySelector('[role=dialog]').textContent`),/Тип объявления/)
+    assert.equal(await evaluate(`document.body.textContent.includes('Discord')`),false)
+    await evaluate(`document.querySelector('[aria-label="Закрыть окно"]').click()`)
+    console.log('Project browser check passed: registration after save, server storage after reload, legacy import, logout/login without localStorage, eight-part build, marketplace search, publication with email account.')
+  }
   if(process.env.UI_AUTH_CHECK==='1') {
     const fill=async(expression,text)=>{await evaluate(`(()=>{const input=${expression};input.focus();input.select()})()`);await send('Input.insertText',{text})}
     const email=`browser-${Date.now()}@example.test`
     await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false})
     await evaluate(`document.querySelectorAll('.side-nav button')[2].click()`)
+    await until(`document.querySelector('.auth-form') || document.querySelector('.account-toolbar')`)
+    if(await evaluate(`Boolean(document.querySelector('.account-toolbar'))`)){
+      await evaluate(`document.querySelector('.account-toolbar button').click()`)
+    }
     await until(`document.querySelector('.auth-form')`)
     await evaluate(`document.querySelectorAll('.auth-tabs button')[1].click()`)
     await fill(`document.querySelector('[autocomplete=name]')`,'Browser Check')
@@ -63,6 +135,47 @@ try {
     await evaluate(`document.querySelector('.auth-form .primary-btn').click()`)
     await until(`document.querySelector('.account-toolbar')`)
     console.log('Browser authentication passed: registration, persistent session, logout and password login.')
+  }
+  if(process.env.UI_RECOVERY_CHECK==='1'){
+    const fill=async(expression,text)=>{await evaluate(`(()=>{const input=${expression};input.focus();input.select()})()`);await send('Input.insertText',{text})}
+    await evaluate(`document.querySelector('.account-chip').click()`)
+    await until(`document.querySelector('.auth-form') || document.querySelector('.account-toolbar')`)
+    if(await evaluate(`Boolean(document.querySelector('.account-toolbar'))`))await evaluate(`document.querySelector('.account-toolbar button').click()`)
+    await until(`Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='Забыли пароль?')`)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Забыли пароль?').click()`)
+    await until(`document.querySelector('.auth-form h1')?.textContent==='Восстановление пароля'`)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Вернуться ко входу').click()`)
+    await evaluate(`window.location.hash='reset_token=invalid-browser-test-token-12345678901234567890'`)
+    await until(`document.querySelector('.reset-password-form')`)
+    assert.equal(await evaluate(`window.location.hash`),'')
+    await fill(`document.querySelectorAll('.reset-password-form input')[0]`,'new-browser-password')
+    await fill(`document.querySelectorAll('.reset-password-form input')[1]`,'different-browser-password')
+    await evaluate(`document.querySelector('.reset-password-form .primary-btn').click()`)
+    await until(`document.querySelector('.reset-password-form [role=alert]')?.textContent.includes('не совпадают')`)
+    await fill(`document.querySelectorAll('.reset-password-form input')[1]`,'new-browser-password')
+    await evaluate(`document.querySelector('.reset-password-form .primary-btn').click()`)
+    await until(`document.querySelector('.reset-password-form [role=alert]')?.textContent.includes('Ссылка недействительна')`)
+    await evaluate(`document.querySelector('.reset-password-form .secondary-btn').click()`)
+    await until(`document.querySelector('.auth-tabs')`)
+    await evaluate(`document.querySelectorAll('.side-nav button')[0].click()`)
+    await evaluate(`(()=>{const details=Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent.startsWith('Найти предложения на'));details.open=true;window.__storeTest=details.querySelector('.store-offers')})()`)
+    await fill(`window.__storeTest.querySelector('input[placeholder="Например, Ryzen 5 5600"]')`,'unavailable-browser-test-999999')
+    assert.equal(await evaluate(`window.__storeTest.querySelectorAll('input[type=checkbox]:checked').length`),12)
+    await evaluate(`window.__storeTest.querySelector('form').requestSubmit()`)
+    await until(`window.__storeTest.querySelectorAll('.source-statuses li').length===12`,45000)
+    assert.match(await evaluate(`window.__storeTest.textContent`),/Подтверждённых предложений не найдено/)
+    assert.equal(await evaluate(`document.body.textContent.includes('Discord')`),false)
+    console.log('Recovery/stores browser check passed: recovery entry, token removed from URL, password confirmation, invalid-link handling, twelve source statuses without invented prices, no Discord.')
+  }
+  if(process.env.UI_LIVE_OFFERS_CHECK==='1'){
+    await evaluate(`document.querySelectorAll('.side-nav button')[0].click()`)
+    await evaluate(`(()=>{const details=Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent.startsWith('Найти предложения на'));details.open=true;window.__storeTest=details.querySelector('.store-offers');const input=window.__storeTest.querySelector('input[placeholder="Например, Ryzen 5 5600"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'RTX 5060');input.dispatchEvent(new Event('input',{bubbles:true}));window.__storeTest.querySelectorAll('form')[0].querySelectorAll('button[type=button]')[1].click()})()`)
+    await evaluate(`(()=>{for(const label of window.__storeTest.querySelectorAll('.store-checkboxes label'))if(['Регард','OLDI','KNS'].includes(label.textContent.trim()))label.querySelector('input').click()})()`)
+    await evaluate(`window.__storeTest.querySelector('form').requestSubmit()`)
+    await until(`window.__storeTest.querySelectorAll('.store-offer-list article').length>0`,45000)
+    const names=await evaluate(`Array.from(window.__storeTest.querySelectorAll('.store-offer-list article strong')).map(n=>n.textContent)`)
+    assert(names.every(name=>!/5060\s*ti|ноутбук|пэвм|системный блок/i.test(name)))
+    console.log(`Live store UI check passed: ${names.length} RTX 5060 offers from KNS, Regard and OLDI; Ti variants and whole PCs excluded.`)
   }
   console.log('Browser check passed: searchable CPU, system report, DDR3 RAM, unknown channels, responsive width.')
 } finally {ws.close()}

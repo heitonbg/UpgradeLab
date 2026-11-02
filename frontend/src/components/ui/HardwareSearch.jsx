@@ -18,7 +18,7 @@ export function HardwareSearch({ label, items, value, onChange, placeholder }) {
       if (e.key==='Enter' && open) { e.preventDefault();if(matches[active])select(matches[active]) }
       if (e.key==='Escape') { setOpen(false);setQuery(null) }
     }}/><span aria-hidden="true">⌕</span></div>
-    {open && <ul id={`${id}-options`} role="listbox" className="hardware-options">{matches.length ? matches.map((item,index)=><li id={`${id}-${item.id}`} role="option" aria-selected={item.id===Number(value)} key={item.id} className={active===index?'highlighted':''} onMouseEnter={()=>setActive(index)} onMouseDown={e=>{e.preventDefault();select(item)}}><span>{item.name}</span>{item.avg_price && <small>{item.avg_price.toLocaleString('ru-RU')} ₽</small>}</li>) : <li className="search-no-results">Модель не найдена. Попробуйте указать номер без производителя.</li>}</ul>}
+    {open && <ul id={`${id}-options`} role="listbox" className="hardware-options">{matches.length ? matches.map((item,index)=><li id={`${id}-${item.id}`} role="option" aria-selected={item.id===Number(value)} key={item.id} className={active===index?'highlighted':''} onMouseEnter={()=>setActive(index)} onMouseDown={e=>{e.preventDefault();select(item)}}><span>{item.name}</span>{item.avg_price && <small title={`${item.price_source || 'Источник'}${item.sample_count ? ` · объявлений: ${item.sample_count}` : ''}${item.price_date ? ` · ${new Date(item.price_date).toLocaleDateString('ru-RU')}` : ''}`}>~{item.avg_price.toLocaleString('ru-RU')} ₽</small>}</li>) : <li className="search-no-results">Модель не найдена. Попробуйте указать номер без производителя.</li>}</ul>}
     {!selected && !open && text && <small className="field-hint">Выберите модель из результатов поиска.</small>}
   </div>
 }

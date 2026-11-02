@@ -42,3 +42,22 @@ GAME_PROFILES = {
         CalcMode.MODE_1440P_HIGH: {"cpu": 0.006, "gpu": 0.004, "overhead": 0.95},
     },
 }
+
+# Fallback GPU and CPU-throughput coefficients. Published GPU observations in
+# game_benchmarks.json override the GPU estimate where coverage exists.
+ESTIMATED_GAME_PROFILES = {
+    GameName.MIR_TANKOV: ((.020, .020), (.014, .012), (.012, .0085)),
+    GameName.PUBG: ((.013, .012), (.010, .008), (.008, .0058)),
+    GameName.WARZONE: ((.009, .007), (.007, .0045), (.006, .0032)),
+    GameName.OVERWATCH: ((.020, .022), (.016, .015), (.013, .010)),
+    GameName.BG3: ((.010, .0075), (.008, .0048), (.0065, .0033)),
+    GameName.HOGWARTS: ((.009, .005), (.007, .0032), (.0055, .0023)),
+    GameName.STARFIELD: ((.007, .0038), (.0055, .0026), (.0045, .0018)),
+    GameName.FORZA5: ((.012, .010), (.009, .0065), (.0075, .0046)),
+    GameName.WITCHER3: ((.012, .008), (.009, .005), (.007, .0035)),
+    GameName.HELLDIVERS: ((.008, .0055), (.006, .0038), (.005, .0027)),
+    GameName.RE4: ((.012, .010), (.009, .0065), (.007, .0045)),
+}
+for game, modes in ESTIMATED_GAME_PROFILES.items():
+    GAME_PROFILES[game] = {mode: {'cpu': cpu, 'gpu': gpu, 'overhead': .95}
+                           for mode, (cpu, gpu) in zip(CalcMode, modes)}

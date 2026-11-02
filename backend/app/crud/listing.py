@@ -16,6 +16,9 @@ def create(db: Session, payload: ListingCreate) -> Listing:
         price=payload.price,
         contact=payload.contact,
         description=payload.description,
+        listing_type=payload.listing_type,
+        exchange_for=payload.exchange_for,
+        photo_url=payload.photo_url,
     )
     db.add(listing)
     db.flush()

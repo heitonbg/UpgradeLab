@@ -5,13 +5,19 @@ import { CalculatorForm } from './CalculatorForm'
 import { CalculatorResult } from './CalculatorResult'
 import { BottleneckVisualization } from './BottleneckVisualization'
 import { AdditionalUpgrades } from './AdditionalUpgrades'
+import { LoadingPanel } from '../ui/LoadingPanel'
+import { BottleneckLesson } from './BottleneckLesson'
+import { UpgradeChoices } from './UpgradeChoices'
 
 export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnMarketplace, onSaveBuild }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [choicesOpen, setChoicesOpen] = useState(false)
+  const [resaleEditRequest, setResaleEditRequest] = useState(0)
+  const editResale = () => { setChoicesOpen(false); setResaleEditRequest(value=>value+1) }
 
-  const handleCalculate = async ({ cpuId, gpuId, ramId, ramManual, game, mode, budget, aiMode, sellMode, manualCpu, manualGpu }) => {
+  const handleCalculate = async ({ cpuId, gpuId, ramId, ramManual, game, mode, budget, aiMode, sellMode, targetFps, priceSources, manualCpu, manualGpu, expectedSalePrice }) => {
     setLoading(true)
     setError(null)
     try {
@@ -60,6 +66,10 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         budget,
         ai_mode: aiMode,
         sell_mode: sellMode,
+        target_fps: targetFps,
+        price_sources: priceSources,
+        refresh_avito_prices: priceSources === null || priceSources.includes('avito') || sellMode === 'budget_plus_sell' && expectedSalePrice == null,
+        expected_sale_price: expectedSalePrice ?? null,
       }
       const data = await calculateUpgrade(payload)
       const cpu = cpus.find((c) => c.id === finalCpuId)
@@ -78,12 +88,41 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         game,
         graphicsMode: mode,
       })
+      setChoicesOpen(Boolean(data.alternatives?.length) && data.current_fps < targetFps)
     } catch (e) {
       setError(e.message ?? 'Не удалось рассчитать')
       setResult(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  const selectChoice = async choice => {
+    setChoicesOpen(false)
+    setLoading(true)
+    setError(null)
+    try {
+      const config = { ...result.config, refresh_avito_prices: false,
+        selected_upgrade_id: choice.kind === 'platform' ? null : choice.id,
+        selected_platform: choice.kind === 'platform' ? choice.platform_selection : null }
+      const data = await calculateUpgrade(config)
+      setResult(previous => ({ ...previous, ...data, config }))
+    } catch (e) { setError(e.message ?? 'Вариант больше недоступен. Повторите расчёт.') }
+    finally { setLoading(false) }
+  }
+
+  const retryResale = async () => {
+    setChoicesOpen(false)
+    setLoading(true)
+    setError(null)
+    try {
+      const config={...result.config, refresh_avito_prices:true, expected_sale_price:null,
+        selected_upgrade_id:null, selected_platform:null}
+      const data=await calculateUpgrade(config)
+      setResult(previous=>({...previous,...data,config}))
+      setChoicesOpen(Boolean(data.alternatives?.length))
+    } catch(e) { setError(e.message ?? 'Не удалось обновить оценку продажи.') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -97,6 +136,7 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
           rams={rams}
           loading={loading}
           onSubmit={handleCalculate}
+          resaleEditRequest={resaleEditRequest}
         />
       )}
 
@@ -106,21 +146,26 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         </div>
       )}
 
-      {result && (
-        <div className="space-y-6">
+      {loading && <LoadingPanel title="Ищем ограничение производительности" description="Сравниваем CPU и GPU для выбранной игры, настроек и бюджета."/>}
+      {result && !loading && (
+        <div className="space-y-6 result-reveal">
           {/* Визуализация bottleneck */}
           <BottleneckVisualization 
             result={result} 
             cpuName={result.cpuName} 
             gpuName={result.gpuName} 
           />
+          <BottleneckLesson result={result}/>
           
           {/* Результат с ценой и апгрейдом */}
           <CalculatorResult
             result={result}
             onFind={onFindOnMarketplace}
             onSave={() => onSaveBuild(result)}
+            onCompare={result.alternatives?.length ? () => setChoicesOpen(true) : null}
+            onResolveResale={editResale}
           />
+          <UpgradeChoices open={choicesOpen} choices={result.alternatives || []} targetFps={result.target_fps} currentFps={result.current_fps} onSelect={selectChoice} onClose={() => setChoicesOpen(false)} resaleNotice={result.resale_notice} onResolveResale={editResale} onRetryResale={retryResale}/>
           
           {/* Дополнительные улучшения */}
           <AdditionalUpgrades
