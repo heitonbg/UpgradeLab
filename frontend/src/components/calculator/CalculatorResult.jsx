@@ -3,8 +3,9 @@ import { FpsEvidence } from './FpsEvidence'
 import { StoreOffers } from '../StoreOffers'
 import { Button } from '../ui/Button'
 import { PriceEvidence } from './UpgradeChoices'
+import { UpgradeSearchStatus } from './UpgradeSearchStatus'
 
-export function CalculatorResult({ result, onFind, onSave, onCompare, onResolveResale }) {
+export function CalculatorResult({ result, onFind, onSave, onCompare, onResolveResale, onRefreshPrices }) {
   if (!result) return null
   const oldName = result.bottleneck === 'CPU' ? result.cpuName : result.gpuName
   const unavailable = result.price_search_status?.some(source => ['unavailable', 'timeout'].includes(source.status))
@@ -26,7 +27,8 @@ export function CalculatorResult({ result, onFind, onSave, onCompare, onResolveR
     </div>}
     {result.upgrade_parts?.length > 0 && <ul className="upgrade-package-parts result-package-parts">{result.upgrade_parts.map(part=><li key={part.type}><span>{part.name}</span><strong>{part.price.toLocaleString('ru-RU')} ₽</strong>{part.price_url&&<a href={part.price_url} target="_blank" rel="noopener noreferrer">{part.price_source}</a>}</li>)}</ul>}
     {result.platform_upgrade_note && <p className="result-note">{result.platform_upgrade_note}</p>}
-    {unavailable && <p className="field-hint">Avito не удалось обновить во время расчёта. Использованы доступные сохранённые наблюдения; если их нет, цена не показывается.</p>}
+    {unavailable && <p className="field-hint">Часть площадок не ответила. Использованы полученные предложения и доступные сохранённые наблюдения с указанным источником и датой. Если данных для модели нет, цена остаётся неизвестной.</p>}
+    <UpgradeSearchStatus sources={result.price_search_summary} onRefresh={onRefreshPrices}/>
     {result.mode === 'budget_plus_sell' && result.resale_status === 'unavailable' && <div className="result-note upgrade-budget" role="status"><p>{result.resale_notice}</p>{onResolveResale&&<Button variant="secondary" onClick={onResolveResale}>Указать ожидаемую цену продажи</Button>}</div>}
     {result.mode === 'budget_plus_sell' && result.resale_status !== 'unavailable' && <div className="result-note upgrade-budget"><p>Деньги на апгрейд: {(result.cash_budget ?? result.config?.budget ?? 0).toLocaleString('ru-RU')} ₽ + продажа старой детали: {result.current_component_price.toLocaleString('ru-RU')} ₽ = <strong>{result.total_budget.toLocaleString('ru-RU')} ₽</strong>.</p>{result.current_component_price > 0 ? <><p>Продажа — ожидаемая выручка; сумма станет доступна после сделки.</p><PriceEvidence quote={result.resale_price}/></> : <p>{result.resale_price?.price_origin === 'manual' ? 'Вы указали нулевую выручку от продажи.' : 'Оценки продажи нет. Укажите ожидаемую цену в форме, чтобы учесть её в бюджете.'}</p>}</div>}
     {result.ai_warning && <p className="result-note"><strong>Нейросети. </strong>{result.ai_warning}</p>}

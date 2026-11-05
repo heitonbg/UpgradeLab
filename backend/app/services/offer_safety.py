@@ -9,6 +9,7 @@ UNSUITABLE = re.compile(
     r"\b(?:обмен|обменяю|меняю|куплю|выкуп|скупка|ищу|trade|wanted)\b|"
     r"неисправ|нерабоч|на запчасти|под ремонт|не включается|артефакт|"
     r"под восстанов|требует восстанов|требует ремонт|на восстанов|на разбор|\bдонор\b|"
+    r"из\s+ремонта|после\s+ремонта|восстановленн|\brefurbished\b|"
     r"не проверен|непроверен|без проверки|не тестирован|не тестировал|прогрев|нет изображения|"
     r"цена (?:условная|договорная|за креплен)|только коробка|коробка без", re.I)
 
@@ -23,6 +24,14 @@ def safe_offers(rows, hardware):
     """
     candidates = []
     for row in rows:
+        from app.services.offers import title_category
+        category = title_category(row.name)
+        if category and category != row.category:
+            continue
+        if row.category == 'case':
+            from app.services.gaming_selection import is_case_offer
+            if not is_case_offer(row):
+                continue
         if getattr(row, 'source', None) != 'avito' and getattr(row, 'condition', None) == 'new' and re.search(
                 r'\bб\s*/\s*у\b|бывш\w*\s+в\s+употреб|\brefurbished\b', row.name, re.I):
             continue  # A discounted used retail item must not masquerade as new.

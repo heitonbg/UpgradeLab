@@ -107,5 +107,20 @@ class AssemblyFallbackTests(unittest.TestCase):
         self.assertEqual(result['search_report']['additional_sources'],[])
         self.assertTrue(all(call.args[1].sources==['dns'] for call in search.call_args_list))
 
+    def test_outage_result_does_not_present_51k_cpu_gpu_as_parts_for_a_50k_pc(self):
+        self.db.execute(delete(StoreOffer))
+        for category, hardware_id, name, price in [('CPU',1,'Intel Core i5-12400F',10000),
+                ('GPU',4,'GeForce RTX 3060 12GB',41000)]:
+            self.db.add(StoreOffer(source='regard',category=category,hardware_id=hardware_id,name=name,
+                price_rub=price,condition='new',observed_at=datetime.utcnow(),origin='public_page',
+                attributes='{}',url=f'https://www.regard.ru/product/{hardware_id}/part'))
+        self.db.commit()
+        with patch('app.services.builds.search_offers',return_value={}),patch.object(settings,'offers_browser_enabled',False):
+            result=assemble(BuildRequest(**{**self.payload,'budget':50000}),self.db)
+        self.assertEqual(result['status'],'partial')
+        self.assertFalse(any(part['type']=='GPU' for part in result['parts']))
+        self.assertLessEqual(result['budget_plan']['known_parts_subtotal']+
+                             result['budget_plan']['reserved_for_missing'],50000)
+
 
 if __name__=='__main__':unittest.main()

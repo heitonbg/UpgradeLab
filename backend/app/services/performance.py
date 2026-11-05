@@ -159,6 +159,22 @@ def cpu_capacity(raw_score, name, game, mode, ram_factor=1):
     return 21819 * profile['cpu'] * ratio * ram_factor
 
 
+def ram_performance_factor(game, cpu_name='', ram_type=None, ram_channels=None):
+    if game == GameName.CS2 and cpu_name:
+        return .93 if ram_channels == 1 else 1.0
+    factor = 1.0
+    if ram_type and ram_channels:
+        if ram_channels == 2:
+            factor += .05
+        if ram_type == 'DDR5':
+            factor += .08 + (.03 if ram_channels == 2 else 0)
+        elif ram_type == 'DDR4' and ram_channels == 2:
+            factor += .02
+        elif ram_type == 'DDR3':
+            factor -= .05
+    return factor
+
+
 def estimate_fps(cpu_raw, gpu_raw, gpu_name, game, mode, ram_factor=1, cpu_name=''):
     profile = GAME_PROFILES[game][mode]
     return max(1, round(min(cpu_capacity(cpu_raw, cpu_name, game, mode, ram_factor),

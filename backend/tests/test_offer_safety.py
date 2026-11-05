@@ -13,6 +13,31 @@ from app.services.prices import price_map
 
 
 class OfferSafetyTests(unittest.TestCase):
+    def test_refurbished_and_repaired_board_are_excluded(self):
+        from types import SimpleNamespace as O
+        from app.services.offer_safety import safe_offers
+        for title in ['Материнская плата MSI PRO H610M-E (Уценка, из ремонта)',
+                      'Материнская плата AM4 после ремонта','Материнская плата AM4 восстановленная']:
+            row=O(id=1,hardware_id=None,source='oldi',category='motherboard',name=title,
+                price_rub=4780,condition='new',attributes='{}')
+            self.assertEqual(safe_offers([row],{}),[])
+
+    def test_related_ssd_is_not_stored_as_cpu_and_old_wrong_category_can_be_repaired(self):
+        from app.services.offers import upsert
+        from app.schemas.offers import OfferInput
+        engine=create_engine('sqlite://');Base.metadata.create_all(engine)
+        url='https://www.regard.ru/product/123/ssd'
+        with Session(engine) as db:
+            row=OfferInput(source='regard',category='CPU',name='Накопитель SSD 500GB Netac NV3000',
+                price_rub=10050,url=url,observed_at=datetime.utcnow())
+            self.assertEqual(upsert(db,[row],'public_page'),0)
+            db.add(StoreOffer(source='regard',category='CPU',name=row.name,price_rub=10050,
+                url=url,observed_at=datetime.utcnow(),origin='public_page',attributes='{}',condition='new'))
+            db.commit()
+            row.category='storage';row.observed_at=datetime.utcnow()
+            self.assertEqual(upsert(db,[row],'public_page'),1)
+            self.assertEqual(db.query(StoreOffer).one().category,'storage')
+        engine.dispose()
     def test_parser_pairs_the_title_with_its_own_link_and_preserves_description(self):
         from app.services.store_providers import parse_html
         html = '''<div data-auto="product-snippet">

@@ -7,6 +7,7 @@ from app.db.models import StoreOffer, Hardware
 from app.services.store_providers import fetch, parse_html, source_blocked
 from app.services.offers import match_offer
 from app.services.search_time import remaining
+from app.core.config import settings
 
 
 def recent_check(metadata, minutes=15):
@@ -38,7 +39,7 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
             remaining(deadline,5)
             kwargs={'deadline':deadline} if deadline is not None else {}
             try:
-                candidates = parse_html(row.source, fetch(row.url, store=row.source,**kwargs), row.category,
+                candidates = parse_html(row.source, fetch(row.url, store=row.source,product=True,**kwargs), row.category,
                                         row.url, require_single_price=True)
             except Exception:
                 if not browser_sources or row.source not in browser_sources:
@@ -53,11 +54,11 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
             return row.id,None,'request_deadline'
         except Exception as error:
             return row.id, None, str(error)[:240]
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=settings.offers_http_workers) as pool:
         outcomes = list(pool.map(inspect, pending))
     hardware = list(db.scalars(select(Hardware)))
     checked_at = datetime.utcnow().isoformat()
-    blocked = {row.source for row in pending if source_blocked(row.source)}
+    blocked = {row.source for row in pending if source_blocked(row.source, product=True)}
     for row_id, candidate, error in outcomes:
         row = db.get(StoreOffer, row_id)
         data = json.loads(row.attributes)

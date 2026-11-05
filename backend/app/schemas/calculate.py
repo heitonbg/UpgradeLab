@@ -65,6 +65,7 @@ class CalculateRequest(BaseModel):
     price_sources: list[Source] | None = Field(default=None, min_length=1, max_length=12)
     refresh_avito_prices: bool = False
     selected_upgrade_id: int | None = Field(default=None, gt=0)
+    price_lookup_id: int | None = Field(default=None, gt=0)
     expected_sale_price: int | None = Field(default=None, ge=0, le=10000000)
     selected_platform: PlatformUpgradeSelection | None = None
 
@@ -92,6 +93,7 @@ class CalculateResponse(BaseModel):
     alternatives: list[dict] = Field(default_factory=list)
     limiting_explanation: str | None = None
     price_search_status: list[dict] = Field(default_factory=list)
+    price_search_summary: list[dict] = Field(default_factory=list)
     target_basis: Literal['central_estimate'] = 'central_estimate'
     resale_price: dict | None = None
     cash_budget: int = 0

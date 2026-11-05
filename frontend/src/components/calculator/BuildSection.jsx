@@ -2,7 +2,7 @@ import { Icon } from '../ui/Icon'
 import { fpsText } from '../../lib/performance'
 import { FpsEvidence } from './FpsEvidence'
 import { useState } from 'react'
-import { request } from '../../api/client'
+import { runSearch } from '../../api/searchJobs'
 import { GamePicker } from './GamePicker'
 import { GAMES, MODES } from '../../constants/game'
 import { PriceSources, StoreOffers, STORES } from '../StoreOffers'
@@ -32,6 +32,7 @@ export function BuildSection({ onSave, onFind, active = true }) {
   const [form,setForm] = useState({budget:'',target_fps:60,game:GAMES[0].value,mode:MODES[0].value,socket:'AM4',ram_type:'DDR4',ram_capacity_gb:16,price_sources:STORES.map(([id])=>id),allow_store_fallback:true,allow_platform_change:true,auto_parts:true,case_style:'gaming',...emptyParts})
   const [offerPart,setOfferPart] = useState(null)
   const [result,setResult] = useState(null)
+  const [searchProgress,setSearchProgress] = useState('Проверяем доступные площадки')
   const [partial,setPartial] = useState(null)
   const [busy,setBusy] = useState(false)
   const [searchStartedAt,setSearchStartedAt] = useState(null)
@@ -49,7 +50,7 @@ export function BuildSection({ onSave, onFind, active = true }) {
     const config = {...form,scenario:'build',budget:Number(form.budget),target_fps:Number(form.target_fps),ram_capacity_gb:Number(form.ram_capacity_gb),...Object.fromEntries(PARTS.map(([key])=>[key,form.auto_parts?null:{name:form[key].name,price:Number(form[key].price),offer_id:form[key].offer_id||null}]))}
     setChoiceConfig(config)
     try {
-      const data = await request('/api/assemble',{method:'POST',body:config})
+      const data = await runSearch('assemble', config, {onProgress:setSearchProgress})
       if(data.status==='partial'){setPartial(data);setChoicesOpen(false);return}
       setChoices(data.alternatives?.length ? data.alternatives : [data])
       setResult(selectedBuild(data, config));setChoicesOpen(true)
@@ -85,7 +86,7 @@ export function BuildSection({ onSave, onFind, active = true }) {
           {form.auto_parts&&<label className="auto-parts-toggle"><input type="checkbox" checked={form.allow_platform_change} onChange={event=>setForm({...form,allow_platform_change:event.target.checked})}/><span><strong>Можно подобрать другую совместимую платформу</strong><small>При нехватке деталей пересмотрим CPU, плату и тип памяти. Бюджет и минимальный объём RAM сохраняются.</small></span></label>}
           {!form.auto_parts&&<div className="manual-parts"><p className="field-hint">Можно указать имеющиеся детали. Стоимость 0 ₽ допустима; характеристики введённых вручную моделей не подтверждаются автоматически.</p>{PARTS.map(([key,label])=><div className="manual-part-row" key={key}><label>{label}<input required minLength="2" maxLength="200" placeholder="Модель" value={form[key].name} onChange={e=>setForm({...form,[key]:{...form[key],name:e.target.value,offer_id:null}})}/></label><label>Цена, ₽<input required type="number" min="0" max="10000000" value={form[key].price} onChange={e=>setForm({...form,[key]:{...form[key],price:e.target.value,offer_id:null}})}/></label><Button type="button" variant="secondary" onClick={()=>setOfferPart(key)}>Найти</Button></div>)}</div>}
         </fieldset></div>
-        <div className="flow-panel" data-flow-panel="2" hidden={flow.step!==2}><fieldset className="builder-step source-step"><legend><span>03</span>Где искать предложения</legend><PriceSources value={form.price_sources} onChange={value=>setForm({...form,price_sources:value})}/>{form.auto_parts&&<label className="auto-parts-toggle"><input type="checkbox" checked={form.allow_store_fallback} onChange={event=>setForm({...form,allow_store_fallback:event.target.checked})}/><span><strong>Если не хватает предложений — искать в других магазинах</strong><small>Сначала проверим выбранные площадки, затем автоматически подключим остальные.</small></span></label>}<div className="flow-callout"><Icon name="shield"/><p>Сверим цены выбранных товаров. Если магазин не отвечает, поищем замену. Доставка и персональные скидки не включены.</p></div></fieldset></div>
+        <div className="flow-panel" data-flow-panel="2" hidden={flow.step!==2}><fieldset className="builder-step source-step"><legend><span>03</span>Где искать предложения</legend><PriceSources value={form.price_sources} onChange={value=>setForm({...form,price_sources:value})}/>{form.auto_parts&&<label className="auto-parts-toggle"><input type="checkbox" checked={form.allow_store_fallback||form.price_sources?.includes('avito')} disabled={form.price_sources?.includes('avito')} onChange={event=>setForm({...form,allow_store_fallback:event.target.checked})}/><span><strong>Если не хватает предложений — искать в других магазинах</strong><small>{form.price_sources?.includes('avito')?'Avito выбран: резервный поиск включён автоматически, если площадка ограничит доступ.':'Сначала проверим выбранные площадки, затем автоматически подключим остальные.'}</small></span></label>}<div className="flow-callout"><Icon name="shield"/><p>Сверим цены выбранных товаров. Если магазин не отвечает, поищем замену. Доставка и персональные скидки не включены.</p></div></fieldset></div>
         <div className="flow-panel" data-flow-panel="3" hidden={flow.step!==3}><ReviewSummary onEdit={navigate} items={[
           {label:'Игра и графика',value:form.game, note:`${MODES.find(mode=>mode.value===form.mode)?.label} · цель ${form.target_fps} FPS`,icon:'gpu',step:0},
           {label:'Бюджет на весь ПК',value:form.budget?Number(form.budget).toLocaleString('ru-RU')+' ₽':'Не указан',note:'8 комплектующих · без периферии и доставки',icon:'box',step:0},
@@ -97,8 +98,8 @@ export function BuildSection({ onSave, onFind, active = true }) {
       </form>
       <aside className="builder-sidebar"><div className="budget-card"><p className="eyebrow">Ваш ориентир</p><strong>{form.budget?Number(form.budget).toLocaleString('ru-RU')+' ₽':'Ваш бюджет'}</strong><span>На все 8 комплектующих</span><div><Icon name="chip"/><Icon name="gpu"/><Icon name="drive"/><Icon name="box"/></div><p>Сравнивайте варианты по цене, возможностям и составу. FPS показываем диапазоном.</p></div><div className="quality-standard"><div className="quality-heading"><Icon name="shield"/><h3>Качество — часть подбора</h3></div><ul><li><strong>Блок питания</strong><span>Модель, мощность и класс эффективности по спецификации производителя.</span></li><li><strong>Внутренний SSD</strong><span>M.2 NVMe при подтверждённом слоте платы; иначе SATA 2,5″. Проверенные серии, включая Netac и KingSpec. При выбранном Avito доступны б/у SSD с отдельной проверкой состояния.</span></li><li><strong>Полноценное охлаждение</strong><span>Кулер под ваш сокет. Крепления и вентиляторы отдельно не подставляются.</span></li></ul><p>Для автоматического подбора. Цены на качество могут потребовать большего бюджета.</p></div></aside>
     </div>
-    {busy&&!choicesOpen&&<LoadingPanel title="Подбираем варианты сборки" description="Ищем комплектующие и проверяем доступные предложения." startedAt={searchStartedAt} cards/>}
-    <Modal open={active&&choicesOpen} onClose={()=>setChoicesOpen(false)} title={busy?'Собираем варианты для вас':'Выберите свою сборку'} size="wide">{busy?<LoadingPanel title="Ищем детали и сверяем цены товаров" description="Проверяем модели, комплектность и доступные цены на выбранных площадках. Окно можно закрыть — поиск продолжится." startedAt={searchStartedAt} cards/>:<BuildChoices choices={choices} targetFps={choiceConfig?.target_fps} onSelect={choice=>{setResult(selectedBuild(choice,choiceConfig));setChoicesOpen(false)}}/>}</Modal>
+    {busy&&!choicesOpen&&<LoadingPanel title="Подбираем варианты сборки" description={searchProgress} startedAt={searchStartedAt} cards/>}
+    <Modal open={active&&choicesOpen} onClose={()=>setChoicesOpen(false)} title={busy?'Собираем варианты для вас':'Выберите свою сборку'} size="wide">{busy?<LoadingPanel title="Ищем детали и сверяем цены товаров" description={searchProgress} startedAt={searchStartedAt} cards/>:<BuildChoices choices={choices} targetFps={choiceConfig?.target_fps} onSelect={choice=>{setResult(selectedBuild(choice,choiceConfig));setChoicesOpen(false)}}/>}</Modal>
     {choices.length>0&&!busy&&<div className="build-ready result-reveal"><div><strong>Варианты готовы</strong><p className="field-hint">Сравните состав и выберите подходящий вариант.</p></div><Button type="button" variant="secondary" onClick={()=>setChoicesOpen(true)}>Сравнить варианты ({choices.length})</Button></div>}
     <Modal open={active&&Boolean(offerPart)} onClose={()=>setOfferPart(null)} title="Выбрать предложение" size="lg">{offerPart&&<StoreOffers key={offerPart} category={offerPart} initialQuery={form[offerPart].name} onSelect={offer=>{setForm({...form,[offerPart]:{name:offer.name,price:offer.price_rub,offer_id:offer.id}});setOfferPart(null)}}/>}</Modal>
     {partial&&!busy&&<AssemblyPartialResult data={partial} onRetry={()=>submit({preventDefault(){}},true)} onEdit={()=>navigate(0)}/>}

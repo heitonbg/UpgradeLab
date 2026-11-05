@@ -136,6 +136,12 @@ with tempfile.TemporaryDirectory() as directory:
             assert discovered.json()['offers']==[]
             assert discovered.json()['candidates'][0]['url']==urls['dns']
             assert browser.call_count==1
+        health=client.get('/api/offers/status')
+        assert health.status_code==200,health.text
+        dns_status=next(source for source in health.json()['sources'] if source['source']=='dns')
+        assert dns_status['last_search']['method']=='discovery',dns_status
+        assert dns_status['last_search']['status']=='unavailable',dns_status
+        assert dns_status['last_search']['message']=='Цена пока не подтверждена',dns_status
         settings.offers_feed_urls=json.dumps({"wb":"https://feed.example/wb"})
         settings.offers_feed_tokens=json.dumps({"wb":"private-feed-token"})
         with patch('app.services.offers.fetch',return_value=json.dumps({"offers":[rows[2].model_dump(mode='json')]})) as remote:

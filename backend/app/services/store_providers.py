@@ -1,10 +1,10 @@
-"""Public structured markup adapters. Challenges and unavailable pages are errors,
-not empty successful searches. No cookies, CAPTCHA bypass or proxy rotation."""
+"""Public markup adapters with no paid proxy or scraping service.
+Challenges and unavailable pages are errors, never empty successful searches."""
 import json
 import re
 from datetime import datetime
 from urllib.parse import urlencode, urljoin, urlsplit
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 import requests
 import time
 from threading import Lock
@@ -17,14 +17,16 @@ _blocked_until = {}
 _block_lock = Lock()
 
 
-def source_blocked(source):
+def source_blocked(source, product=False):
     with _block_lock:
-        return _blocked_until.get(source, 0) > time.monotonic()
+        key = (source, 'product') if product else source
+        return _blocked_until.get(key, 0) > time.monotonic()
 
 
-def pause_source(source):
+def pause_source(source, product=False):
     with _block_lock:
-        _blocked_until[source] = time.monotonic() + 600
+        key = (source, 'product') if product else source
+        _blocked_until[key] = time.monotonic() + 600
 
 
 def search_url(source, query):
@@ -48,29 +50,38 @@ def resolved_search_url(source, query, deadline=None):
     return url
 
 
-def fetch(url, params=None, token=None, store=None, deadline=None):
+def fetch(url, params=None, token=None, store=None, deadline=None, product=False, redirect_hosts=()):
+    remaining(deadline, 5)
+    # Some storefronts set a region/session cookie before redirecting to the
+    # search page. Retain it for this request without sharing users' sessions.
+    with requests.Session() as session:
+        return _fetch_session(session, url, params, token, store, deadline, product, redirect_hosts)
+
+
+def _fetch_session(session, url, params=None, token=None, store=None, deadline=None, product=False, redirect_hosts=()):
     # URLs originate only from fixed store hosts or administrator configuration.
     # Limit response size and do not follow redirects off the configured host.
     headers = {"User-Agent": "UpgradeLab/1.0", "Accept-Language": "ru-RU"}
-    if store and source_blocked(store):
+    if store and source_blocked(store, product=product):
         raise RuntimeError('Площадка ранее ограничила доступ; повторные запросы приостановлены на 10 минут')
     if token:
         headers["Authorization"] = "Bearer " + token
     for _ in range(4):
-        with requests.get(url, params=params, timeout=request_timeout(deadline), stream=True,
+        with session.get(url, params=params, timeout=request_timeout(deadline), stream=True,
                           headers=headers, allow_redirects=False) as response:
             if response.status_code in (301, 302, 303, 307, 308):
                 location = urljoin(url, response.headers.get("Location", ""))
                 parsed = urlsplit(location)
                 domain = STORES[store]["domain"] if store else ""
                 host = parsed.hostname or ""
-                if not store or token or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None,443) or not (host == domain or host.endswith("." + domain)):
+                allowed = (store and (host == domain or host.endswith('.'+domain))) or host in redirect_hosts
+                if token or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None,443) or not allowed:
                     raise RuntimeError("Источник перенаправил запрос за пределы площадки")
                 url, params = location, None
                 continue
             if response.status_code in (401, 403, 429, 439):
                 if store:
-                    pause_source(store)
+                    pause_source(store, product=product)
                 raise RuntimeError(f"Площадка ограничила доступ (HTTP {response.status_code})")
             response.raise_for_status()
             content = bytearray()
@@ -93,11 +104,18 @@ def money(value):
 
 
 def parse_html(source, html, category, page_url=None, require_single_price=False):
-    lowered = html.lower().replace('\xa0', ' ')
-    if any(marker in lowered for marker in ("showcaptcha", "captcha-container", "подтвердите, что вы не робот", "доступ ограничен", "доступ к сайту", "доступ к сервису временно запрещ", "403 forbidden")):
-        pause_source(source)
+    # A link to a CAPTCHA script is not a challenge. Shops include those scripts
+    # on ordinary product pages too; inspect visible text instead of JavaScript.
+    visible = re.sub(r'<(script|style)\b[^>]*>.*?</\1\s*>', '', html, flags=re.I|re.S)
+    visible = re.sub(r'<[^>]+>', ' ', visible).lower().replace('\xa0', ' ')[:5000]
+    if any(marker in visible for marker in ("подтвердите, что вы не робот", "доступ ограничен", "доступ к сервису временно запрещ", "403 forbidden")):
+        from app.schemas.offers import store_url
+        pause_source(source, product=bool(page_url and store_url(source, page_url)))
         raise RuntimeError("Площадка запросила CAPTCHA; подключите выгрузку предложений")
-    soup = BeautifulSoup(html, "html.parser")
+    # Search pages often contain megabytes of layout and hydration markup.
+    # Structured offers do not need that DOM in memory. Product confirmation
+    # still reads every price representation below to reject contradictory prices.
+    soup = BeautifulSoup(html, "html.parser", parse_only=SoupStrainer(['script', 'h1', 'meta']))
     main_title = soup.select_one('h1, meta[property="og:title"]')
     main_name = (main_title.get('content') or main_title.get_text(' ', strip=True)) if main_title else ''
     def same_page_name(name):
@@ -157,6 +175,9 @@ def parse_html(source, html, category, page_url=None, require_single_price=False
             walk(json.loads(script.get_text()))
         except (ValueError, TypeError):
             continue
+    if found and not require_single_price:
+        return list(found.values())
+    soup = BeautifulSoup(html, 'html.parser')
     # Server-rendered store cards, isolated selectors avoid unrelated page prices.
     selectors = {"avito": '[data-marker="item"]', "yandex": '[data-auto="product-snippet"]',
                  "dns": '.catalog-product', "ozon": '[data-widget="searchResultsV2"] [data-index]',

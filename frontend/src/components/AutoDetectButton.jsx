@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiUrl } from '../api/config'
 
 export function AutoDetectButton({ onDetect }) {
   const [detecting, setDetecting] = useState(false)
@@ -13,7 +14,7 @@ export function AutoDetectButton({ onDetect }) {
       const extension = gl?.getExtension('WEBGL_debug_renderer_info')
       const renderer = extension && gl.getParameter(extension.UNMASKED_RENDERER_WEBGL)
       if (!renderer) { setMessage('Браузер не открыл модель видеокарты. Выберите её из списка.'); return }
-      const response = await fetch('/api/detect-gpu', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renderer_string: renderer }) })
+      const response = await fetch(apiUrl('/api/detect-gpu'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renderer_string: renderer }) })
       if (!response.ok) throw new Error('Сервер не ответил')
       const data = await response.json()
       if (data.gpu_id) { onDetect(null, data.gpu_id); setMessage(`Похоже на ${data.gpu_name}. Проверьте выбор видеокарты и укажите процессор.`) }

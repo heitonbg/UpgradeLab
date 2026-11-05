@@ -1,10 +1,13 @@
 import hashlib
 import json
 import re
+import time
+import requests
 from urllib.parse import unquote, urlsplit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from functools import lru_cache
 from sqlalchemy import select
 from app.core.config import settings, BACKEND_DIR
 from app.db.models import Hardware, StoreOffer, OfferSearch
@@ -17,13 +20,14 @@ def fresh(offer):
     return datetime.utcnow() - timedelta(hours=24) <= offer.observed_at <= datetime.utcnow() + timedelta(minutes=5)
 
 
+@lru_cache(maxsize=32768)
 def model_signatures(name, kind):
     text = name.lower()
     if kind == "CPU":
         pattern = r"(ryzen\s*[3579]\s*\d{4,5}[a-z0-9]*|i[3579][-\s]*\d{4,5}[a-z0-9]*|fx[-\s]*\d{4}[a-z0-9]*)"
     else:
         pattern = r"((?:rtx|gtx|gts|gt|rx)\s*\d{3,4}\s*(?:ti\s*super|ti|super|xtx|xt)?|(?:rx\s*)?vega\s*(?:56|64)|arc\s*[ab]\d{3})"
-    return {re.sub(r"[^a-z0-9]", "", match).replace('rxvega', 'vega') for match in re.findall(pattern, text)}
+    return frozenset(re.sub(r"[^a-z0-9]", "", match).replace('rxvega', 'vega') for match in re.findall(pattern, text))
 
 
 def signature(name, kind):
@@ -83,23 +87,46 @@ def match_offer(hardware, row):
     return matches[0] if len(matches) == 1 else None
 
 
-def upsert(db, rows, origin):
+@lru_cache(maxsize=16384)
+def title_category(name):
+    """Explicit product titles keep related goods out of the requested category."""
+    patterns = (
+        ('motherboard', r'^\s*(?:материнская\s+плата|motherboard)\b'),
+        ('memory', r'^\s*(?:оперативная\s+память|модуль\s+памяти|память\s+(?:DIMM|DDR))\b'),
+        ('storage', r'^\s*(?:накопитель|SSD\b|твердотельный\s+накопитель)'),
+        ('psu', r'^\s*блок\s+питания\b'), ('case', r'^\s*(?:игровой\s+)?корпус\b'),
+        ('cooler', r'^\s*(?:кулер|охлаждение\s+процессора)\b'),
+        ('CPU', r'^\s*процессор\b'), ('GPU', r'^\s*видеокарта\b'),
+    )
+    for category, pattern in patterns:
+        if re.search(pattern, name, re.I):
+            return category
+    cpu, gpu = model_signatures(name, 'CPU'), model_signatures(name, 'GPU')
+    return 'CPU' if cpu and not gpu else 'GPU' if gpu and not cpu else None
+
+
+def upsert(db, rows, origin, commit=True):
     hardware = list(db.scalars(select(Hardware)))
     count = 0
     for row in rows:
         if not isinstance(row, OfferInput):
             row = OfferInput.model_validate(row)
+        category = title_category(row.name)
+        if category and category != row.category:
+            continue
         existing = db.scalar(select(StoreOffer).where(StoreOffer.url == row.url))
         if existing and existing.observed_at > row.observed_at:
             continue
-        if existing and (existing.category != row.category or existing.source != row.source):
-            continue  # One product URL must not become a different component.
+        repairing = bool(existing and existing.category != row.category and category == row.category
+            and title_category(existing.name) == row.category and existing.origin in ('public_page', 'browser_page'))
+        if existing and (existing.source != row.source or existing.category != row.category and not repairing):
+            continue
         if not row.available:
             if existing:
                 db.delete(existing)
             continue
         incoming_page_check = origin in ('product_page', 'browser_page') and row.attributes.get('price_verification', {}).get('status') == 'verified'
-        if existing and origin != 'feed' and not incoming_page_check:
+        if existing and origin != 'feed' and not incoming_page_check and not repairing:
             from app.services.price_verification import recent_check
             verification = json.loads(existing.attributes).get('price_verification', {})
             if recent_check(verification):
@@ -113,7 +140,10 @@ def upsert(db, rows, origin):
         offer.attributes = json.dumps(row.attributes, ensure_ascii=False)
         db.add(offer)
         count += 1
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return count
 
 
@@ -157,56 +187,120 @@ def available_offers(db, sources=None, category=None, include_unavailable=False)
     return [row for row in rows if sources is None or row.source in sources]
 
 
+def search_key(payload):
+    return hashlib.sha256(json.dumps(['public-v3', payload.query.lower(), payload.category,
+        sorted(payload.sources), payload.method, settings.offers_browser_search_engine]).encode()).hexdigest()
+
+
+def collect_source(source, payload, deadline, feeds, tokens):
+    """Network work only; worker threads must never share a database session."""
+    if time.monotonic() >= deadline:
+        return source, [], 'timeout', 'Источник не проверен: общий лимит времени поиска исчерпан', {'attempted': False}
+    try:
+        from app.services.search_time import remaining
+        remaining(deadline, 5)
+        if payload.method == 'web':
+            from app.services.public_discovery import discover_public_offers
+            rows, details = discover_public_offers(source, payload.query, payload.category, deadline)
+            return source, rows, 'product_page' if rows else 'unavailable', (
+                f"HTTP-поиск: подтверждено цен {len(rows)}" if rows else details['error']), details
+        if payload.method != 'http':
+            from app.services.browser_offers import search_browser
+            rows, details = search_browser(source, payload.query, payload.category,
+                payload.method == 'discovery', deadline=deadline)
+            message = details.get('error') or (f"Браузер: найдено предложений {details.get('found', len(rows))}; "
+                f"подтверждено {details['verified']}; найдено ссылок {details['discovered']}")
+            return source, rows, 'browser_page' if rows else 'unavailable', message, details
+        if source in feeds:
+            body = json.loads(fetch(feeds[source], {'query': payload.query, 'category': payload.category},
+                                    tokens.get(source), deadline=deadline))
+            rows = [OfferInput.model_validate(row) for row in body['offers']]
+            rows = [row for row in rows if row.source == source and row.category == payload.category]
+            return source, rows, 'feed', 'Выгрузка источника получена', {}
+        if settings.offers_live_search:
+            return source, search_public(source, payload.query, payload.category, deadline=deadline), 'public_page', 'Публичная страница получена', {}
+        return source, [], 'disabled', 'Прямой поиск отключён; используются сохранённые предложения', {}
+    except (TimeoutError, requests.Timeout):
+        return source, [], 'timeout', 'Площадка не ответила за отведённое время', {}
+    except requests.HTTPError as error:
+        code = error.response.status_code if error.response is not None else 'unknown'
+        return source, [], 'unavailable', f'Площадка вернула HTTP {code}', {}
+    except RuntimeError as error:
+        return source, [], 'unavailable', str(error)[:300], {}
+    except Exception:
+        return source, [], 'unavailable', 'Источник не отдал читаемые предложения: ограничение доступа, ошибка или изменившаяся разметка', {}
+
+
+def persist_search(db, payload, responses, commit=True):
+    statuses = []
+    checked = datetime.utcnow()
+    for source, rows, origin, message, details in responses:
+        if rows:
+            upsert(db, rows, origin, commit=False)
+        statuses.append({'source': source, 'label': LABELS[source], 'status': origin,
+            'attempted': details.get('attempted', True),
+            'method': payload.method, 'message': message, 'checked_at': checked.isoformat() + 'Z',
+            'search_url': search_url(source, payload.query), 'discovered_urls': details.get('links', []),
+            'search_engines': details.get('search_engines', [])})
+    previous = db.get(OfferSearch, search_key(payload)) or OfferSearch(key=search_key(payload))
+    previous.checked_at = checked
+    if any(item['status'] == 'timeout' for item in statuses):
+        previous.checked_at -= timedelta(minutes=9, seconds=30)
+    previous.statuses = json.dumps(statuses, ensure_ascii=False)
+    db.add(previous)
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return previous, statuses
+
+
+def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
+    """Cover missing PC categories concurrently; persist all results serially."""
+    feeds, tokens = json.loads(settings.offers_feed_urls), json.loads(settings.offers_feed_tokens)
+    pending, results, jobs = {}, [], []
+    for payload in payloads:
+        if payload.method != 'http':
+            raise ValueError('Пакетный поиск поддерживает только публичные HTTP-страницы')
+        key = search_key(payload)
+        if key in pending:
+            continue
+        previous = db.get(OfferSearch, key)
+        if previous and previous.checked_at >= datetime.utcnow() - timedelta(minutes=10):
+            results.append({'category': payload.category, 'query': payload.query, 'sources': json.loads(previous.statuses)})
+            continue
+        pending[key] = (payload, [])
+        jobs.extend((key, source, payload) for source in dict.fromkeys(payload.sources))
+    if source_first:
+        # Cover every model on the priority stores before slower fallback stores.
+        jobs.sort(key=lambda job: (job[2].query not in priority_queries, job[2].sources.index(job[1])))
+    def collect(job):
+        key, source, payload = job
+        deadline = payload._deadline or time.monotonic()+30
+        if payload._source_timeout:
+            deadline = min(deadline, time.monotonic()+payload._source_timeout)
+        return key, collect_source(source, payload, deadline, feeds, tokens)
+    with ThreadPoolExecutor(max_workers=settings.offers_http_workers) as pool:
+        for key, response in pool.map(collect, jobs):
+            pending[key][1].append(response)
+    for payload, responses in pending.values():
+        _, statuses = persist_search(db, payload, responses, commit=False)
+        results.append({'category': payload.category, 'query': payload.query, 'sources': statuses})
+    if pending:
+        db.commit()
+    return results
+
+
 def search_offers(db, payload):
-    deadline=payload._deadline
-    feeds = json.loads(settings.offers_feed_urls)
-    tokens = json.loads(settings.offers_feed_tokens)
-    key = hashlib.sha256(json.dumps([payload.query.lower(), payload.category, sorted(payload.sources), payload.method,
-                                    settings.offers_browser_search_engine if payload.method != "http" else None]).encode()).hexdigest()
-    previous = db.get(OfferSearch, key)
+    deadline = payload._deadline or time.monotonic() + 45
+    feeds, tokens = json.loads(settings.offers_feed_urls), json.loads(settings.offers_feed_tokens)
+    previous = db.get(OfferSearch, search_key(payload))
     statuses = json.loads(previous.statuses) if previous else []
     if previous is None or previous.checked_at < datetime.utcnow() - timedelta(minutes=10):
-        def get_source(source):
-            try:
-                from app.services.search_time import remaining
-                remaining(deadline, 5)
-                if payload.method != "http":
-                    from app.services.browser_offers import search_browser
-                    kwargs={'deadline':deadline} if deadline is not None else {}
-                    rows, details = search_browser(source, payload.query, payload.category, payload.method == "discovery",**kwargs)
-                    return source, rows, "browser_page" if rows else "unavailable", (details.get("error") or
-                        f"Браузер: подтверждено предложений {details['verified']}; найдено ссылок в поиске {details['discovered']}"), details
-                if source in feeds:
-                    kwargs={'deadline':deadline} if deadline is not None else {}
-                    body = json.loads(fetch(feeds[source], {"query": payload.query, "category": payload.category}, tokens.get(source),**kwargs))
-                    rows = [OfferInput.model_validate(row) for row in body["offers"]]
-                    rows = [row for row in rows if row.source == source and row.category == payload.category]
-                    return source, rows, "feed", "Выгрузка источника получена", {}
-                if settings.offers_live_search:
-                    kwargs={'deadline':deadline} if deadline is not None else {}
-                    return source, search_public(source, payload.query, payload.category,**kwargs), "public_page", "Публичная страница получена", {}
-                return source, [], "disabled", "Прямой поиск отключён; используются сохранённые предложения", {}
-            except TimeoutError:
-                return source, [], "timeout", "Площадка не ответила за отведённое время", {}
-            except RuntimeError as error:
-                return source, [], "unavailable", str(error)[:300], {}
-            except Exception:
-                return source, [], "unavailable", "Источник не отдал читаемые предложения: ограничение доступа, ошибка или изменившаяся разметка", {}
-        with ThreadPoolExecutor(max_workers=5) as pool:
-            responses = list(pool.map(get_source, dict.fromkeys(payload.sources)))
-        statuses = []
-        for source, rows, origin, message, details in responses:
-            if rows:
-                upsert(db, rows, origin)
-            statuses.append({"source": source, "label": LABELS[source], "status": origin, "method": payload.method, "message": message,
-                             "search_url": search_url(source, payload.query), "discovered_urls": details.get("links", [])})
-        previous = previous or OfferSearch(key=key)
-        previous.checked_at = datetime.utcnow()
-        if any(item['status']=='timeout' for item in statuses):
-            previous.checked_at -= timedelta(minutes=9,seconds=30)
-        previous.statuses = json.dumps(statuses, ensure_ascii=False)
-        db.add(previous)
-        db.commit()
+        with ThreadPoolExecutor(max_workers=settings.offers_http_workers) as pool:
+            responses = list(pool.map(lambda source: collect_source(source, payload, deadline, feeds, tokens),
+                                      dict.fromkeys(payload.sources)))
+        previous, statuses = persist_search(db, payload, responses)
     rows = available_offers(db, payload.sources, payload.category)
     if payload.category in ("CPU", "GPU"):
         rows = [row for row in rows if component_listing(row.name)]

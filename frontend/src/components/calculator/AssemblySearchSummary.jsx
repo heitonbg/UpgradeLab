@@ -3,6 +3,13 @@ import { Icon } from '../ui/Icon'
 import { Button } from '../ui/Button'
 
 const storeNames = Object.fromEntries(STORES)
+const slots = [
+  ['CPU','Процессор','chip'], ['GPU','Видеокарта','gpu'],
+  ['motherboard','Материнская плата','chip'], ['memory','Оперативная память','chip'],
+  ['storage','SSD','drive'], ['psu','Блок питания','shield'],
+  ['case','Корпус','box'], ['cooler','Кулер','fan'],
+]
+const rub = value => `${Number(value || 0).toLocaleString('ru-RU')} ₽`
 
 export function AssemblyPriceNotice({ draft, note }) {
   if(!draft)return null
@@ -33,14 +40,26 @@ export function AssemblySearchSummary({ report }) {
 }
 
 export function AssemblyPartialResult({ data, onRetry, onEdit }) {
+  const parts = Object.fromEntries((data.parts || []).map(part => [part.type, part]))
+  const missing = Object.fromEntries((data.missing_parts || []).map(part => [part.type, part]))
+  const count = data.parts?.length || 0
+  const plan = data.budget_plan
   return <section className="panel assembly-partial result-reveal" aria-labelledby="partial-build-title">
-    <header><span className="section-icon"><Icon name="search" size={23}/></span><div><p className="eyebrow">Результаты поиска</p><h2 id="partial-build-title">{data.parts?.length?'Найденные предложения':'Площадки не дали получить объявления'}</h2></div></header>
-    <p>{data.message}</p>
+    <header><span className="section-icon"><Icon name="box" size={23}/></span><div><p className="eyebrow">Ваш план сборки</p><h2 id="partial-build-title">{count?'Сохранили подходящие предложения':'Продолжим поиск комплектующих'}</h2></div><span className="assembly-count"><strong>{count}</strong> / 8 категорий</span></header>
+    <div className="assembly-progress" role="progressbar" aria-label="Категории с найденными предложениями" aria-valuemin={0} aria-valuemax={8} aria-valuenow={count}><span style={{width:`${count / 8 * 100}%`}}/></div>
+    {plan&&<div className="assembly-budget-overview"><div><span>На весь системный блок</span><strong>{rub(plan.budget)}</strong></div><div><span>Найденные детали</span><strong>{rub(plan.known_parts_subtotal)}</strong></div><div><span>Остаётся на поиск</span><strong>{rub(plan.budget_remaining)}</strong></div></div>}
+    <p>Полная совместимая сборка пока не подтверждена. Найденные предложения сохранены ниже; недостающие детали можно проверить на площадках или поискать через поисковики.</p>
+    {plan&&<p className="field-hint">Бюджеты пустых категорий — план расходов, а не цены товаров. Их сумма вместе с найденными деталями учитывается в общем бюджете. Доставка оплачивается отдельно.</p>}
+    <div className="assembly-slot-grid">{slots.map(([type,label,icon],index)=>{
+      const part = parts[type]
+      const gap = missing[type]
+      return <article className={`assembly-slot ${part?'has-offer':'needs-offer'}`} key={type}>
+        <header><span className="slot-icon"><Icon name={icon} size={19}/></span><div><small>{String(index+1).padStart(2,'0')}</small><h3>{label}</h3></div><span className="slot-state">{part?'Предложение':'Нужно найти'}</span></header>
+        {part?<><strong className="slot-model">{part.name}</strong><div className="slot-price">{rub(part.price)}<small>{part.price_source}</small></div><PartPriceEvidence part={part}/><a className="slot-primary-link" href={part.price_url} target="_blank" rel="noopener noreferrer">Открыть предложение <Icon name="arrow" size={14}/></a></>:<><strong className="slot-model">{gap?.query || 'Подходящая модель ещё не найдена'}</strong>{gap?.budget_limit!=null&&<div className="slot-price">{rub(gap.budget_limit)}<small>Плановый бюджет категории</small></div>}<p className="slot-hint">{gap?.observed_min_price ? `Есть предложения от ${rub(gap.observed_min_price)}. ${gap.blocking_reason === 'outside_budget' ? 'Нужно перераспределить бюджет.' : 'Нужно проверить совместимость и состав.'}` : 'Сравните объявления в поиске. Цена и наличие проверяются на странице товара.'}</p>{Boolean(gap?.web_links?.length)&&<div className="slot-web-links" aria-label={`Поиск: ${label}`}>{gap.web_links.map(link=><a key={link.source} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</div>}{Boolean(gap?.links?.length)&&<details className="slot-store-links"><summary>Открыть поиск в магазинах</summary><div>{gap.links.map(link=><a key={link.source} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</div></details>}</>}
+      </article>
+    })}</div>
     <AssemblySearchSummary report={data.search_report}/>
-    {data.parts?.length>0&&<><h3>Найдены предложения: {data.parts.length} из 8 категорий</h3><p className="field-hint">{data.note}</p><div className="partial-offers">{data.parts.map(part=><article key={part.type}><strong>{part.name}</strong><span>{part.price.toLocaleString('ru-RU')} ₽ · {part.price_source}</span><PartPriceEvidence part={part}/><a href={part.price_url} target="_blank" rel="noopener noreferrer">Открыть товар ↗</a></article>)}</div></>}
-    <h3>{data.parts?.length===8?'Для завершения нужно уточнить совместимость или бюджет':'Что осталось найти'}</h3>
-    <div className="partial-missing">{data.missing_parts?.map(item=><details key={item.type}><summary>{item.label}<small>Найти на площадках</small></summary><p>{item.query}</p><div>{item.links.map(link=><a key={link.source} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</div></details>)}</div>
-    <details className="field-hint"><summary>Что помешало завершить подбор</summary><p>{data.reason}</p></details>
-    <div className="result-actions"><Button type="button" onClick={onRetry}>Повторить подбор</Button><Button type="button" variant="secondary" onClick={onEdit}>Изменить параметры</Button></div>
+    <details className="field-hint assembly-reason"><summary>Что осталось проверить</summary><p>{data.reason}</p><p>{data.note}</p></details>
+    <div className="result-actions"><Button type="button" onClick={onRetry}><Icon name="refresh" size={16}/>Повторить поиск</Button><Button type="button" variant="secondary" onClick={onEdit}>Изменить параметры</Button></div>
   </section>
 }

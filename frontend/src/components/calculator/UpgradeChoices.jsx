@@ -17,12 +17,12 @@ export function PriceEvidence({ quote }) {
   </small>
 }
 
-export function UpgradeChoices({ open, choices, targetFps, currentFps, onSelect, onClose, resaleNotice, onResolveResale, onRetryResale }) {
+export function UpgradeChoices({ open, choices, targetFps, currentFps, onSelect, onClose, resaleNotice, onResolveResale, onRetryResale, onLookupPrice }) {
   return <Modal open={open} onClose={onClose} title="Варианты апгрейда" size="wide">
     {resaleNotice&&<div className="result-note" role="status"><p>{resaleNotice}</p><div className="result-actions">{onRetryResale&&<Button variant="secondary" onClick={onRetryResale}>Повторить автоматический поиск</Button>}{onResolveResale&&<Button variant="secondary" onClick={onResolveResale}>Указать ожидаемую цену продажи</Button>}</div></div>}
     <p className="choice-intro">Сравните замену детали или платформы. В комплект платформы включены CPU, плата, RAM и кулер; видеокарта остаётся. Цены и FPS — ориентиры.</p>
     <div className="upgrade-choice-grid">{choices.map((choice, index) => <article className="upgrade-choice-card" key={choice.key || choice.id || choice.name}>
-      <div className="choice-card-top"><span className="choice-number">0{index + 1}</span><span className="choice-tag">{choice.selection_block_reason === 'resale_price_unavailable' ? 'Продажа не оценена' : choice.budget_shortfall > 0 ? 'Выше бюджета' : !choice.price ? 'Проверить цену' : index === 0 ? 'Рекомендуем' : 'Альтернатива'}</span></div>
+      <div className="choice-card-top"><span className="choice-number">0{index + 1}</span><span className="choice-tag">{!choice.price ? 'Проверить цену' : choice.selection_block_reason === 'resale_price_unavailable' ? 'Продажа не оценена' : choice.budget_shortfall > 0 ? 'Выше бюджета' : index === 0 ? 'Рекомендуем' : 'Альтернатива'}</span></div>
       <p className="eyebrow">{choice.kind === 'platform' ? 'Смена платформы · 4 детали' : choice.component === 'CPU' ? 'Процессор' : 'Видеокарта'}</p>
       <h4>{choice.name}</h4>
       {choice.kind === 'platform' && <ul className="upgrade-package-parts">{choice.parts.map(part=><li key={part.type}><span>{part.name}</span><strong>{part.price.toLocaleString('ru-RU')} ₽</strong>{part.price_url&&<a href={part.price_url} target="_blank" rel="noopener noreferrer">{part.price_source}</a>}</li>)}</ul>}
@@ -33,7 +33,7 @@ export function UpgradeChoices({ open, choices, targetFps, currentFps, onSelect,
       {choice.kind === 'platform' && <p className="field-hint">Предварительная сумма по наблюдениям за 7 дней. Видеокарта остаётся; BIOS, корпус и питание нужно проверить.</p>}
       {choice.budget_shortfall > 0 && <p className="field-hint">С учётом продажи нужно добавить ещё {choice.budget_shortfall.toLocaleString('ru-RU')} ₽.</p>}
       {choice.selection_block_reason === 'resale_price_unavailable' && <p className="field-hint">Своих денег не хватает {choice.cash_shortfall.toLocaleString('ru-RU')} ₽. Доступность после продажи пока не определена — её цена не получена.</p>}
-      <Button type="button" disabled={choice.selection_allowed === false && !(choice.selection_block_reason === 'resale_price_unavailable' && onResolveResale)} variant={index === 0 ? 'primary' : 'secondary'} onClick={() => choice.selection_block_reason === 'resale_price_unavailable' ? onResolveResale?.() : onSelect(choice)}>{choice.selection_block_reason === 'resale_price_unavailable' ? 'Указать цену продажи' : choice.selection_allowed === false ? 'Нужно увеличить бюджет' : 'Выбрать вариант'}</Button>
+      <Button type="button" disabled={!choice.price ? !onLookupPrice : choice.selection_allowed === false && !(choice.selection_block_reason === 'resale_price_unavailable' && onResolveResale)} variant={index === 0 ? 'primary' : 'secondary'} onClick={() => !choice.price ? onLookupPrice?.(choice) : choice.selection_block_reason === 'resale_price_unavailable' ? onResolveResale?.() : onSelect(choice)}>{!choice.price ? 'Найти цену' : choice.selection_block_reason === 'resale_price_unavailable' ? 'Указать цену продажи' : choice.selection_allowed === false ? 'Нужно увеличить бюджет' : 'Выбрать вариант'}</Button>
     </article>)}</div>
   </Modal>
 }

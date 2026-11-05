@@ -58,7 +58,19 @@ def case_features(offer):
     return score
 
 
+def is_case_offer(offer):
+    """Reject case accessories accidentally returned for a case search."""
+    title = offer.name.upper()
+    explicit_case = re.search(r"^\s*(?:(?:КОМПЬЮТЕРНЫЙ|ИГРОВОЙ)\s+)?КОРПУС\b", title)
+    if re.search(r"КОРПУС\s+(?:ДЛЯ\s+)?(?:КОНТРОЛЛЕР|SSD|HDD|НАКОПИТЕЛ|ТЕЛЕФОН)", title):
+        return False
+    if not explicit_case and re.search(r"FAN\s*(?:HUB|CONTROLLER)|CONTROLLER|\bHUB\b|ВЕНТИЛЯТОР|КОНТРОЛЛЕР|КРЕПЛЕНИ|ПАНЕЛЬ|ФИЛЬТР|ЗАГЛУШК|КОРЗИНА|КРОНШТЕЙН|АКСЕССУАР", title, re.I):
+        return False
+    return bool(re.search(r"\bCASE\b|\bCHASSIS\b|КОРПУС|CC\s?\d{3}|CH\s?\d{3}|MONTECH\s+(?:X\d|AIR\s?\d|SKY)|ZALMAN\s+[A-Z]?\d{2,3}|POWERCOOL\s+SLIM\b", title, re.I))
+
+
 def gaming_cases(offers, budget, style='gaming', flexible=False):
+    offers = [offer for offer in offers if is_case_offer(offer)]
     if style == 'budget':
         return sorted(offers, key=lambda o: (o.condition != 'new', o.price_rub))
     limit = max(3500, min(15000, round(budget * (.15 if flexible else .09))))

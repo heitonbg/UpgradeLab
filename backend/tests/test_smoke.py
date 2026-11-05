@@ -5,13 +5,14 @@ import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
 import sqlite3
+from contextlib import ExitStack
 from unittest import SkipTest
 
 if __name__ != '__main__':
     raise SkipTest('Run test_smoke.py in its own process to isolate the database and settings.')
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-with tempfile.TemporaryDirectory() as directory:
+with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
     os.environ["DATABASE_URL"] = "sqlite:///" + (Path(directory) / "smoke.db").as_posix()
     # Exercise the additive migration against the previous listings schema.
     with sqlite3.connect(Path(directory) / "smoke.db") as legacy:
@@ -22,6 +23,7 @@ with tempfile.TemporaryDirectory() as directory:
     from fastapi.testclient import TestClient
     from app.main import app
     from app.db.base import engine
+    cleanup.callback(engine.dispose)
     from app.db.base import SessionLocal
     from app.db.models import Hardware, HardwarePrice
     from sqlalchemy import delete
@@ -164,7 +166,7 @@ with tempfile.TemporaryDirectory() as directory:
             remote_builds = another_browser.get("/api/builds")
             assert remote_builds.headers["cache-control"] == "no-store"
             assert len(remote_builds.json()) == 1
-        assert remote_builds.json()[0]["config"] == {**payload, "ram_id": None, "ram_manual": None, "ai_mode": "off", "sell_mode": "budget_only", "target_fps": 60, "price_sources": None, "refresh_avito_prices": False, "selected_upgrade_id": None, "expected_sale_price": None, "selected_platform": None}
+        assert remote_builds.json()[0]["config"] == {**payload, "ram_id": None, "ram_manual": None, "ai_mode": "off", "sell_mode": "budget_only", "target_fps": 60, "price_sources": None, "refresh_avito_prices": False, "selected_upgrade_id": None, "expected_sale_price": None, "selected_platform": None, "price_lookup_id": None}
         assert client.patch("/api/auth/profile", json={"name": "Новое имя"}).json()["name"] == "Новое имя"
         assert client.post("/api/auth/password", json={"current_password": "wrong", "new_password": "newpassword"}).status_code == 400
         assert client.post("/api/auth/password", json={"current_password": "longpassword", "new_password": "newpassword"}).status_code == 200

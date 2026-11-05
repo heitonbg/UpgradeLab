@@ -68,11 +68,12 @@ class OfferInput(BaseModel):
 
 class SearchOffers(BaseModel):
     _deadline: float | None = PrivateAttr(default=None)
+    _source_timeout: float | None = PrivateAttr(default=None)
     query: str = Field(min_length=2, max_length=160)
     category: Category
     sources: list[Source] = Field(default_factory=lambda: list(DOMAINS), min_length=1, max_length=len(STORES))
     hardware_id: int | None = Field(default=None, gt=0)
-    method: Literal["http", "browser", "discovery"] = "http"
+    method: Literal["http", "web", "browser", "discovery"] = "http"
 
     @model_validator(mode="after")
     def browser_batch(self):

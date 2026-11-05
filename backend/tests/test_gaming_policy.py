@@ -73,6 +73,18 @@ class GamingPolicyTests(unittest.TestCase):
         self.assertTrue(all(item.condition == 'new' for item in result))
         self.assertIn(old, gaming_cases([old, gaming], 70000, 'budget'))
 
+    def test_case_accessories_never_fill_the_case_slot(self):
+        def offer(name):
+            return Obj(name=name, price_rub=2500, condition='new', attributes='{}')
+        accessories=[offer('Контроллер вентиляторов DeepCool FH-10'),
+                     offer('Панель для корпуса DeepCool CC560'),
+                     offer('Корпус для SSD NVMe')]
+        real=offer('Корпус DeepCool CC560 с вентиляторами и контроллером RGB')
+        for style in ('gaming','budget','minimal'):
+            with self.subTest(style=style):
+                result=gaming_cases([*accessories,real],50000,style)
+                self.assertEqual(result,[real])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from app.core.constants import GAME_PROFILES
 from app.schemas.calculate import AIOption, Bottleneck, CalcMode, GameName
-from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, fps_outlook, cs2_cpu_basis
+from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, fps_outlook, cs2_cpu_basis, ram_performance_factor
 
 
 def meaningful_upgrade(current_fps, after_fps):
@@ -54,24 +54,7 @@ def calculate(
 ) -> CalculateResult:
     profile = GAME_PROFILES[game][mode]
 
-    # 2.5. Учитываем влияние RAM на производительность
-    ram_boost = 1.0
-    if ram_type and ram_channels:
-        if ram_channels == 2:
-            ram_boost += 0.05  # Двухканальный режим даёт +5%
-        if ram_type == "DDR5":
-            ram_boost += 0.08  # DDR5 быстрее DDR4
-            if ram_channels == 2:
-                ram_boost += 0.03  # DDR5 + dual channel = ещё +3%
-        elif ram_type == "DDR4":
-            if ram_channels == 2:
-                ram_boost += 0.02  # DDR4 dual даёт небольшой бонус
-        elif ram_type == "DDR3":
-            ram_boost -= 0.05  # DDR3 замедляет современные системы
-    # CS2 CPU references already use dual-channel memory. Do not add a second
-    # dual-channel/DDR5 bonus to their measured relative ranking.
-    if game == GameName.CS2 and cpu_name:
-        ram_boost = .93 if ram_channels == 1 else 1.0
+    ram_boost = ram_performance_factor(game, cpu_name, ram_type, ram_channels)
     
     # Memory affects CPU throughput; it must not increase a GPU-limited result.
     cpu_cap = cpu_capacity(cpu_raw, cpu_name, game, mode, ram_boost)
@@ -198,7 +181,7 @@ def calculate(
                (not has_budget_limit or search_budget > 0)]
     stretch = [item for item in candidates if item.get('avg_price') and
                has_budget_limit and item['avg_price'] > search_budget]
-    eligible = affordable or unknown
+    eligible = [*affordable, *unknown]
 
     def choose(items):
         reached = [item for item in items if fps_for(item) >= target_fps and item.get('avg_price')]
@@ -252,7 +235,7 @@ def calculate(
     if eligible:
         best = max(eligible, key=lambda item: (fps_for(item), -(item.get('avg_price') or float('inf'))))
     extra = choose(stretch) if stretch else None
-    ordered = [recommended, extra, best, *sorted(eligible, key=lambda item: (
+    ordered = [chosen, recommended, extra, best, *sorted(eligible, key=lambda item: (
         item.get('avg_price') or float('inf'), -fps_for(item)))]
     alternatives, seen = [], set()
     for item in ordered:

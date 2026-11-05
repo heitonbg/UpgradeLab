@@ -12,6 +12,7 @@ import { UpgradeChoices } from './UpgradeChoices'
 export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnMarketplace, onSaveBuild }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [searchProgress, setSearchProgress] = useState('Проверяем конфигурацию и цены')
   const [error, setError] = useState(null)
   const [choicesOpen, setChoicesOpen] = useState(false)
   const [resaleEditRequest, setResaleEditRequest] = useState(0)
@@ -68,10 +69,10 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         sell_mode: sellMode,
         target_fps: targetFps,
         price_sources: priceSources,
-        refresh_avito_prices: priceSources === null || priceSources.includes('avito') || sellMode === 'budget_plus_sell' && expectedSalePrice == null,
+        refresh_avito_prices: true,
         expected_sale_price: expectedSalePrice ?? null,
       }
-      const data = await calculateUpgrade(payload)
+      const data = await calculateUpgrade(payload, {onProgress:setSearchProgress})
       const cpu = cpus.find((c) => c.id === finalCpuId)
       const gpu = gpus.find((g) => g.id === finalGpuId)
       const ram = rams.find((r) => r.id === Number(ramId))
@@ -106,22 +107,26 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         selected_upgrade_id: choice.kind === 'platform' ? null : choice.id,
         selected_platform: choice.kind === 'platform' ? choice.platform_selection : null }
       const data = await calculateUpgrade(config)
-      setResult(previous => ({ ...previous, ...data, config }))
+      setResult(previous => ({ ...previous, ...data, config,
+        price_search_status: previous.price_search_status,
+        price_search_summary: previous.price_search_summary }))
     } catch (e) { setError(e.message ?? 'Вариант больше недоступен. Повторите расчёт.') }
     finally { setLoading(false) }
   }
 
-  const retryResale = async () => {
+  const refreshPrices = async (resetResale = false, focusId = null) => {
     setChoicesOpen(false)
     setLoading(true)
     setError(null)
     try {
-      const config={...result.config, refresh_avito_prices:true, expected_sale_price:null,
+      const config={...result.config, refresh_avito_prices:true,
+        price_lookup_id:focusId,
+        expected_sale_price: resetResale ? null : result.config.expected_sale_price,
         selected_upgrade_id:null, selected_platform:null}
-      const data=await calculateUpgrade(config)
+      const data=await calculateUpgrade(config, {onProgress:setSearchProgress})
       setResult(previous=>({...previous,...data,config}))
       setChoicesOpen(Boolean(data.alternatives?.length))
-    } catch(e) { setError(e.message ?? 'Не удалось обновить оценку продажи.') }
+    } catch(e) { setError(e.message ?? 'Не удалось обновить цены.') }
     finally { setLoading(false) }
   }
 
@@ -146,7 +151,7 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
         </div>
       )}
 
-      {loading && <LoadingPanel title="Ищем ограничение производительности" description="Сравниваем CPU и GPU для выбранной игры, настроек и бюджета."/>}
+      {loading && <LoadingPanel title="Ищем ограничение и цены" description={searchProgress}/>}
       {result && !loading && (
         <div className="space-y-6 result-reveal">
           {/* Визуализация bottleneck */}
@@ -164,8 +169,9 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
             onSave={() => onSaveBuild(result)}
             onCompare={result.alternatives?.length ? () => setChoicesOpen(true) : null}
             onResolveResale={editResale}
+            onRefreshPrices={() => refreshPrices()}
           />
-          <UpgradeChoices open={choicesOpen} choices={result.alternatives || []} targetFps={result.target_fps} currentFps={result.current_fps} onSelect={selectChoice} onClose={() => setChoicesOpen(false)} resaleNotice={result.resale_notice} onResolveResale={editResale} onRetryResale={retryResale}/>
+          <UpgradeChoices open={choicesOpen} choices={result.alternatives || []} targetFps={result.target_fps} currentFps={result.current_fps} onSelect={selectChoice} onClose={() => setChoicesOpen(false)} resaleNotice={result.resale_notice} onResolveResale={editResale} onRetryResale={() => refreshPrices(true)} onLookupPrice={choice => refreshPrices(false, choice.id)}/>
           
           {/* Дополнительные улучшения */}
           <AdditionalUpgrades

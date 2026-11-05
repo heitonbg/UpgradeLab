@@ -114,3 +114,17 @@ class OfferSearch(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime)
     statuses: Mapped[str] = mapped_column(Text)
+
+
+class SearchJob(Base):
+    __tablename__ = 'search_jobs'
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_key: Mapped[str] = mapped_column(String(64), unique=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    payload: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    progress: Mapped[str] = mapped_column(String(300))
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -7,7 +7,7 @@ from app.schemas.calculate import CalculateRequest, CalculateResponse
 from app.services import calculator
 from app.services.prices import public_price
 from app.services.performance import fps_outlook, CS2_CPU_SOURCE
-from app.services.upgrade_prices import upgrade_price_map, avito_price_estimates, refresh_avito
+from app.services.upgrade_prices import upgrade_price_map, avito_price_estimates, refresh_upgrade_prices, upgrade_search_summary
 from app.services.upgrade_platforms import platform_choices
 from dataclasses import replace
 
@@ -35,14 +35,25 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
 
     # Получаем все CPU и GPU для поиска апгрейда в рамках бюджета
     all_hw = list(db.scalars(select(Hardware)))
+    ram_type, ram_channels = None, None
+    if payload.ram_id:
+        ram = db.get(Hardware, payload.ram_id)
+        if not ram or ram.type != 'RAM':
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'RAM не найдена')
+        ram_type, ram_channels = ram.ram_type, ram.ram_channels
+    elif payload.ram_manual:
+        ram_type, ram_channels = payload.ram_manual.type, payload.ram_manual.channels
+    from datetime import datetime
+    search_started = datetime.utcnow()
     statuses = []
-    if payload.refresh_avito_prices and (payload.price_sources is None or 'avito' in payload.price_sources
-            or payload.sell_mode == 'budget_plus_sell' and payload.expected_sale_price is None):
+    if payload.refresh_avito_prices:
         import time
         from app.services.offers import search_offers
         single_offer_fallback = payload.sell_mode == 'budget_plus_sell' and payload.expected_sale_price is None
-        statuses = refresh_avito(db, all_hw, cpu, gpu, time.monotonic() + (12 if single_offer_fallback else 8), search_offers,
-                                 payload.game, payload.mode, single_offer_fallback=single_offer_fallback)
+        statuses = refresh_upgrade_prices(
+            db, all_hw, cpu, gpu, time.monotonic() + 45, search_offers,
+            payload.price_sources, payload.game, payload.mode, resale_fallback=single_offer_fallback,
+            target_fps=payload.target_fps, ram_type=ram_type, ram_channels=ram_channels, focus_id=payload.price_lookup_id)
     prices = upgrade_price_map(db, payload.price_sources)
     resale_quotes = avito_price_estimates(db) if payload.sell_mode == 'budget_plus_sell' else {}
     def sale_value(hardware_id):
@@ -68,21 +79,6 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
     gpu_vram = gpu.vram
     cpu_socket = cpu.socket
     
-    # Получаем RAM если указана
-    ram_type = None
-    ram_channels = None
-    if payload.ram_id:
-        ram = db.get(Hardware, payload.ram_id)
-        if not ram or ram.type != "RAM":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "RAM не найдена")
-        if ram:
-            ram_type = ram.ram_type
-            ram_channels = ram.ram_channels
-    elif payload.ram_manual:
-        # Используем ручные данные RAM
-        ram_type = payload.ram_manual.type
-        ram_channels = payload.ram_manual.channels
-
     result = calculator.calculate(
         cpu_raw=cpu.raw_score,
         gpu_raw=gpu.raw_score,
@@ -236,6 +232,8 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
         alternatives=alternatives,
         limiting_explanation=result.limiting_explanation,
         price_search_status=statuses,
+        price_search_summary=upgrade_search_summary(statuses, prices, resale_quotes,
+            payload.price_sources, search_started, {h.id: h.name for h in all_hw}) if payload.refresh_avito_prices else [],
         resale_price=resale_price,
         cash_budget=payload.budget or 0,
         net_upgrade_cost=max(0, result.avg_price-result.current_component_price) if result.avg_price and resale_status != 'unavailable' else None,

@@ -76,7 +76,7 @@ def search_queries(budget, socket):
                       'LGA1200':['Core i3-10100F','Core i5-10400F'],
                       'LGA1151':['Core i5-8400','Core i5-9400F']}
         cpus=list(dict.fromkeys(entry_cpus.get(socket,[]) + cpus))
-    gpu = (['Radeon RX 6600', 'GeForce RTX 3060', 'GeForce RTX 2060 SUPER'] if budget <= 60000
+    gpu = (['Radeon RX 6600', 'GeForce RTX 3050 6GB', 'GeForce GTX 1660 SUPER', 'GeForce RTX 2060', 'GeForce RTX 3060', 'GeForce RTX 2060 SUPER'] if budget <= 60000
            else ['GeForce RTX 5060', 'GeForce RTX 4060', 'Radeon RX 7600', 'Radeon RX 6700 XT'])
     gpu += ['Radeon RX 6600', 'GeForce RTX 3060', 'GeForce RTX 2060 SUPER', 'GeForce GTX 1660 SUPER', 'GeForce RTX 2060']
     if budget <= 35000:
@@ -84,10 +84,10 @@ def search_queries(budget, socket):
     gpu = list(dict.fromkeys(gpu))
     return {
         'CPU': cpus, 'GPU': gpu,
-        'storage': ['Netac NV3000 500GB', 'KingSpec NX 512GB 2280', 'Lexar NM620 512GB', 'Crucial BX500 480GB', 'Kingston A400 480GB',
+        'storage': ['Netac NV3000', 'Lexar NM620', 'KingSpec NX 512GB 2280', 'Crucial BX500', 'Kingston A400',
                     'Crucial P3 Plus 500GB', 'WD Blue SN580 500GB', 'Samsung 980 500GB'] +
                    (['Lexar NM620 1TB', 'WD Blue SN580 1TB', 'Kingston KC3000 1TB'] if budget >= 80000 else []),
-        'psu': ['DeepCool PK550D', 'Corsair CX550', 'DeepCool PK650D', 'Corsair CX650', 'MSI MAG A650BN'] +
+        'psu': ['DeepCool PK550D', 'MSI MAG A650BN', 'Corsair CX550', 'DeepCool PK650D', 'Corsair CX650'] +
                (['Corsair CX750', 'MSI MAG A750GL'] if budget >= 80000 else []),
         'cooler': ['ID-COOLING SE-214-XT', 'Thermalright Assassin X 120 Refined SE', 'DeepCool AG400', 'DeepCool AG300'] +
                   (['ARCTIC Freezer 36'] if budget >= 80000 else []),

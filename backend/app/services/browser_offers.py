@@ -3,6 +3,10 @@ through a search engine, then verify prices at the store, never in snippets."""
 import base64
 import ipaddress
 import time
+import sys
+import logging
+from pathlib import Path
+from importlib.metadata import version, PackageNotFoundError
 from datetime import datetime
 from contextlib import contextmanager
 from threading import BoundedSemaphore
@@ -14,14 +18,23 @@ from app.schemas.offers import store_url
 from app.services.store_providers import parse_html, resolved_search_url
 from app.services.search_time import remaining
 
-browser_slots = BoundedSemaphore(2)
-SEARCH_HOSTS = {"www.bing.com", "bing.com", "www.google.com", "google.com", "yandex.ru", "www.yandex.ru"}
+browser_slots = BoundedSemaphore(1)
+last_launch_error = None
+logger = logging.getLogger(__name__)
+SEARCH_HOSTS = {"www.bing.com", "bing.com", "www.google.com", "google.com", "yandex.ru", "www.yandex.ru",
+                "duckduckgo.com", "html.duckduckgo.com"}
+SEARCH_ENGINES = {"bing": ("https://www.bing.com/search", "q"),
+                  "google": ("https://www.google.com/search", "q"),
+                  "yandex": ("https://yandex.ru/search/", "text"),
+                  "duckduckgo": ("https://html.duckduckgo.com/html/", "q")}
 
 
 def unwrap_search_link(href):
     url = urljoin("https://www.bing.com", href)
     parsed = urlsplit(url)
     query = parse_qs(parsed.query)
+    if parsed.path in ('/l/', '/l') and query.get('uddg'):
+        return query['uddg'][0]
     if parsed.hostname in {"bing.com", "www.bing.com"} and parsed.path == "/ck/a":
         encoded = query.get("u", [""])[0]
         if encoded.startswith("a1"):
@@ -67,6 +80,59 @@ def allowed_navigation(url, source, search=False):
         host == domain or host.endswith("." + domain) or search and host in SEARCH_HOSTS)
 
 
+def browser_diagnostics():
+    """Inspect installation without launching Chromium or exposing environment secrets."""
+    info = {'enabled': settings.offers_browser_enabled, 'configured_channel': settings.offers_browser_channel,
+            'platform': sys.platform, 'package_version': None, 'bundled_installed': False}
+    try:
+        info['package_version'] = version('playwright')
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as playwright:
+            info['bundled_installed'] = Path(playwright.chromium.executable_path).is_file()
+    except (ImportError, PackageNotFoundError, OSError, RuntimeError):
+        pass
+    info['last_launch_error'] = last_launch_error
+    for field, paths in {
+        'memory_limit_bytes': ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'),
+        'memory_current_bytes': ('/sys/fs/cgroup/memory.current', '/sys/fs/cgroup/memory/memory.usage_in_bytes'),
+        'pids_limit': ('/sys/fs/cgroup/pids.max',), 'pids_current': ('/sys/fs/cgroup/pids.current',),
+    }.items():
+        for filename in paths:
+            try:
+                value = Path(filename).read_text().strip()
+                info[field] = int(value) if value.isdigit() else value
+                break
+            except (OSError, ValueError):
+                continue
+    return info
+
+
+def launch_browser(playwright, deadline):
+    global last_launch_error
+    options = {'headless': True, 'args': ['--disable-dev-shm-usage']}
+    channel = settings.offers_browser_channel or None
+    # Linux hosting has bundled Chromium; a leftover local msedge setting must
+    # not prevent it from starting. Do not depend on Amvera setting AMVERA=1.
+    if sys.platform.startswith('linux') and Path(playwright.chromium.executable_path).is_file():
+        # channel=None uses the separate headless-shell binary, whereas this
+        # installation check refers to full Chromium. Launch the binary checked.
+        channel = 'chromium'
+    try:
+        return playwright.chromium.launch(channel=channel,
+            timeout=max(1, int(remaining(deadline, 8)*1000)), **options)
+    except Exception as error:
+        last_launch_error = {'at': datetime.utcnow().isoformat()+'Z', 'detail': str(error)[:1800]}
+        logger.warning('Chromium launch failed: %s', str(error)[:1800])
+        if channel and Path(playwright.chromium.executable_path).is_file():
+            try:
+                return playwright.chromium.launch(timeout=max(1, int(remaining(deadline, 5)*1000)), **options)
+            except Exception:
+                pass
+        if not Path(playwright.chromium.executable_path).is_file():
+            raise RuntimeError('Chromium не установлен в образе сервера. Пересоберите backend с Dockerfile проекта.') from error
+        raise RuntimeError('Не удалось запустить Chromium в контейнере. Проверьте память и журнал запуска backend.') from error
+
+
 @contextmanager
 def browser_context(deadline=None):
     if not settings.offers_browser_enabled:
@@ -82,13 +148,16 @@ def browser_context(deadline=None):
             owned = not settings.offers_browser_cdp_url
             try:
                 browser = (playwright.chromium.connect_over_cdp(settings.offers_browser_cdp_url, timeout=max(1,int(remaining(deadline,5)*1000)))
-                           if not owned else playwright.chromium.launch(channel=settings.offers_browser_channel or None, headless=True,
-                                timeout=max(1,int(remaining(deadline,8)*1000))))
-            except Exception:
-                raise RuntimeError("Не удалось запустить/подключить браузер; проверьте настройки Edge/Chromium")
+                           if not owned else launch_browser(playwright, deadline))
+            except RuntimeError:
+                raise
+            except Exception as error:
+                raise RuntimeError("Не удалось подключить браузер; проверьте настройку CDP") from error
             context = browser.new_context(locale="ru-RU", accept_downloads=False)
 
             def public_only(route):
+                if route.request.resource_type in ('image', 'media', 'font'):
+                    return route.abort()
                 parsed = urlsplit(route.request.url)
                 host = parsed.hostname or ""
                 if parsed.scheme not in ("http", "https", "data", "blob") or host in ("localhost", "metadata.google.internal") or host.endswith(".local"):
@@ -115,16 +184,22 @@ def read_page(page, source, url, search=False, deadline=None):
     if not allowed_navigation(url, source, search):
         raise RuntimeError("Адрес не принадлежит выбранной площадке")
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=max(1,int(remaining(deadline,settings.offers_browser_timeout_ms/1000)*1000)))
+        response = page.goto(url, wait_until="domcontentloaded", timeout=max(1,int(remaining(deadline,settings.offers_browser_timeout_ms/1000)*1000)))
     except Exception:
         # A navigation timeout may still leave a readable document.
         if not allowed_navigation(page.url, source, search):
             raise RuntimeError("Браузер не открыл страницу площадки")
+        response = None
+    if response is not None and response.status in (401, 403, 429, 439):
+        raise RuntimeError(f"Браузер: площадка вернула HTTP {response.status}")
     if not allowed_navigation(page.url, source, search):
         raise RuntimeError("Площадка перенаправила браузер за пределы разрешённых адресов")
-    poll_deadline = time.monotonic() + remaining(deadline,4)
+    # Navigation can time out after a usable search document is already drawn.
+    # Inspect it once before enforcing the polling deadline; otherwise each
+    # engine's whole result is thrown away merely because domcontentloaded was late.
+    poll_deadline = min(deadline, time.monotonic()+4) if deadline is not None else time.monotonic()+4
     html = ""
-    while time.monotonic() < poll_deadline:
+    while True:
         html = page.content()
         if len(html) > 8 * 1024 * 1024:
             raise RuntimeError("Страница слишком большая")
@@ -139,11 +214,35 @@ def read_page(page, source, url, search=False, deadline=None):
                 return html
             except RuntimeError:
                 pass
+        if time.monotonic() >= poll_deadline:
+            break
         page.wait_for_timeout(min(500,max(1,int((poll_deadline-time.monotonic())*1000))))
     return html
 
 
+def search_engine_links(page, source, query, deadline):
+    """Merge product URLs from all engines, reserving time to read the products."""
+    attempts, combined = [], []
+    engines = list(dict.fromkeys([settings.offers_browser_search_engine, *SEARCH_ENGINES]))
+    search_deadline = min(deadline - 4, time.monotonic() + 12)
+    for index, engine in enumerate(engines):
+        if time.monotonic() >= search_deadline:
+            break
+        base, parameter = SEARCH_ENGINES[engine]
+        lookup = base + '?' + urlencode({parameter: f'{query} site:{STORES[source]["domain"]}'})
+        try:
+            engine_deadline = time.monotonic() + (search_deadline - time.monotonic()) / (len(engines) - index)
+            html = read_page(page, source, lookup, search=True, deadline=engine_deadline)
+            links = discover_links(source, html, min(settings.offers_browser_product_limit, 5))
+            attempts.append({'engine': engine, 'links': len(links)})
+            combined.extend(links)
+        except (RuntimeError, TimeoutError) as error:
+            attempts.append({'engine': engine, 'links': 0, 'message': str(error)[:160]})
+    return list(dict.fromkeys(combined)), attempts
+
+
 def search_browser(source, query, category, discovery_only=False, deadline=None):
+    deadline = deadline or time.monotonic() + 45
     details = {"method": "discovery" if discovery_only else "browser", "discovered": 0, "verified": 0, "links": []}
     kwargs={'deadline':deadline} if deadline is not None else {}
     with browser_context(**kwargs) as context:
@@ -176,16 +275,13 @@ def search_browser(source, query, category, discovery_only=False, deadline=None)
                     rows=verified
                     if not rows:
                         raise RuntimeError('Карточки поиска Avito не дали подтвердить цену конкретных объявлений')
-                details["verified"] = len(rows)
+                details["found"] = len(rows)
+                details["verified"] = sum(row.attributes.get('price_verification', {}).get('status') == 'verified' for row in rows)
                 return rows, details
             except Exception as error:
                 direct_error = str(error)
-        search_base, parameter = {"bing":("https://www.bing.com/search", "q"),
-                                  "google":("https://www.google.com/search", "q"),
-                                  "yandex":("https://yandex.ru/search/", "text")}[settings.offers_browser_search_engine]
-        lookup = search_base + "?" + urlencode({parameter: f"{query} site:{STORES[source]['domain']}"})
-        html = read_page(page, source, lookup, search=True,**kwargs)
-        links = discover_links(source, html, min(settings.offers_browser_product_limit, 5))
+        links, engines = search_engine_links(page, source, query, deadline)
+        details['search_engines'] = engines
         details["discovered"] = len(links)
         details["links"] = links
         verified = {}
@@ -207,6 +303,7 @@ def search_browser(source, query, category, discovery_only=False, deadline=None)
 
 
 def read_browser_product(source, url, category, deadline=None):
+    deadline = deadline or time.monotonic() + 20
     kwargs={'deadline':deadline} if deadline is not None else {}
     with browser_context(**kwargs) as context:
         page = context.new_page()

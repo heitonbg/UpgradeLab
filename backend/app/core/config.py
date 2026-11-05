@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import Field, field_validator
 from urllib.parse import urlsplit
 import json
+import os
 from app.core.stores import STORES
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -12,8 +13,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
-    database_url: str = "sqlite:///" + (BACKEND_DIR / "pc_upgrade.db").as_posix()
-    cookie_secure: bool = False
+    database_url: str = ("sqlite:////data/pc_upgrade.db" if os.getenv("AMVERA") == "1"
+                         else "sqlite:///" + (BACKEND_DIR / "pc_upgrade.db").as_posix())
+    cookie_secure: bool = Field(default_factory=lambda: os.getenv("AMVERA") == "1")
     frontend_url: str = "http://localhost:5173"
     smtp_host: str = ""
     smtp_port: int = 587
@@ -25,8 +27,9 @@ class Settings(BaseSettings):
     offers_feed_urls: str = "{}"
     offers_feed_tokens: str = "{}"
     offers_live_search: bool = True
+    offers_http_workers: int = Field(default=2, ge=1, le=5)
     offers_browser_enabled: bool = True
-    offers_browser_channel: str = "msedge"
+    offers_browser_channel: str = Field(default_factory=lambda: "" if os.getenv("AMVERA") == "1" else "msedge")
     offers_browser_cdp_url: str = ""
     offers_browser_timeout_ms: int = Field(default=12000, ge=2000, le=30000)
     offers_browser_product_limit: int = Field(default=3, ge=1, le=5)

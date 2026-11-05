@@ -77,9 +77,242 @@ def avito_price_estimates(db):
 
 def upgrade_price_map(db, sources=None):
     quotes = price_map(db, sources)
+    # Upgrade estimates deliberately accept the documented seven-day observation window.
+    # The generic offer list uses a stricter 24-hour window intended for a new PC purchase.
+    for row in upgrade_market_rows(db, sources):
+        if not row.hardware_id:
+            continue
+        previous = quotes.get(row.hardware_id)
+        if previous is not None:
+            cutoff = datetime.utcnow() - timedelta(hours=24)
+            previous_rank = (previous.observed_at < cutoff, previous.price_rub)
+            row_rank = (row.observed_at < cutoff, row.price_rub)
+            if previous_rank <= row_rank:
+                continue
+        verification = json.loads(row.attributes).get('price_verification', {})
+        quotes[row.hardware_id] = SimpleNamespace(
+            price_rub=row.price_rub, source=row.source,
+            market='used_ru' if row.condition == 'used' else 'retail_ru',
+            source_url=row.url, observed_at=row.observed_at, sample_count=1,
+            origin=row.origin, offer_id=row.id, offer_name=row.name,
+            verified_at=verification.get('checked_at') + 'Z'
+            if verification.get('status') == 'verified' and verification.get('checked_at') else None,
+        )
     if sources is None or 'avito' in sources:
-        quotes.update(avito_price_estimates(db))
+        for hardware_id, quote in avito_price_estimates(db).items():
+            previous = quotes.get(hardware_id)
+            if (previous is None or previous.source in ('avito', 'avito_snapshot') or
+                    quote.price_rub <= previous.price_rub):
+                quotes[hardware_id] = quote
     return quotes
+
+
+def upgrade_search_summary(statuses, prices, resale_quotes, sources, started, names):
+    """Distinguish an actual refresh, a saved estimate, and an inaccessible source."""
+    from app.schemas.offers import LABELS
+    selected = list(dict.fromkeys(sources if sources is not None else LABELS))
+    if any(row.get('source') == 'avito' for row in statuses) and 'avito' not in selected:
+        selected.append('avito')
+    searched_models = {row.get('model') for row in statuses}
+    # Only report prices for models involved in this calculation, not the whole catalog.
+    quotes = {(ident, quote.source, quote.observed_at, quote.price_rub): quote
+              for pool in (prices, resale_quotes) for ident, quote in pool.items()
+              if names.get(ident) in searched_models}
+    result = []
+    for source in selected:
+        attempts = [row for row in statuses if row.get('source') == source and row.get('attempted', True)]
+        used = [quote for quote in quotes.values() if quote.source == source or
+                source == 'avito' and quote.source == 'avito_snapshot']
+        fresh = sum(quote.observed_at >= started for quote in used)
+        errors = [row for row in attempts if row.get('status') in ('unavailable', 'timeout')]
+        state = ('refreshed' if fresh else 'cached' if used else 'unavailable' if errors else
+                 'not_found' if attempts else 'not_attempted')
+        result.append({'source': source, 'label': LABELS[source], 'status': state,
+            'attempted': bool(attempts), 'models_searched': len({row.get('model') for row in attempts}),
+            'fresh_quotes': fresh, 'cached_quotes': len(used)-fresh,
+            'last_error': errors[-1]['message'] if errors else None,
+            'checked_at': max((row.get('checked_at') or '' for row in attempts), default=None) or None})
+    return result
+
+
+def upgrade_search_candidates(hardware, cpu, gpu, game=None, mode=None, target_fps=60,
+                              ram_type=None, ram_channels=None):
+    """Choose replacements by their gaming outcome, not multi-core score proximity."""
+    from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, ram_performance_factor, cs2_cpu_basis
+    from app.services.calculator import meaningful_upgrade
+    from app.services.builds import desktop_gpu
+    from app.schemas.calculate import GameName
+
+    if game is None or mode is None:
+        return [cpu, gpu], cpu
+    factor = ram_performance_factor(game, cpu.name, ram_type, ram_channels)
+    cpu_cap = cpu_capacity(cpu.raw_score, cpu.name, game, mode, factor)
+    gpu_cap = gpu_capacity(gpu.raw_score, gpu.name, game, mode)
+    current = estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, game, mode, factor, cpu.name)
+    limiting = cpu if cpu_cap < gpu_cap else gpu
+    def after(item):
+        return (estimate_fps(item.raw_score, gpu.raw_score, gpu.name, game, mode, factor, item.name)
+                if item.type == 'CPU' else
+                estimate_fps(cpu.raw_score, item.raw_score, item.name, game, mode, factor, cpu.name))
+    choices = [item for item in hardware if item.id != limiting.id and item.type == limiting.type and (
+        bool(cpu.socket) and 'BGA' not in cpu.socket.upper() and item.socket == cpu.socket
+        if item.type == 'CPU' else desktop_gpu(item.name)) and meaningful_upgrade(current, after(item))]
+    if limiting.type == 'CPU' and game == GameName.CS2 and cs2_cpu_basis(cpu.name):
+        based = [item for item in choices if cs2_cpu_basis(item.name)]
+        choices = based or choices
+    # Strongest first keeps X3D in the search even if a 5700X is already priced.
+    def capacity(item):
+        return (cpu_capacity(item.raw_score, item.name, game, mode, factor) if item.type == 'CPU'
+                else gpu_capacity(item.raw_score, item.name, game, mode))
+    fastest = sorted(choices, key=lambda item: (-after(item), -capacity(item), item.raw_score, item.id))
+    target = sorted(choices, key=lambda item: (after(item) < target_fps,
+        abs(after(item)-target_fps), item.raw_score, item.id))
+    modest = sorted(choices, key=lambda item: (after(item), item.raw_score, item.id))
+    selected, seen = [], {cpu.id, gpu.id}
+    for item in [*fastest[:2], *target[:1], *modest, *fastest]:
+        if item.id not in seen:
+            selected.append(item)
+            seen.add(item.id)
+        if len(selected) == 4:
+            break
+    other = gpu if limiting.type == 'CPU' else cpu
+    return [limiting, *selected, other], limiting
+
+
+def refresh_upgrade_prices(db, hardware, cpu, gpu, deadline, search, sources=None, game=None, mode=None,
+                           resale_fallback=False, target_fps=60, ram_type=None, ram_channels=None, focus_id=None):
+    """Bounded search of every selected source, including Avito alongside retailers."""
+    import time
+    from app.core.config import settings
+    from app.core.stores import STORES
+    from app.schemas.offers import SearchOffers, LABELS
+    from app.services.offers import search_offers as default_search, batch_search_offers, signature, available_offers
+    from app.services.search_jobs import report_progress
+
+    selected = list(dict.fromkeys(sources if sources is not None else STORES.keys()))
+    if resale_fallback and 'avito' not in selected:
+        selected.insert(0, 'avito')
+    priority = ['avito', 'regard', 'kns', 'oldi', *selected]
+    request_sources = list(dict.fromkeys(source for source in priority if source in selected))
+    candidates, limiting = upgrade_search_candidates(hardware, cpu, gpu, game, mode, target_fps,
+                                                     ram_type, ram_channels)
+    if focus_id:
+        focus = next((item for item in hardware if item.id == focus_id), None)
+        if not focus or focus.type != limiting.type or focus.type == 'CPU' and focus.socket != cpu.socket:
+            from fastapi import HTTPException
+            raise HTTPException(422, 'Модель для уточнения цены не соответствует текущему апгрейду')
+        candidates = [focus, *[item for item in candidates if item.id != focus_id]]
+    report_progress('Ищем цены текущих деталей и подходящих замен на выбранных площадках')
+    statuses, pending, direct = [], [], {}
+    started = time.monotonic()
+    http_deadline = started + max(0, deadline-started) * (.5 if settings.offers_browser_enabled else .7)
+    def request_for(item, method='http', stores=None):
+        model = signature(item.name, item.type)
+        query = 'AMD FX-' + model[2:] if item.type == 'CPU' and model and model.startswith('fx') else item.name
+        request = SearchOffers(query=query, category=item.type, sources=stores or request_sources,
+                               hardware_id=item.id, method=method)
+        request._deadline = http_deadline if method == 'http' else deadline
+        request._source_timeout = 4
+        return request
+    if search is default_search:
+        # Batch results already contain status information. Do not re-run six
+        # complete SQL/filter passes merely to read the searches just saved.
+        primary = next((item for item in candidates if item.id == focus_id), None) or next(
+            (item for item in candidates if item.id not in (cpu.id, gpu.id)), limiting)
+        results = batch_search_offers(db, [request_for(item) for item in candidates], source_first=True,
+                                      priority_queries=[request_for(primary).query])
+        by_query = {result['query']: result for result in results}
+        for item in candidates:
+            result = by_query[request_for(item).query]
+            statuses.extend({**row, 'model': item.name} for row in result['sources'])
+        successful = {(row['model'], row['source']) for row in statuses
+                      if row['status'] in ('public_page', 'feed', 'browser_page')}
+        names = {item.id: item.name for item in candidates}
+        for row in available_offers(db, selected):
+            if (names.get(row.hardware_id), row.source) in successful:
+                direct.setdefault(row.hardware_id, set()).add(row.source)
+    else:
+        for index, item in enumerate(candidates):
+            if time.monotonic() >= http_deadline:
+                break
+            request = request_for(item)
+            request._deadline = min(http_deadline, time.monotonic() +
+                                   (http_deadline-time.monotonic())/(len(candidates)-index))
+            try:
+                result = search(db, request)
+                statuses.extend({**row, 'model': item.name} for row in result.get('sources', []))
+                direct[item.id] = {row.get('source') for row in result.get('offers', [])}
+            except Exception:
+                statuses.append({'source': 'search', 'status': 'unavailable', 'model': item.name,
+                                 'message': 'Не удалось выполнить поиск цен по выбранным площадкам.'})
+
+    # A retailer price never suppresses Avito. Resale must follow the actual
+    # limiting component, including GPU-limited games. Every job gets its own
+    # slice, leaving later replacements a chance to run.
+    replacements = [item for item in candidates if item.id not in (cpu.id, gpu.id)]
+    need_resale = resale_fallback and limiting.id not in avito_price_estimates(db)
+    avito_order = [limiting, *replacements] if need_resale and not focus_id else [*replacements, limiting]
+    for item in avito_order:
+        found = direct.get(item.id, set())
+        if 'avito' in selected and 'avito' not in found:
+            pending.append((item, ['avito']))
+    for item in candidates:
+        if not direct.get(item.id):
+            stores = [source for source in request_sources if source != 'avito'][:2]
+            if stores:
+                pending.append((item, stores))
+    if search is default_search and pending:
+        item = pending[0][0]
+        web_sources = [source for source in request_sources if source not in direct.get(item.id, set())][:3]
+        web_deadline = min(deadline-(8 if settings.offers_browser_enabled else 0), time.monotonic()+12)
+        if web_sources and time.monotonic() < web_deadline-3:
+            report_progress(f'Ищем страницы {item.name} через бесплатную HTTP-выдачу поисковиков')
+            request = request_for(item, 'web', web_sources)
+            request._deadline = web_deadline
+            result = search(db, request)
+            statuses.extend({**row, 'model': item.name} for row in result.get('sources', []))
+            found = {row.get('source') for row in result.get('offers', [])}
+            pending = [(model, [source for source in stores if model.id != item.id or source not in found])
+                       for model, stores in pending]
+    blocked, browser_attempts = set(), defaultdict(int)
+    for index, (item, stores) in enumerate(pending):
+        if not settings.offers_browser_enabled or time.monotonic() >= deadline:
+            break
+        stores = [source for source in stores if source not in blocked and browser_attempts[source] < 2]
+        if not stores:
+            continue
+        denied_http = any(row.get('source') == 'avito' and row.get('method', 'http') == 'http'
+                          and row.get('status') == 'unavailable' and any(marker in row.get('message', '').lower()
+                          for marker in ('http 403', 'http 429', 'http 439', 'captcha', 'ограничила доступ', 'приостановлены'))
+                          for row in statuses)
+        method = 'discovery' if stores == ['avito'] and denied_http else 'browser'
+        request = request_for(item, method, stores)
+        report_progress(f'Проверяем {item.name}: ' + ', '.join(LABELS[source] for source in stores))
+        for source in stores:
+            browser_attempts[source] += 1
+        # At most two Avito browser starts in a request; one can otherwise spend
+        # the entire window trying to launch a browser absent from the image.
+        remaining_jobs = min(2, sum(any(source not in blocked for source in batch)
+                                   for _, batch in pending[index:]))
+        request._deadline = min(deadline, time.monotonic() +
+                                (deadline-time.monotonic())/max(1, remaining_jobs))
+        try:
+            result = search(db, request)
+            statuses.extend({**row, 'model': item.name} for row in result.get('sources', []))
+            for row in result.get('sources', []):
+                message = row.get('message', '').lower()
+                if row.get('status') in ('unavailable', 'timeout') and any(marker in message for marker in (
+                    'captcha', 'http 401', 'http 403', 'http 429', 'http 439',
+                    'запрет доступа', 'запустить', 'не установлен', 'браузер занят')):
+                    blocked.add(row['source'])
+                    if any(marker in message for marker in ('запустить', 'не установлен', 'браузер занят')):
+                        blocked.update(selected)
+        except Exception:
+            statuses.extend({'source': source, 'label': LABELS[source], 'status': 'unavailable',
+                             'method': 'browser', 'model': item.name,
+                             'message': 'Браузерный поиск не завершился; сохранённые цены показаны отдельно.'}
+                            for source in stores)
+    return statuses
 
 
 def refresh_avito(db, hardware, cpu, gpu, deadline, search, game=None, mode=None, single_offer_fallback=False):

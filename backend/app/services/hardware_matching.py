@@ -1,6 +1,8 @@
 import re
+from functools import lru_cache
 
 
+@lru_cache(maxsize=16384)
 def model_key(name: str) -> str:
     value = name.lower()
     value = re.sub(r"\((r|tm)\)|[™®]", "", value)

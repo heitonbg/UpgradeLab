@@ -1,0 +1,10 @@
+.venv
+backend
+tests
+storage
+.env
+.artifacts
+__pycache__
+*.pyc
+pc_upgrade.db
+avito_prices.db

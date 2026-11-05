@@ -1,6 +1,7 @@
 """Upgrade choices should use game-specific CPU comparisons and honest prices."""
 import sys
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -13,7 +14,8 @@ from app.schemas.calculate import CalculateRequest, CalcMode, GameName
 from app.api.calculate import post_calculate
 from app.services.performance import cpu_capacity, cs2_gpu_reference
 from app.services.prices import public_price
-from app.services.upgrade_prices import upgrade_price_map
+from app.services.upgrade_prices import upgrade_price_map, refresh_upgrade_prices, upgrade_search_candidates, upgrade_search_summary
+from app.core.config import settings
 
 
 class UpgradeRecommendationsTests(unittest.TestCase):
@@ -168,6 +170,135 @@ class UpgradeRecommendationsTests(unittest.TestCase):
         extra=next(card for card in result.alternatives if card['budget_shortfall']>0)
         self.assertFalse(extra['selection_allowed'])
         self.assertEqual(extra['budget_shortfall'],extra['price']-11000)
+
+    def test_upgrade_queries_cover_cpu_gpu_and_replacements_before_browser_fallback(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)))
+        calls=[]
+        clock=[100.0]
+        def search(db, request):
+            calls.append((request.method,request.hardware_id,request._deadline))
+            clock[0]=min(clock[0]+2,request._deadline)
+            return {'offers':[], 'sources':[{'source':source,'status':'unavailable','message':'no cards'}
+                                           for source in request.sources]}
+        with patch('time.monotonic',side_effect=lambda:clock[0]),patch.object(settings,'offers_browser_enabled',True):
+            refresh_upgrade_prices(self.db,hardware,hardware[0],hardware[1],145,search,
+                                   ['avito','regard'],GameName.CS2,CalcMode.MODE_1080P_LOW)
+        first_browser=next(index for index,call in enumerate(calls) if call[0]!='http')
+        direct_ids={call[1] for call in calls[:first_browser]}
+        self.assertTrue({1,2}.issubset(direct_ids))
+        self.assertTrue(direct_ids.intersection({3,4,6}))
+        self.assertTrue(all(call[0]=='http' for call in calls[:first_browser]))
+        self.assertLessEqual(max(call[2] for call in calls),145)
+
+    def test_newer_expensive_quote_does_not_hide_a_cheaper_current_retail_offer(self):
+        for ident,source,price,age in [(101,'regard',15000,1),(102,'dns',41000,0)]:
+            self.db.add(StoreOffer(id=ident,source=source,category='GPU',name='GeForce RTX 5060',
+                price_rub=price,hardware_id=2,url=f'https://www.{"regard.ru/product" if source=="regard" else "dns-shop.ru/product"}/{ident}/gpu',
+                condition='new',observed_at=self.now-timedelta(hours=age),origin='public_page',attributes='{}'))
+        self.db.commit()
+        self.assertEqual(upgrade_price_map(self.db,['regard','dns'])[2].price_rub,15000)
+
+    def test_cs2_search_includes_x3d_instead_of_only_nearby_multicore_scores(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)))
+        candidates, limiting=upgrade_search_candidates(hardware,hardware[0],hardware[1],
+            GameName.CS2,CalcMode.MODE_1080P_LOW,550,'DDR4',2)
+        self.assertEqual(limiting.id,1)
+        self.assertTrue({3,6}.issubset({item.id for item in candidates}))
+        self.assertNotIn(5,{item.id for item in candidates})
+
+    def test_retail_price_does_not_cancel_avito_replacement_search(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)));calls=[]
+        def search(db,request):
+            calls.append(request)
+            if request.method=='http':
+                return {'offers':[{'source':'regard'}], 'sources':[{'source':'regard','status':'public_page','message':'OK'}]}
+            return {'offers':[], 'sources':[{'source':'avito','status':'unavailable','message':'HTTP 403'}]}
+        import time
+        with patch.object(settings,'offers_browser_enabled',True):
+            refresh_upgrade_prices(self.db,hardware,hardware[0],hardware[1],time.monotonic()+30,
+                search,['avito','regard'],GameName.CS2,CalcMode.MODE_1080P_LOW,target_fps=550)
+        browser=[request for request in calls if request.method=='browser']
+        self.assertTrue(browser)
+        self.assertIn(browser[0].hardware_id,(3,6))
+        self.assertEqual(browser[0].sources,['avito'])
+
+    def test_real_batch_search_attempts_all_selected_stores(self):
+        from sqlalchemy import select
+        from app.services.offers import search_offers
+        hardware=list(self.db.scalars(select(Hardware)))
+        seen=[]
+        def collect(source,request,*args):
+            seen.append((source,request.hardware_id))
+            return source, [], 'unavailable', 'HTTP 403', {}
+        import time
+        with patch.object(settings,'offers_browser_enabled',False),patch(
+                'app.services.offers.collect_source',side_effect=collect):
+            statuses=refresh_upgrade_prices(self.db,hardware,hardware[0],hardware[1],time.monotonic()+30,
+                search_offers,['avito','regard','kns','dns','ozon'],GameName.CS2,CalcMode.MODE_1080P_LOW,target_fps=550)
+        self.assertEqual({source for source,_ in seen},{'avito','regard','kns','dns','ozon'})
+        self.assertTrue({('avito',3),('avito',6)}.issubset(set(seen)))
+        self.assertTrue(any(row['source']=='avito' and 'X3D' in row['model'] for row in statuses))
+
+    def test_gpu_resale_refresh_searches_gpu_first_when_gpu_is_limiting(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)));calls=[]
+        def search(db,request):
+            calls.append(request)
+            return {'offers':[], 'sources':[{'source':source,'status':'unavailable','message':'No offers'}
+                for source in request.sources]}
+        import time
+        with patch.object(settings,'offers_browser_enabled',True):
+            refresh_upgrade_prices(self.db,hardware,hardware[0],hardware[1],time.monotonic()+30,
+                search,['avito'],GameName.RDR2,CalcMode.MODE_1440P_HIGH,resale_fallback=True)
+        self.assertEqual(next(request for request in calls if request.method=='browser').hardware_id,2)
+
+    def test_avito_http_denial_uses_search_engines_without_repeating_blocked_search_page(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)));calls=[]
+        def search(db,request):
+            calls.append(request)
+            return {'offers':[], 'sources':[{'source':'avito','status':'unavailable',
+                'method':request.method,'message':'HTTP 403'}]}
+        import time
+        with patch.object(settings,'offers_browser_enabled',True):
+            refresh_upgrade_prices(self.db,hardware,hardware[0],hardware[1],time.monotonic()+30,
+                search,['avito'],GameName.CS2,CalcMode.MODE_1080P_LOW,resale_fallback=True)
+        fallback=[request for request in calls if request.method!='http']
+        self.assertEqual(len(fallback),1)
+        self.assertEqual(fallback[0].method,'discovery')
+
+    def test_browser_launch_failure_does_not_repeat_for_every_model_and_store(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)));calls=[]
+        def search(db,request):
+            calls.append(request)
+            return {'offers':[], 'sources':[{'source':source,'status':'unavailable',
+                'message':'Не удалось запустить Chromium'} for source in request.sources]}
+        import time
+        with patch.object(settings,'offers_browser_enabled',True):
+            refresh_upgrade_prices(self.db,hardware,hardware[0],hardware[1],time.monotonic()+30,
+                search,['avito','regard','kns'],GameName.CS2,CalcMode.MODE_1080P_LOW)
+        self.assertEqual(len([request for request in calls if request.method!='http']),1)
+
+    def test_unknown_x3d_price_is_visible_alongside_a_priced_non_x3d(self):
+        self.db.query(HardwarePrice).filter(HardwarePrice.hardware_id.in_([3,6])).delete()
+        self.db.commit()
+        result=post_calculate(self.payload,self.db)
+        self.assertEqual(result.upgrade_id,4)
+        self.assertTrue(any('X3D' in item['name'] and item['price'] is None for item in result.alternatives))
+
+    def test_search_summary_does_not_claim_cached_avito_price_was_updated(self):
+        from types import SimpleNamespace
+        quote=SimpleNamespace(source='avito',price_rub=7000,observed_at=self.now-timedelta(days=1))
+        summary=upgrade_search_summary([{'source':'avito','status':'unavailable','message':'HTTP 403',
+            'model':'AMD Ryzen 5 5600X'}],{}, {1:quote},['avito','dns'],self.now,{1:'AMD Ryzen 5 5600X'})
+        self.assertEqual(summary[0]['status'],'cached')
+        self.assertEqual(summary[0]['fresh_quotes'],0)
+        self.assertEqual(summary[0]['last_error'],'HTTP 403')
+        self.assertEqual(summary[1]['status'],'not_attempted')
 
 
 if __name__ == '__main__':

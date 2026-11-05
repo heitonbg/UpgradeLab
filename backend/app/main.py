@@ -44,10 +44,14 @@ def create_app() -> FastAPI:
     from app.api import recovery, offers
     app.include_router(recovery.router)
     app.include_router(offers.router)
+    from app.api import search_jobs
+    app.include_router(search_jobs.router)
+    from app.services.search_jobs import recover_jobs
+    recover_jobs()
 
     @app.get("/api/health", tags=["meta"])
     def health():
-        return {"status": "ok"}
+        return {"status": "ok", "search_revision": "server-jobs-http-v2"}
 
     return app
 

@@ -81,6 +81,18 @@ class SearchOutageTests(unittest.TestCase):
         self.assertEqual(result['parts'],[])
         self.assertNotIn('total_price',result)
 
+    def test_partial_result_keeps_ryzen_without_an_incompatible_intel_board(self):
+        self.db.execute(delete(StoreOffer).where(StoreOffer.category.in_(['motherboard','storage'])))
+        self.db.add(StoreOffer(source='oldi',category='motherboard',name='Материнская плата MSI PRO H610M-E DDR4',
+            price_rub=4780,url='https://www.oldi.ru/catalog/element/123456/',hardware_id=None,
+            condition='new',observed_at=datetime.utcnow(),origin='public_page',attributes='{}'))
+        self.db.commit()
+        with patch('app.services.builds.search_offers',return_value={}),patch.object(settings,'offers_browser_enabled',False):
+            result=assemble(BuildRequest(**{**self.payload,'price_sources':['avito','oldi']}),self.db)
+        self.assertEqual(result['status'],'partial')
+        self.assertTrue(any(part['type']=='CPU' for part in result['parts']))
+        self.assertFalse(any(part['type']=='motherboard' for part in result['parts']))
+
     def test_old_known_cooler_price_is_preferred_to_a_dubious_search_price(self):
         row=self.db.scalar(select(StoreOffer).where(StoreOffer.category=='cooler'))
         row.source='yandex';row.price_rub=846;row.url='https://market.yandex.ru/card/cooler/99000'
