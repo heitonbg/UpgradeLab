@@ -3,6 +3,9 @@ import json
 import re
 import time
 import requests
+from pydantic import ValidationError
+from app.services.network_policy import NetworkPolicyError
+from app.services.source_outcomes import SourceFailure, diagnose_source, http_outcome, outcome_code, public_outcome, public_runtime_message
 from urllib.parse import unquote, urlsplit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -195,6 +198,7 @@ def search_key(payload):
         sorted(payload.sources), payload.method, settings.offers_browser_search_engine]).encode()).hexdigest()
 
 
+@diagnose_source
 def collect_source(source, payload, deadline, feeds, tokens):
     """Network work only; worker threads must never share a database session."""
     if time.monotonic() >= deadline:
@@ -222,14 +226,23 @@ def collect_source(source, payload, deadline, feeds, tokens):
             return source, rows, 'feed', 'Выгрузка источника получена', {}
         if settings.offers_live_search:
             return source, search_public(source, payload.query, payload.category, deadline=deadline), 'public_page', 'Публичная страница получена', {}
-        return source, [], 'disabled', 'Прямой поиск отключён; используются сохранённые предложения', {}
+        return source, [], 'disabled', 'Прямой поиск отключён; используются сохранённые предложения', {'attempted':False}
+    except SourceFailure as error:
+        return source, [], 'unavailable', str(error), {'outcome':error.outcome,
+            'http_status':error.http_status,'attempted':error.attempted}
+    except (json.JSONDecodeError, ValidationError, KeyError, TypeError):
+        return source, [], 'unavailable', 'Источник отдал данные неверного формата; предложения не добавлены', {'outcome':'parse_error'}
     except (TimeoutError, requests.Timeout):
-        return source, [], 'timeout', 'Площадка не ответила за отведённое время', {}
+        return source, [], 'timeout', 'Площадка не ответила за отведённое время', {'outcome':'timeout'}
     except requests.HTTPError as error:
         code = error.response.status_code if error.response is not None else 'unknown'
-        return source, [], 'unavailable', f'Площадка вернула HTTP {code}', {}
+        return source, [], 'unavailable', f'Площадка вернула HTTP {code}', {'outcome':http_outcome(code),'http_status':code if isinstance(code,int) else None}
+    except (requests.ConnectionError, OSError):
+        return source, [], 'unavailable', 'Не удалось установить соединение с источником', {'outcome':'network_error'}
+    except NetworkPolicyError as error:
+        return source, [], 'unavailable', str(error)[:300], {'outcome':'network_error'}
     except RuntimeError as error:
-        return source, [], 'unavailable', str(error)[:300], {}
+        return source, [], 'unavailable', public_runtime_message(error), {}
     except Exception:
         return source, [], 'unavailable', 'Источник не отдал читаемые предложения: ограничение доступа, ошибка или изменившаяся разметка', {}
 
@@ -243,6 +256,9 @@ def persist_search(db, payload, responses, commit=True):
         statuses.append({'source': source, 'label': LABELS[source], 'status': origin,
             'attempted': details.get('attempted', True),
             'method': payload.method, 'message': message, 'checked_at': iso_utc(checked),
+            'outcome': details.get('outcome') or outcome_code(origin,result_count=len(rows)),
+            'elapsed_ms': details.get('elapsed_ms'), 'result_count':len(rows),
+            'http_status': details.get('http_status'),
             'search_url': search_url(source, payload.query), 'discovered_urls': details.get('links', []),
             'search_engines': details.get('search_engines', [])})
     previous = db.get(OfferSearch, search_key(payload)) or OfferSearch(key=search_key(payload))
@@ -270,7 +286,8 @@ def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
             continue
         previous = db.get(OfferSearch, key)
         if previous and is_fresh(previous.checked_at, SEARCH_TTL, inclusive=True):
-            results.append({'category': payload.category, 'query': payload.query, 'sources': json.loads(previous.statuses)})
+            results.append({'category': payload.category, 'query': payload.query, 'sources': json.loads(previous.statuses),
+                            'source_outcomes':[public_outcome(item,cached=True) for item in json.loads(previous.statuses)]})
             continue
         pending[key] = (payload, [])
         jobs.extend((key, source, payload) for source in dict.fromkeys(payload.sources))
@@ -288,7 +305,8 @@ def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
             pending[key][1].append(response)
     for payload, responses in pending.values():
         _, statuses = persist_search(db, payload, responses, commit=False)
-        results.append({'category': payload.category, 'query': payload.query, 'sources': statuses})
+        results.append({'category': payload.category, 'query': payload.query, 'sources': statuses,
+                        'source_outcomes':[public_outcome(item) for item in statuses]})
     if pending:
         db.commit()
     return results
@@ -321,6 +339,7 @@ def search_offers(db, payload):
                   for status in statuses for url in status.get("discovered_urls", [])]
     unavailable = [item['source'] for item in statuses if item['status'] in ('unavailable', 'timeout', 'disabled')]
     return {"offers": [public_offer(r) for r in rows[:100]], "sources": statuses, "candidates": candidates,
+            "source_outcomes": [public_outcome(item,cached=search_cached) for item in statuses],
             "search_cached": search_cached, "unavailable_sources": unavailable,
             "partial_result": bool(rows and unavailable),
             "checked_at": as_utc(previous.checked_at),

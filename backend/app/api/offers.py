@@ -12,6 +12,7 @@ from urllib.parse import urlsplit, urlunsplit
 from app.core.config import settings
 import json
 from app.core.price_time import db_now, iso_utc
+from app.services.source_outcomes import public_outcome
 
 router = APIRouter(prefix="/api/offers", tags=["offers"])
 slots = BoundedSemaphore(3)
@@ -73,7 +74,8 @@ def status(db: DBSession):
         for result in json.loads(search.statuses):
             latest.setdefault(result['source'], {'status': result['status'], 'method': result.get('method', 'http'),
                 'message': result['message'], 'checked_at': iso_utc(result.get('checked_at', search.checked_at)),
-                'search_engines': result.get('search_engines', [])})
+                'search_engines': result.get('search_engines', []),
+                'outcome': public_outcome(result)['outcome']})
     return {"search_mode": "public_pages", "search_revision": "server-jobs-http-v2",
             "http_workers": settings.offers_http_workers, "browser": browser_diagnostics(),
             "sources": [{"source": source, "label": label,

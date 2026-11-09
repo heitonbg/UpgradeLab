@@ -1,0 +1,397 @@
+[
+  {
+    "repository": "strupeiq/citilink-parser",
+    "head": "00f95b1e6cb1a601661ad551e4e78e5ae039a923",
+    "head_committed_at": "2025-12-20T18:11:10+05:00",
+    "files": [
+      {
+        "path": "app/schemas/parser.py",
+        "sha256": "4f81e4569f53e90539a8e9039837295a6e60f273cecaea8376600012e1479af9"
+      },
+      {
+        "path": "app/schemas/price_monitor.py",
+        "sha256": "1f5332ef656309679738e2abcde92da8627650063b320b3e7f4d138ba60b4eb6"
+      },
+      {
+        "path": "app/api/endpoints.py",
+        "sha256": "39752a880cabea1b516f0ca048c2f2a217b8b66656dd35bab017e20e2b2113c1"
+      },
+      {
+        "path": "app/services/product_service.py",
+        "sha256": "05d430b76df9a678d40000e6b77e6fe248e4a468df06392a3285fac22438af23"
+      },
+      {
+        "path": "app/models/product.py",
+        "sha256": "92980dbfd563d804137d795ae7c3e98bb227095848b90d7833a0ec64b509e223"
+      },
+      {
+        "path": "app/nats/manager.py",
+        "sha256": "2fd39e33b81da4eeedb51f02e6706bdf48fd4044abd3fd17e55999600df49cbe"
+      },
+      {
+        "path": "requirements.txt",
+        "sha256": "b1d784241b54d7e58ce345802f6da83e476cc2ce0fe693d2adbf239eac2f8c0b"
+      },
+      {
+        "path": "README.md",
+        "sha256": "b58c2f16e3df5363fbb2da6bff51485747d2536b373630f2d1a72d61e94965a9"
+      }
+    ]
+  },
+  {
+    "repository": "Vladimir-Human/ru-marketplace-mcp",
+    "head": "d5681191aaaf13621ed757674fcd37d77bdd8a6b",
+    "head_committed_at": "2026-11-08T21:05:16+03:00",
+    "files": [
+      {
+        "path": "LICENSE",
+        "sha256": "d0575bd04107b415dfceb39be2438492d1a0ea7078aebc93f436a460249c4fbe"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/errors.py",
+        "sha256": "982dd027beccb3417b49e63fad4db8f01d8d5be81233ea06b84407782739c632"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/resilience.py",
+        "sha256": "0621913af5a7f5427c5de88fe1d4206dff978d209926a708332f65b672507b30"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/cache.py",
+        "sha256": "500dcd670f2e422e83eb2900b899e23275ce1624995f99bd308a317fea6a534e"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/transport/http_tier.py",
+        "sha256": "712b67f70f46c626a5e9fa087705a9748eb97ca89c721c3d3f4877c02865a223"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/sources.py",
+        "sha256": "13822b6cfedc49956627eea570571fa2d890183426952fae739d1141bca0ae68"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/source_selection.py",
+        "sha256": "c932b67813aca9c5fb2dae8c593991debca5d0ea1c806fa21739de4ce9286fcd"
+      },
+      {
+        "path": "packages/avito-connector/src/avito_connector/server.py",
+        "sha256": "7702e315df6c4ccf690bf92743061b1cd2f7630f6fd4d9af2743826aeb2b487e"
+      },
+      {
+        "path": "packages/dns-connector/src/dns_connector/server.py",
+        "sha256": "a96e4902523130f65fcb9070a5bd843a3505592778a3df2a3ad0b0064b603a77"
+      },
+      {
+        "path": "packages/citilink-connector/src/citilink_connector/server.py",
+        "sha256": "fad6522b004edc9fd32972db99f1daab769a8c699445228c348a8a07228cf1d1"
+      },
+      {
+        "path": "packages/ozon-connector/src/ozon_connector/server.py",
+        "sha256": "f08e3b6b8c4c78a3e6aa9dca42dfa9b73ba5fa1a70fd19a31f4cbbe1a12d79dc"
+      },
+      {
+        "path": "packages/wb-connector/src/wb_connector/server.py",
+        "sha256": "48c9d69b8ea747176032778b1703f8e98a9036534573faa1fde131f46c9ec7cf"
+      },
+      {
+        "path": "packages/yandex-connector/src/yandex_connector/server.py",
+        "sha256": "4aeb8c32450f052148d1f830628f8c0397dfb4569e020bf082da2b9514e6d027"
+      },
+      {
+        "path": "packages/mcp-core/tests/test_errors.py",
+        "sha256": "066d4bc0a827df74f45d7d513551e6035ab183a06f8d601c658d7c7c250991a0"
+      },
+      {
+        "path": "packages/citilink-connector/tests/test_card_out_of_stock_dom.py",
+        "sha256": "15cca163f2adb096e2a71e9f8e7ef4e6d8664feef1e200c91ce070b5415fbe09"
+      },
+      {
+        "path": "packages/avito-connector/tests/test_offer_invariants.py",
+        "sha256": "725cc353cb0a49801b0fe0749e34b5548b4aa7c42aaee627800def6374984da2"
+      },
+      {
+        "path": "packages/mcp-core/src/mcp_core/http.py",
+        "sha256": "65e4f927056c6d13b133ba72627ca7f1c6a5f42c10e47d246e9e2033f2453a15"
+      }
+    ]
+  },
+  {
+    "repository": "Duff89/parser_avito",
+    "head": "91a5399f79bf035d3eb919d66ada00545571c2f1",
+    "head_committed_at": "2026-09-30T20:34:11+03:00",
+    "files": [
+      {
+        "path": "parser/http/client.py",
+        "sha256": "d8d2717d8c1e88855eba3c2defe158a99869a515efe4ef96fe8453b5c7f095d0"
+      },
+      {
+        "path": "parser_cls.py",
+        "sha256": "080b22957497c5221e2942c3ed8a3c133e6ac46ccdec9d2d6f2f296327a4b6ca"
+      },
+      {
+        "path": "parser/url_converter.py",
+        "sha256": "3c2d1ece850ae104a84f326c08f809c6f35376e257843e2ed02cf0ef319c4157"
+      },
+      {
+        "path": "utils/build_api_params.py",
+        "sha256": "0e4737a57ca367c9129e5b56b9cf6a7f848f80e4169d13210a07a2cfb5e8698c"
+      },
+      {
+        "path": "db_service.py",
+        "sha256": "ffbfd78920afb00a867ee690103140632af0b6ab639447735dcd8fb03ce2115e"
+      },
+      {
+        "path": "models.py",
+        "sha256": "7986843c243d7cf45eee83d133fb265db76e97d01bc4bca90477abc115998cf5"
+      },
+      {
+        "path": "tests/test_parser_cls.py",
+        "sha256": "9c3351e047f7204e3b4bef773b3140ae6291055ac01dad60cbcd385ce697305e"
+      },
+      {
+        "path": "tests/test_db_service.py",
+        "sha256": "d491bcf22e1ccfbc6ed7e93f9d974e3b8ddf106504d55aa4c5342ca4f56e48d4"
+      },
+      {
+        "path": "README.md",
+        "sha256": "b1109400820fa7265901c19d7490f88956d1dcf768decc8734ca613698be1597"
+      }
+    ]
+  },
+  {
+    "repository": "domovoyproj/avito-parser",
+    "head": "4295c18565fc961d5a7a708e702f1f52507501dc",
+    "head_committed_at": "2026-10-21T20:01:24+03:00",
+    "files": [
+      {
+        "path": "http_engine.py",
+        "sha256": "ae62a0cb1888846b618a618aa183b2aa678d409b8953b94056ce5f3f77ac5b50"
+      },
+      {
+        "path": "browser_engine.py",
+        "sha256": "ed7dc4a9af40944ff52c57291fba1145889d01ea229c90fa2aa75fca994df7b7"
+      },
+      {
+        "path": "parser_core.py",
+        "sha256": "c9ba2209df10527a76bef6bc045b1a9a53520f7eec611e5edf2c0fa9907b7b85"
+      },
+      {
+        "path": "parse_outcomes.py",
+        "sha256": "4507ba5cd899acc091ad97aafa1569218ce8c75af2dba183ab7f3edfb8a92b35"
+      },
+      {
+        "path": "access_guard.py",
+        "sha256": "5a2a85d39de8a81f19e7941d05f8e65049bd4d7f0be2f9eee3d684eae8b797fa"
+      },
+      {
+        "path": "models.py",
+        "sha256": "07ffbfc79e11bf0fa0eeb4245c3d98b8acbbc2e7548717c98202a5709c259e88"
+      },
+      {
+        "path": "parser_jobs.py",
+        "sha256": "d23963c6aeb8d31c12faef52ee0def5eee22a86cd873bbdde8c4c1d05b5dd17f"
+      },
+      {
+        "path": "repositories/items.py",
+        "sha256": "abf1307cbd32fe11ffbf6aba68f5bac0fc616527bfe3d8c104818a99fcd80121"
+      },
+      {
+        "path": "database.py",
+        "sha256": "26a0b2e51615e122720171308644160a705bf3960dc160b1cfc1e7d6a0286540"
+      },
+      {
+        "path": "test_parser.py",
+        "sha256": "8e8b371b304e9bd9cc6c02c6854104669ca64b04f1118249c057f227a619a05c"
+      },
+      {
+        "path": "test_parser_jobs.py",
+        "sha256": "36c75ec7980053a3c91c9be58fa67dccd79b5336924a2096cb40ca3398a8dc94"
+      },
+      {
+        "path": "README.md",
+        "sha256": "51ee335a3356b3ea89a628316d2fa7da07e955eae61eaa3795a0f16c5183c653"
+      }
+    ]
+  },
+  {
+    "repository": "HecyMa/DNS-parser-with-analysis",
+    "head": "426923d6b63717f8cbe65cb6763ff0c4427a65fb",
+    "head_committed_at": "2025-12-31T09:54:06+03:00",
+    "files": [
+      {
+        "path": "parser.py",
+        "sha256": "c686440e0858710935d175adecbd0ab4d4488ad0a7e8f0252713bff30f97730a"
+      },
+      {
+        "path": "mdb_con.py",
+        "sha256": "b2505e30b1e3bb9a4211aa9d96480869d1cd635d836d8ab00b175abed6fa0afe"
+      },
+      {
+        "path": "api.py",
+        "sha256": "a2b1a3be491ed1c0835222ad6cbe6cbac9b279f3e0fc02c901b41fed860f6e4e"
+      },
+      {
+        "path": "requirements.txt",
+        "sha256": "ece671b0e34da08e2804ff5e9e90d094875b772819953fb5ce473a327699d107"
+      },
+      {
+        "path": "README.md",
+        "sha256": "fba0b1ae0d43cd6c2f30d4e64c715f61c662497b39c9eff474e3c1a0de1cec06"
+      }
+    ]
+  },
+  {
+    "repository": "kireev20000/DNS-Shop-Parser",
+    "head": "0bb1f2e577522e8963b8ae64f825715b4e743c73",
+    "head_committed_at": "2023-09-23T18:59:41+07:00",
+    "files": [
+      {
+        "path": "DNS_parser.py",
+        "sha256": "c4cdeb076220150361d02cf6beccfc44291cc37d898adab1a24d96d87519250d"
+      },
+      {
+        "path": "requirements.txt",
+        "sha256": "e79cf9f7c4f2a1db74ad35a1565a1e3977f0b8e2d650d14c099bd5fc8022959a"
+      },
+      {
+        "path": "README.md",
+        "sha256": "6927caae47cbac6a0a3e725987788e746cc1336a6cd0980d1e8a55f6a1a0a560"
+      }
+    ]
+  },
+  {
+    "repository": "prog-time/grex",
+    "head": "2767d8e9d1fca1909cdbbf97a207a6b69def31c1",
+    "head_committed_at": "2026-11-03T22:17:46+03:00",
+    "files": [
+      {
+        "path": "crawlers/base.py",
+        "sha256": "a640ff43b9df8a59dc862f550c49e181a0475bf5cae877f295d4877aba7ea8f1"
+      },
+      {
+        "path": "crawlers/registry.py",
+        "sha256": "27c7b8967f16bdfe6cbf3790a71cf69690a0cd7c869fcf258e036d44c602b279"
+      },
+      {
+        "path": "crawlers/wildberries.py",
+        "sha256": "1261cbceeb5184761c5466b3d0aa863b272261574d1b0ccb76ea9beef8667755"
+      },
+      {
+        "path": "crawlers/citilink.py",
+        "sha256": "696e327fe9b52e628277a23f66cb296a886e8557c3dd6be00f1a5336c6e6dd6b"
+      },
+      {
+        "path": "crawlers/ozon.py",
+        "sha256": "6569692179995789c3259b4c5baca736b12013993367cf97a1b160f7239ae314"
+      },
+      {
+        "path": "crawlers/yandex_market.py",
+        "sha256": "570c3e716112f8eadb5cd7c9be73c32e68532a2c5398939002b6880c399bf859"
+      },
+      {
+        "path": "services/parsing.py",
+        "sha256": "ddee53741bf7641b625ec1967b46203f9596f40c47b1e8f3575648616a48eedd"
+      },
+      {
+        "path": "services/monitoring.py",
+        "sha256": "727521e03536f016b4b1c64248235b2ce9fff25f5ca264fe554fe1b7de5f6793"
+      },
+      {
+        "path": "services/monitor_scheduler.py",
+        "sha256": "4d11ad8a3c99c550e95e687ebcf7663bf435a22dd06b4b591895a25e1fcc08a2"
+      },
+      {
+        "path": "models/price_snapshot.py",
+        "sha256": "ba02fbaf16b51a7016f851501f72b8a6dffee34450673b5e1c8d51a18118eb3e"
+      },
+      {
+        "path": "tests/test_batch.py",
+        "sha256": "99e201c028333ce74e8d3d54334ebe4dbc6603c5e1c7a6d2284c5efd54f9bb73"
+      },
+      {
+        "path": "tests/test_monitoring.py",
+        "sha256": "5589d84d4044c7fd7c2ee0a982b3f81d4cbd55b705cc9bcab1d7904be9b9514e"
+      },
+      {
+        "path": "docs/adr/0008-remove-licensing-open-source.md",
+        "sha256": "b000d5729a4f7142af7e7460ab568992a63647246bb92fd8d8f07b5e582e3387"
+      },
+      {
+        "path": "pyproject.toml",
+        "sha256": "f5d32fa4e134a025649ab8d2dde40e1ad4b802cee4b455c6db6a191942554e9d"
+      },
+      {
+        "path": "README.md",
+        "sha256": "30f941339fc3c565e7877d3cf753906cac2c24ba0a92bfebf1da07965c043588"
+      }
+    ]
+  },
+  {
+    "repository": "MaxDev43/Marketplace-Parser",
+    "head": "81c5d1f5758ce9d2ca0c0ea249ec52025ab8adc7",
+    "head_committed_at": "2026-08-10T19:45:27+03:00",
+    "files": [
+      {
+        "path": "LICENSE",
+        "sha256": "6a55dc509dbe93c7aa1bf026b7ccbd1e195bf1f4f59c005a7d93aa58399dcd4c"
+      },
+      {
+        "path": "parsers/common.py",
+        "sha256": "58a0eb2b0327150db8d196aa442350e35c78de00d4bcecbaaf33fbb309162807"
+      },
+      {
+        "path": "parsers/ozon.py",
+        "sha256": "61b5e9ab2681212a0453a79b2a67a18e6590091883428aa8dd9a1aca80ec6837"
+      },
+      {
+        "path": "parsers/wildberries.py",
+        "sha256": "15308f519f0ab34a72408308dec73df14e8d651cddc9fd28e108f4ba82ad6e57"
+      },
+      {
+        "path": "requirements.txt",
+        "sha256": "aa09acdeb496b9448dabdd9a9d10ec1b5c4a58ea3aac82aba74a5d511eb83d66"
+      },
+      {
+        "path": "README.md",
+        "sha256": "9ab1bdc106fd4191adff938199b3748ff39616af8c5936e163f3958a1b0f3ba5"
+      }
+    ]
+  },
+  {
+    "repository": "remzone/Marketplace_price_parcer",
+    "head": "81cfea8440a1c1614c8ca052c14346900f3a57c0",
+    "head_committed_at": "2026-08-24T00:21:48+03:00",
+    "files": [
+      {
+        "path": "parsers/ozon.py",
+        "sha256": "4024c5e9400c75957c1bc1bde5545fc555efb8ccc026505df4b65706fbf60b09"
+      },
+      {
+        "path": "parsers/wildberries.py",
+        "sha256": "a517abb061e1a15f89cfcb8dd4bf080039dee4eabc1061a614ef07bb53b484d4"
+      },
+      {
+        "path": "parsers/yandex.py",
+        "sha256": "cc05d43b71bff85127982e294d5b70b88364bdb369222942984715b1949ef053"
+      },
+      {
+        "path": "parsers/parser_service.py",
+        "sha256": "74031fbcd750df7549a3fd3ee74be284fec2a156562b04b0d31b4e9768a725bb"
+      },
+      {
+        "path": "parsers/test_ozon_parser.py",
+        "sha256": "89a18f51626903299f9795fa03ae572b9f5b9a017d48b084cf3fdb659cd5d0e2"
+      },
+      {
+        "path": "main.py",
+        "sha256": "527d51d28b2026a0e07d058632e876da0274f14ff68d8830ee9ce1f12726c9b8"
+      },
+      {
+        "path": "requirements.txt",
+        "sha256": "b672e9f9f13c635c9db0484ea59c2aa75307125c6f4ff030d32b0390e5d64668"
+      },
+      {
+        "path": "README.md",
+        "sha256": "2295d46c84620feaec3b2d8e3bf70ccfd553664238a7c12786e0506413a0dd6d"
+      }
+    ]
+  }
+]

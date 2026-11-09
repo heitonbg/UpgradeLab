@@ -13,6 +13,7 @@ from app.core.stores import STORES
 from app.services.search_time import remaining
 from app.services.network_policy import Policy, validate_url
 from app.services.safe_http import SafeSession
+from app.services.source_outcomes import SourceFailure, http_outcome
 
 _blocked_until = {}
 _block_lock = Lock()
@@ -48,14 +49,14 @@ def resolved_search_url(source, query, deadline=None):
     url = urljoin("https://www.nix.ru", response.json()["href"])
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in ("www.nix.ru", "nix.ru") or parsed.username or parsed.password or parsed.port not in (None,443):
-        raise RuntimeError("Некорректный адрес поиска НИКС")
+        raise SourceFailure("parse_error","Некорректный адрес поиска НИКС")
     return url
 
 
 def fetch(url, params=None, token=None, store=None, deadline=None, product=False, redirect_hosts=()):
     remaining(deadline, 5)
     if store and source_blocked(store, product=product):
-        raise RuntimeError('Площадка ранее ограничила доступ; повторные запросы приостановлены на 10 минут')
+        raise SourceFailure('blocked','Площадка ранее ограничила доступ; повторные запросы приостановлены на 10 минут',attempted=False)
     target=validate_url(url)
     policy=(Policy(domains=(STORES[store]['domain'],)) if store else
             Policy(hosts=tuple(dict.fromkeys((target.host,*redirect_hosts)))))
@@ -65,7 +66,7 @@ def fetch(url, params=None, token=None, store=None, deadline=None, product=False
         response=session.get(url,params=params,headers=headers,deadline=deadline)
     if response.status_code in (401,403,429,439):
         if store:pause_source(store,product=product)
-        raise RuntimeError(f'Площадка ограничила доступ (HTTP {response.status_code})')
+        raise SourceFailure(http_outcome(response.status_code),f'Площадка ограничила доступ (HTTP {response.status_code})',http_status=response.status_code)
     response.raise_for_status()
     return response.text
 
@@ -86,7 +87,7 @@ def parse_html(source, html, category, page_url=None, require_single_price=False
     if any(marker in visible for marker in ("подтвердите, что вы не робот", "доступ ограничен", "доступ к сервису временно запрещ", "403 forbidden")):
         from app.schemas.offers import store_url
         pause_source(source, product=bool(page_url and store_url(source, page_url)))
-        raise RuntimeError("Площадка запросила CAPTCHA; подключите выгрузку предложений")
+        raise SourceFailure("blocked","Площадка запросила CAPTCHA; подключите выгрузку предложений")
     # Search pages often contain megabytes of layout and hydration markup.
     # Structured offers do not need that DOM in memory. Product confirmation
     # still reads every price representation below to reject contradictory prices.
@@ -200,7 +201,7 @@ def parse_html(source, html, category, page_url=None, require_single_price=False
             currency.get("content", "RUB") if currency else "RUB",
             (availability.get("content") or availability.get("href") or "") if availability else "")
     if not found:
-        raise RuntimeError("Нет читаемых карточек с ценой: разметка изменилась, нужен JavaScript или выгрузка")
+        raise SourceFailure("parser_drift","Нет читаемых карточек с ценой: формат не распознан, нужен JavaScript или выгрузка")
     if require_single_price:
         from urllib.parse import urlunsplit
         def canonical(url):
@@ -208,7 +209,7 @@ def parse_html(source, html, category, page_url=None, require_single_price=False
             return urlunsplit((parsed.scheme, parsed.netloc.lower(), parsed.path.rstrip('/'), '', ''))
         exact = [row for row in found.values() if canonical(row.url) == canonical(page_url or '')]
         if len({price for row in exact for price in prices[row.url]}) != 1:
-            raise RuntimeError('Страница не подтвердила единственную цену именно этого товара')
+            raise SourceFailure('parse_error','Страница не подтвердила единственную цену именно этого товара')
         return exact
     return list(found.values())
 
