@@ -4,13 +4,13 @@ import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select, delete, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, delete
 from app.api.deps import DBSession
 from app.api.account import Credentials, password_hash
 from app.db.base import SessionLocal
-from app.db.models import User, PasswordReset, LoginSession, ResetRequestLimit
-from app.services import mail
+from app.db.models import User, PasswordReset, LoginSession
+from app.services import mail, auth_limits
+from app.core.config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["account"])
 logger = logging.getLogger(__name__)
@@ -35,24 +35,7 @@ def digest(value):
 
 
 def throttle(db, key, maximum):
-    now = datetime.utcnow()
-    key = digest(key)
-    db.execute(delete(ResetRequestLimit).where(ResetRequestLimit.started_at < now - timedelta(hours=1)))
-    row = db.get(ResetRequestLimit, key)
-    if row is None:
-        db.add(ResetRequestLimit(key_hash=key, started_at=now, attempts=1))
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            raise HTTPException(429, "Слишком много запросов. Попробуйте позже.")
-    else:
-        changed = db.execute(update(ResetRequestLimit).where(
-            ResetRequestLimit.key_hash == key, ResetRequestLimit.attempts < maximum
-        ).values(attempts=ResetRequestLimit.attempts + 1)).rowcount
-        db.commit()
-        if not changed:
-            raise HTTPException(429, "Слишком много запросов. Попробуйте позже.")
+    auth_limits.enforce(db, [(key, maximum, settings.auth_recovery_window_seconds)])
 
 
 def deliver(address, token):
@@ -77,8 +60,8 @@ def forgot_password(payload: ForgotPassword, db: DBSession, request: Request, re
     if not mail.configured():
         raise HTTPException(503, "Отправка писем пока не настроена. Обратитесь к администратору.")
     email = payload.email
-    throttle(db, "ip:" + (request.client.host if request.client else "unknown"), 10)
-    throttle(db, "email:" + email, 3)
+    throttle(db, "ip:" + auth_limits.client_ip(request), settings.auth_recovery_ip_limit)
+    throttle(db, "email:" + email, settings.auth_recovery_account_limit)
     user = db.scalar(select(User).where(User.email == email))
     if user:
         token = secrets.token_urlsafe(32)
@@ -92,7 +75,7 @@ def forgot_password(payload: ForgotPassword, db: DBSession, request: Request, re
 @router.post("/reset-password")
 def reset_password(payload: ResetPassword, db: DBSession, request: Request, response: Response):
     response.headers["Cache-Control"] = "no-store"
-    throttle(db, "reset-ip:" + (request.client.host if request.client else "unknown"), 20)
+    throttle(db, "reset-ip:" + auth_limits.client_ip(request), settings.auth_reset_ip_limit)
     user_id = db.execute(delete(PasswordReset).where(
         PasswordReset.token_hash == digest(payload.token), PasswordReset.expires_at > datetime.utcnow()
     ).returning(PasswordReset.user_id)).scalar_one_or_none()

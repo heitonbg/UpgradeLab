@@ -1,6 +1,7 @@
 """Product-page confirmation before returning a priced automatic PC."""
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.price_time import is_fresh, iso_utc, db_now, current_verification
 from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import select
 from app.db.models import StoreOffer, Hardware
@@ -11,19 +12,16 @@ from app.core.config import settings
 
 
 def recent_check(metadata, minutes=15):
-    try:
-        return datetime.utcnow() - datetime.fromisoformat(metadata['checked_at']) < timedelta(minutes=minutes)
-    except (KeyError, TypeError, ValueError):
-        return False
+    return isinstance(metadata, dict) and is_fresh(metadata.get('checked_at'), timedelta(minutes=minutes))
 
 
 def pending_build_prices(db, result):
     ids = {part['offer_id'] for variant in result.get('alternatives', [result])
            for part in variant['parts'] if part.get('offer_id')}
     rows = list(db.scalars(select(StoreOffer).where(StoreOffer.id.in_(ids))))
-    return [row for row in rows if row.origin != 'feed'
-               and not (json.loads(row.attributes).get('price_verification', {}).get('status') == 'verified'
-                        and recent_check(json.loads(row.attributes).get('price_verification', {})))]
+    from app.services.offers import fresh
+    return [row for row in rows if not fresh(row) or (row.origin != 'feed'
+               and current_verification(json.loads(row.attributes).get('price_verification', {})) is None)]
 
 
 def build_prices_confirmed(db, result):
@@ -57,7 +55,7 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
     with ThreadPoolExecutor(max_workers=settings.offers_http_workers) as pool:
         outcomes = list(pool.map(inspect, pending))
     hardware = list(db.scalars(select(Hardware)))
-    checked_at = datetime.utcnow().isoformat()
+    checked_at = iso_utc(db_now())
     blocked = {row.source for row in pending if source_blocked(row.source, product=True)}
     for row_id, candidate, error in outcomes:
         row = db.get(StoreOffer, row_id)
@@ -67,7 +65,7 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
         previous_check=data.get('price_verification',{})
         if previous_check.get('status')=='verified':
             data['last_verified_price']={'price_rub':row.price_rub,'checked_at':previous_check.get('checked_at'),
-                'observed_at':row.observed_at.isoformat()}
+                'observed_at':iso_utc(row.observed_at)}
         if candidate and row.hardware_id:
             matched = match_offer(hardware, candidate)
             if not matched or matched.id != row.hardware_id:
@@ -80,7 +78,7 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
             data['price_verification'] = {'status': 'verified', 'checked_at': checked_at, 'method': method}
             row.origin = 'product_page'
             data['last_verified_price']={'price_rub':row.price_rub,'checked_at':checked_at,
-                                         'observed_at':row.observed_at.isoformat()}
+                                         'observed_at':iso_utc(row.observed_at)}
         else:
             data['price_verification'] = {'status': 'unavailable', 'checked_at': checked_at,
                                           'message': error or 'Цена товара не подтверждена'}
@@ -95,7 +93,7 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
                 continue
             if verification.get('status')=='verified':
                 data['last_verified_price']={'price_rub':row.price_rub,'checked_at':verification.get('checked_at'),
-                    'observed_at':row.observed_at.isoformat()}
+                    'observed_at':iso_utc(row.observed_at)}
             data['price_verification'] = {'status': 'unavailable', 'checked_at': checked_at,
                                           'message': 'Площадка ограничила доступ; цена страницы не подтверждена'}
             row.attributes = json.dumps(data, ensure_ascii=False)

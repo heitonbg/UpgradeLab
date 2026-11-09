@@ -1,0 +1,157 @@
+[
+  {
+    "city_id": "ru:moscow",
+    "name": "Москва",
+    "region": "Москва",
+    "aliases": [
+      "мск"
+    ],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:saint-petersburg",
+    "name": "Санкт-Петербург",
+    "region": "Санкт-Петербург",
+    "aliases": [
+      "питер",
+      "спб",
+      "санкт петербург"
+    ],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:kemerovo",
+    "name": "Кемерово",
+    "region": "Кемеровская область — Кузбасс",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:kem",
+    "name": "Кемь",
+    "region": "Республика Карелия",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:krasnoyarsk",
+    "name": "Красноярск",
+    "region": "Красноярский край",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:novosibirsk",
+    "name": "Новосибирск",
+    "region": "Новосибирская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:ekaterinburg",
+    "name": "Екатеринбург",
+    "region": "Свердловская область",
+    "aliases": [
+      "екб"
+    ],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:kazan",
+    "name": "Казань",
+    "region": "Республика Татарстан",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:nizhny-novgorod",
+    "name": "Нижний Новгород",
+    "region": "Нижегородская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:samara",
+    "name": "Самара",
+    "region": "Самарская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:omsk",
+    "name": "Омск",
+    "region": "Омская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:tomsk",
+    "name": "Томск",
+    "region": "Томская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:tyumen",
+    "name": "Тюмень",
+    "region": "Тюменская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:perm",
+    "name": "Пермь",
+    "region": "Пермский край",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:ufa",
+    "name": "Уфа",
+    "region": "Республика Башкортостан",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:chelyabinsk",
+    "name": "Челябинск",
+    "region": "Челябинская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:rostov-on-don",
+    "name": "Ростов-на-Дону",
+    "region": "Ростовская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:krasnodar",
+    "name": "Краснодар",
+    "region": "Краснодарский край",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:sovetsk-kirov",
+    "name": "Советск",
+    "region": "Кировская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:sovetsk-kaliningrad",
+    "name": "Советск",
+    "region": "Калининградская область",
+    "aliases": [],
+    "external_ids": {}
+  },
+  {
+    "city_id": "ru:sovetsk-tula",
+    "name": "Советск",
+    "region": "Тульская область",
+    "aliases": [],
+    "external_ids": {}
+  }
+]

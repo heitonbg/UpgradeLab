@@ -10,7 +10,8 @@ import re
 import time
 from pathlib import Path
 
-import requests
+from app.services.safe_http import SafeSession
+from app.services.network_policy import Policy, validate_url
 from bs4 import BeautifulSoup
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -54,16 +55,18 @@ def to_int(v) -> int | None:
     return int(float(m.group())) if m else None
 
 
-def get_session(page_url: str) -> requests.Session:
-    s = requests.Session()
+def get_session(page_url: str) -> SafeSession:
+    policy = Policy(domains=('cpubenchmark.net','videocardbenchmark.net'))
+    validate_url(page_url, policy)
+    s = SafeSession(policy)
     h = dict(HEADERS)
     h["Referer"] = page_url
     s.headers.update(h)
     return s
 
 
-def fetch_mega_data(session: requests.Session, page_url: str) -> list[dict]:
-    domain = re.sub(r"^https?://", "", page_url).split("/")[0]
+def fetch_mega_data(session: SafeSession, page_url: str) -> list[dict]:
+    domain = validate_url(page_url, session.policy).host
     print(f"  -> Запрос к {page_url} ...")
     page = session.get(page_url, timeout=30)
     page.raise_for_status()

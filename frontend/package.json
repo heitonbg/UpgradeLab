@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/lib/hardware.test.js src/lib/performance.test.js src/lib/marketplace.test.js src/api/searchJobs.test.js"
+    "test": "node --test src/lib/hardware.test.js src/lib/performance.test.js src/lib/marketplace.test.js src/api/searchJobs.test.js src/lib/authChallenge.test.js src/api/auth.test.js src/lib/sourceDiagnostics.test.js src/lib/savedPrices.test.js src/lib/contacts.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",

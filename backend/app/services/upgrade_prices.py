@@ -1,6 +1,7 @@
 """Market estimates for upgrades; never turn one listing into an average."""
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.price_time import as_utc, db_now, is_fresh, current_verification
 from statistics import median, mean
 from types import SimpleNamespace
 from urllib.parse import urlsplit
@@ -16,9 +17,10 @@ def upgrade_market_rows(db, sources=None):
     """Safe seven-day observations for estimates, never a current-stock claim."""
     from app.services.offer_safety import safe_offers
     hardware = {h.id: h for h in db.scalars(select(Hardware))}
+    now = db_now()
     rows = list(db.scalars(select(StoreOffer).where(
-        StoreOffer.observed_at >= datetime.utcnow() - timedelta(days=7),
-        StoreOffer.observed_at <= datetime.utcnow())))
+        StoreOffer.observed_at >= now - timedelta(days=7),
+        StoreOffer.observed_at <= now)))
     result = []
     for row in safe_offers(rows, hardware):
         verification = json.loads(row.attributes).get('price_verification', {})
@@ -34,7 +36,7 @@ def avito_price_estimates(db):
     """Seven-day used-market asking-price estimates, independently of purchase stores."""
     quotes = {}
     for quote in db.scalars(select(HardwarePrice).where(HardwarePrice.source == 'avito_snapshot')):
-        if quote.price_rub > 0 and datetime.utcnow() - timedelta(days=30) <= quote.observed_at <= datetime.utcnow():
+        if quote.price_rub > 0 and is_fresh(quote.observed_at, timedelta(days=30), inclusive=True):
             quotes[quote.hardware_id] = quote
     grouped = defaultdict(dict)
     hardware = list(db.scalars(select(Hardware)))
@@ -84,9 +86,9 @@ def upgrade_price_map(db, sources=None):
             continue
         previous = quotes.get(row.hardware_id)
         if previous is not None:
-            cutoff = datetime.utcnow() - timedelta(hours=24)
-            previous_rank = (previous.observed_at < cutoff, previous.price_rub)
-            row_rank = (row.observed_at < cutoff, row.price_rub)
+            cutoff = as_utc(db_now()) - timedelta(hours=24)
+            previous_rank = (as_utc(previous.observed_at) < cutoff, previous.price_rub)
+            row_rank = (as_utc(row.observed_at) < cutoff, row.price_rub)
             if previous_rank <= row_rank:
                 continue
         verification = json.loads(row.attributes).get('price_verification', {})
@@ -95,8 +97,7 @@ def upgrade_price_map(db, sources=None):
             market='used_ru' if row.condition == 'used' else 'retail_ru',
             source_url=row.url, observed_at=row.observed_at, sample_count=1,
             origin=row.origin, offer_id=row.id, offer_name=row.name,
-            verified_at=verification.get('checked_at') + 'Z'
-            if verification.get('status') == 'verified' and verification.get('checked_at') else None,
+            verified_at=current_verification(verification),
         )
     if sources is None or 'avito' in sources:
         for hardware_id, quote in avito_price_estimates(db).items():
@@ -123,7 +124,7 @@ def upgrade_search_summary(statuses, prices, resale_quotes, sources, started, na
         attempts = [row for row in statuses if row.get('source') == source and row.get('attempted', True)]
         used = [quote for quote in quotes.values() if quote.source == source or
                 source == 'avito' and quote.source == 'avito_snapshot']
-        fresh = sum(quote.observed_at >= started for quote in used)
+        fresh = sum(as_utc(quote.observed_at) >= as_utc(started) for quote in used)
         errors = [row for row in attempts if row.get('status') in ('unavailable', 'timeout')]
         state = ('refreshed' if fresh else 'cached' if used else 'unavailable' if errors else
                  'not_found' if attempts else 'not_attempted')

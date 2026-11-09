@@ -35,6 +35,13 @@ class Listing(Base):
     listing_type: Mapped[str] = mapped_column(String(20), default="sale", server_default="sale")
     exchange_for: Mapped[str | None] = mapped_column(String(500), nullable=True)
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    city_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    hardware_id: Mapped[int | None] = mapped_column(ForeignKey("hardware.id"), nullable=True)
+    contact_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    publication_status: Mapped[str] = mapped_column(String(20), default="active", server_default="active")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    availability_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False, index=True
     )
@@ -128,3 +135,11 @@ class SearchJob(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AuthChallenge(Base):
+    __tablename__ = "auth_challenges"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject_hash: Mapped[str] = mapped_column(String(64))
+    bits: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)

@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 import json
 import os
 from app.core.stores import STORES
+from app.services.network_policy import validate_url
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
@@ -28,13 +29,33 @@ class Settings(BaseSettings):
     offers_feed_tokens: str = "{}"
     offers_live_search: bool = True
     offers_http_workers: int = Field(default=2, ge=1, le=5)
-    offers_browser_enabled: bool = True
+    offers_browser_enabled: bool = False
     offers_browser_channel: str = Field(default_factory=lambda: "" if os.getenv("AMVERA") == "1" else "msedge")
     offers_browser_cdp_url: str = ""
     offers_browser_timeout_ms: int = Field(default=12000, ge=2000, le=30000)
     offers_browser_product_limit: int = Field(default=3, ge=1, le=5)
     offers_browser_search_engine: Literal["bing", "google", "yandex"] = "bing"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+
+
+    # Authentication quotas: shared through SQLite, charged before password work.
+    auth_login_window_seconds: int = Field(default=900, ge=10, le=86400)
+    auth_login_ip_limit: int = Field(default=60, ge=1, le=100000)
+    auth_login_pair_limit: int = Field(default=10, ge=1, le=100000)
+    auth_login_account_limit: int = Field(default=20, ge=1, le=100000)
+    auth_register_window_seconds: int = Field(default=3600, ge=10, le=86400)
+    auth_register_ip_limit: int = Field(default=5, ge=1, le=100000)
+    auth_register_account_limit: int = Field(default=3, ge=1, le=100000)
+    auth_password_window_seconds: int = Field(default=3600, ge=10, le=86400)
+    auth_password_ip_limit: int = Field(default=20, ge=1, le=100000)
+    auth_password_account_limit: int = Field(default=10, ge=1, le=100000)
+    auth_recovery_window_seconds: int = Field(default=3600, ge=10, le=86400)
+    auth_recovery_ip_limit: int = Field(default=10, ge=1, le=100000)
+    auth_recovery_account_limit: int = Field(default=3, ge=1, le=100000)
+    auth_reset_ip_limit: int = Field(default=20, ge=1, le=100000)
+    auth_challenge_bits: int = Field(default=18, ge=8, le=22)
+    auth_challenge_ttl_seconds: int = Field(default=120, ge=30, le=600)
+    auth_ipv6_prefix: int = Field(default=64, ge=32, le=128)
 
     @field_validator("offers_feed_urls")
     @classmethod
@@ -43,8 +64,10 @@ class Settings(BaseSettings):
         if not isinstance(mapping, dict) or any(source not in STORES for source in mapping):
             raise ValueError("OFFERS_FEED_URLS должен содержать JSON-объект с известными площадками")
         for url in mapping.values():
-            if not isinstance(url, str) or urlsplit(url).scheme != "https" or not urlsplit(url).hostname:
-                raise ValueError("Для выгрузки нужен HTTPS URL")
+            try:
+                validate_url(url)
+            except RuntimeError:
+                raise ValueError("Для выгрузки нужен допустимый публичный HTTPS URL без авторизации") from None
         return value
 
     @field_validator("offers_feed_tokens")

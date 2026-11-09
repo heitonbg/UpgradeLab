@@ -1,9 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from app.core.price_time import as_naive_utc, db_now, OBSERVATION_SKEW
 from typing import Literal
 from urllib.parse import urlsplit
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 import re
 from app.core.stores import STORES
+from app.services.network_policy import NetworkPolicyError, Policy, validate_url
 
 Source = Literal["ozon", "avito", "wb", "yandex", "dns", "citilink", "regard", "oldi", "kns", "xcom", "onlinetrade", "nix"]
 Category = Literal["CPU", "GPU", "motherboard", "memory", "storage", "psu", "case", "cooler"]
@@ -12,12 +14,11 @@ LABELS = {key: store["name"] for key, store in STORES.items()}
 
 
 def store_url(source, url):
-    parsed = urlsplit(url)
-    domain = DOMAINS[source]
-    host = parsed.hostname or ""
-    product = bool(re.search(STORES[source]["product"], parsed.path, re.I))
-    return (product and parsed.scheme == "https" and not parsed.username and not parsed.password and
-            parsed.port in (None, 443) and (host == domain or host.endswith("." + domain)))
+    try:
+        target=validate_url(url,Policy(domains=(DOMAINS[source],)))
+        return bool(re.search(STORES[source]["product"],urlsplit(target.url).path,re.I))
+    except (NetworkPolicyError,KeyError,ValueError):
+        return False
 
 
 class OfferInput(BaseModel):
@@ -51,9 +52,8 @@ class OfferInput(BaseModel):
     @field_validator("observed_at")
     @classmethod
     def utc_date(cls, value):
-        if value.tzinfo:
-            value = value.astimezone(timezone.utc).replace(tzinfo=None)
-        if value > datetime.utcnow() + timedelta(minutes=5):
+        value = as_naive_utc(value)
+        if value is None or value > db_now() + OBSERVATION_SKEW:
             raise ValueError("Дата цены не может быть в будущем")
         return value
 

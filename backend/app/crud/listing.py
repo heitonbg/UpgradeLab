@@ -4,22 +4,19 @@ from app.db.models import Listing
 from app.schemas.listing import ListingCreate
 
 
-def list_recent(db: Session) -> list[Listing]:
-    stmt = select(Listing).order_by(Listing.created_at.desc(), Listing.id.desc())
+def list_recent(db: Session, city_id=None) -> list[Listing]:
+    stmt = select(Listing).where(Listing.publication_status == "active")
+    if city_id is not None:
+        stmt = stmt.where(Listing.city_id == city_id)
+    stmt = stmt.order_by(Listing.created_at.desc(), Listing.id.desc())
     return list(db.scalars(stmt))
 
 
 def create(db: Session, payload: ListingCreate) -> Listing:
-    listing = Listing(
-        title=payload.title,
-        condition=payload.condition,
-        price=payload.price,
-        contact=payload.contact,
-        description=payload.description,
-        listing_type=payload.listing_type,
-        exchange_for=payload.exchange_for,
-        photo_url=payload.photo_url,
-    )
+    from app.core.price_time import db_now
+    data = payload.model_dump(exclude={'confirm_availability'})
+    listing = Listing(**data, created_at=db_now(), updated_at=db_now(),
+        availability_confirmed_at=db_now() if payload.confirm_availability and payload.publication_status == 'active' else None)
     db.add(listing)
     db.flush()
     return listing

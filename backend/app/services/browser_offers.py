@@ -1,15 +1,13 @@
-"""Read public store pages in an isolated browser context; discover product URLs
-through a search engine, then verify prices at the store, never in snippets."""
+"""Browser extraction helpers retained for fixtures and a future isolated runtime.
+Native browser/CDP contexts are disabled until OS egress isolation is verified."""
 import base64
-import ipaddress
 import time
 import sys
 import logging
 from pathlib import Path
 from importlib.metadata import version, PackageNotFoundError
-from datetime import datetime
+from app.core.price_time import db_now, iso_utc
 from contextlib import contextmanager
-from threading import BoundedSemaphore
 from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlsplit
 from bs4 import BeautifulSoup
 from app.core.config import settings
@@ -17,12 +15,14 @@ from app.core.stores import STORES
 from app.schemas.offers import store_url
 from app.services.store_providers import parse_html, resolved_search_url
 from app.services.search_time import remaining
+from app.services.network_policy import NetworkPolicyError
 
-browser_slots = BoundedSemaphore(1)
 last_launch_error = None
 logger = logging.getLogger(__name__)
 SEARCH_HOSTS = {"www.bing.com", "bing.com", "www.google.com", "google.com", "yandex.ru", "www.yandex.ru",
                 "duckduckgo.com", "html.duckduckgo.com"}
+BROWSER_SECURITY_MESSAGE = ('Браузерный поиск отключён: не подтверждена сетевая изоляция Chromium/CDP. '
+                            'Используйте HTTP-поиск или HTTP-импорт; браузеру нужен проверенный изолированный egress.')
 SEARCH_ENGINES = {"bing": ("https://www.bing.com/search", "q"),
                   "google": ("https://www.google.com/search", "q"),
                   "yandex": ("https://yandex.ru/search/", "text"),
@@ -82,7 +82,9 @@ def allowed_navigation(url, source, search=False):
 
 def browser_diagnostics():
     """Inspect installation without launching Chromium or exposing environment secrets."""
-    info = {'enabled': settings.offers_browser_enabled, 'configured_channel': settings.offers_browser_channel,
+    info = {'enabled': False, 'configured_enabled': settings.offers_browser_enabled,
+            'security_status': 'disabled_pending_network_isolation', 'security_message': BROWSER_SECURITY_MESSAGE,
+            'configured_channel': settings.offers_browser_channel,
             'platform': sys.platform, 'package_version': None, 'bundled_installed': False}
     try:
         info['package_version'] = version('playwright')
@@ -108,76 +110,18 @@ def browser_diagnostics():
 
 
 def launch_browser(playwright, deadline):
-    global last_launch_error
-    options = {'headless': True, 'args': ['--disable-dev-shm-usage']}
-    channel = settings.offers_browser_channel or None
-    # Linux hosting has bundled Chromium; a leftover local msedge setting must
-    # not prevent it from starting. Do not depend on Amvera setting AMVERA=1.
-    if sys.platform.startswith('linux') and Path(playwright.chromium.executable_path).is_file():
-        # channel=None uses the separate headless-shell binary, whereas this
-        # installation check refers to full Chromium. Launch the binary checked.
-        channel = 'chromium'
-    try:
-        return playwright.chromium.launch(channel=channel,
-            timeout=max(1, int(remaining(deadline, 8)*1000)), **options)
-    except Exception as error:
-        last_launch_error = {'at': datetime.utcnow().isoformat()+'Z', 'detail': str(error)[:1800]}
-        logger.warning('Chromium launch failed: %s', str(error)[:1800])
-        if channel and Path(playwright.chromium.executable_path).is_file():
-            try:
-                return playwright.chromium.launch(timeout=max(1, int(remaining(deadline, 5)*1000)), **options)
-            except Exception:
-                pass
-        if not Path(playwright.chromium.executable_path).is_file():
-            raise RuntimeError('Chromium не установлен в образе сервера. Пересоберите backend с Dockerfile проекта.') from error
-        raise RuntimeError('Не удалось запустить Chromium в контейнере. Проверьте память и журнал запуска backend.') from error
+    # Direct calls must respect the same fail-closed browser policy.
+    remaining(deadline, 5)
+    raise NetworkPolicyError(BROWSER_SECURITY_MESSAGE)
 
 
 @contextmanager
 def browser_context(deadline=None):
-    if not settings.offers_browser_enabled:
-        raise RuntimeError("Браузерный поиск отключён на сервере")
-    if not browser_slots.acquire(timeout=remaining(deadline, 5 if deadline else 30)):
-        raise RuntimeError("Браузер занят; повторите поиск выбранной площадки")
-    try:
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError:
-            raise RuntimeError("Установите backend/requirements-browser.txt и браузер Edge/Chromium")
-        with sync_playwright() as playwright:
-            owned = not settings.offers_browser_cdp_url
-            try:
-                browser = (playwright.chromium.connect_over_cdp(settings.offers_browser_cdp_url, timeout=max(1,int(remaining(deadline,5)*1000)))
-                           if not owned else launch_browser(playwright, deadline))
-            except RuntimeError:
-                raise
-            except Exception as error:
-                raise RuntimeError("Не удалось подключить браузер; проверьте настройку CDP") from error
-            context = browser.new_context(locale="ru-RU", accept_downloads=False)
-
-            def public_only(route):
-                if route.request.resource_type in ('image', 'media', 'font'):
-                    return route.abort()
-                parsed = urlsplit(route.request.url)
-                host = parsed.hostname or ""
-                if parsed.scheme not in ("http", "https", "data", "blob") or host in ("localhost", "metadata.google.internal") or host.endswith(".local"):
-                    return route.abort()
-                try:
-                    if ipaddress.ip_address(host).is_private or ipaddress.ip_address(host).is_loopback:
-                        return route.abort()
-                except ValueError:
-                    pass
-                return route.continue_()
-
-            context.route("**/*", public_only)
-            try:
-                yield context
-            finally:
-                context.close()
-                if owned:
-                    browser.close()
-    finally:
-        browser_slots.release()
+    # URL interception cannot constrain all native Chromium channels or pin
+    # DNS. No browser or external CDP process is used without OS egress isolation.
+    remaining(deadline,5)
+    raise NetworkPolicyError(BROWSER_SECURITY_MESSAGE)
+    yield  # A contextmanager generator; intentionally unreachable in this runtime.
 
 
 def read_page(page, source, url, search=False, deadline=None):
@@ -268,7 +212,7 @@ def search_browser(source, query, category, discovery_only=False, deadline=None)
                             products=parse_html(source,product_html,category,page.url,require_single_price=True)
                             for product in products:
                                 product.attributes['price_verification']={'status':'verified',
-                                    'checked_at':datetime.utcnow().isoformat(),'method':'browser_product_page'}
+                                    'checked_at':iso_utc(db_now()),'method':'browser_product_page'}
                             verified.extend(products)
                         except Exception:
                             continue
@@ -292,7 +236,7 @@ def search_browser(source, query, category, discovery_only=False, deadline=None)
                 for row in parse_html(source, html, category, page.url, require_single_price=True):
                     if row.url.rstrip('/').split('?')[0] == page.url.rstrip('/').split('?')[0]:
                         row.attributes['price_verification'] = {'status': 'verified',
-                            'checked_at': datetime.utcnow().isoformat(), 'method': 'browser_product_page'}
+                            'checked_at': iso_utc(db_now()), 'method': 'browser_product_page'}
                         verified[row.url] = row
             except Exception:
                 continue
@@ -311,5 +255,5 @@ def read_browser_product(source, url, category, deadline=None):
         rows = parse_html(source, html, category, page.url, require_single_price=True)
         for row in rows:
             row.attributes['price_verification'] = {'status': 'verified',
-                'checked_at': datetime.utcnow().isoformat(), 'method': 'browser_product_page'}
+                'checked_at': iso_utc(db_now()), 'method': 'browser_product_page'}
         return rows

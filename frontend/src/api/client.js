@@ -1,10 +1,11 @@
 import { apiUrl } from './config.js'
 
 export class ApiError extends Error {
-  constructor(status, message) {
+  constructor(status, message, challenge = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.challenge = challenge
   }
 }
 
@@ -45,14 +46,18 @@ async function performRequest(path, { method = 'GET', body, timeoutMs } = {}) {
       window.dispatchEvent(new Event('upgradelab:session-expired'))
     }
     let detail = `HTTP ${res.status}`
+    let challenge = null
     try {
       const data = await res.json()
       if (typeof data?.detail === 'string') detail = data.detail
-      else if (Array.isArray(data?.detail)) {
+      else if (typeof data?.detail?.message === 'string') {
+        detail = data.detail.message
+        challenge = data.detail.challenge || null
+      } else if (Array.isArray(data?.detail)) {
         detail = data.detail.map((e) => e.msg ?? JSON.stringify(e)).join('; ')
       }
     } catch { /* ignore */ }
-    throw new ApiError(res.status, detail)
+    throw new ApiError(res.status, detail, challenge)
   }
 
   if (res.status === 204) return null

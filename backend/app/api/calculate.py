@@ -43,8 +43,8 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
         ram_type, ram_channels = ram.ram_type, ram.ram_channels
     elif payload.ram_manual:
         ram_type, ram_channels = payload.ram_manual.type, payload.ram_manual.channels
-    from datetime import datetime
-    search_started = datetime.utcnow()
+    from app.core.price_time import db_now
+    search_started = db_now()
     statuses = []
     if payload.refresh_avito_prices:
         import time

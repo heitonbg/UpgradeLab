@@ -14,7 +14,9 @@ from app.api.deps import DBSession
 from app.db.models import User, LoginSession, SavedBuild, PasswordReset
 from app.schemas.calculate import CalculateRequest
 from app.core.config import settings
+from app.core.price_time import iso_utc, db_now
 from app.services.builds import BuildRequest, assemble
+from app.services import auth_limits
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -23,6 +25,8 @@ class Credentials(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=128)
     remember_me: bool = True
+    challenge_token: str | None = Field(default=None, min_length=64, max_length=64, pattern=r'^[a-f0-9]+$')
+    challenge_nonce: str | None = Field(default=None, min_length=1, max_length=12, pattern=r'^[0-9]+$')
 
     @field_validator("email")
     @classmethod
@@ -84,7 +88,10 @@ def sign_in(db, user, response, remember=True):
 
 
 @router.post("/auth/register", status_code=201)
-def register(payload: Registration, db: DBSession, response: Response):
+def register(payload: Registration, db: DBSession, response: Response, request: Request):
+    auth_limits.enforce(db,[
+        ('register-ip:'+auth_limits.client_ip(request),settings.auth_register_ip_limit,settings.auth_register_window_seconds),
+        ('register-account:'+payload.email,settings.auth_register_account_limit,settings.auth_register_window_seconds)])
     salt = secrets.token_hex(16)
     user = User(email=payload.email, name=payload.name, password_hash=salt + ":" + password_hash(payload.password, salt))
     db.add(user)
@@ -97,7 +104,8 @@ def register(payload: Registration, db: DBSession, response: Response):
 
 
 @router.post("/auth/login")
-def login(payload: Credentials, db: DBSession, response: Response):
+def login(payload: Credentials, db: DBSession, response: Response, request: Request):
+    auth_limits.login_attempt(db,request,payload.email,payload.challenge_token,payload.challenge_nonce)
     user = db.scalar(select(User).where(User.email == payload.email))
     salt, expected = user.password_hash.split(":") if user else ("00" * 16, "00" * 64)
     valid = hmac.compare_digest(password_hash(payload.password, salt), expected)
@@ -131,7 +139,10 @@ def update_profile(payload: ProfileUpdate, db: DBSession, user: AuthUser):
 
 
 @router.post("/auth/password")
-def update_password(payload: PasswordUpdate, db: DBSession, user: AuthUser, response: Response):
+def update_password(payload: PasswordUpdate, db: DBSession, user: AuthUser, response: Response, request: Request):
+    auth_limits.enforce(db,[
+        ('password-ip:'+auth_limits.client_ip(request),settings.auth_password_ip_limit,settings.auth_password_window_seconds),
+        ('password-user:'+str(user.id),settings.auth_password_account_limit,settings.auth_password_window_seconds)])
     salt, expected = user.password_hash.split(":")
     if not hmac.compare_digest(password_hash(payload.current_password, salt), expected):
         raise HTTPException(400, "Текущий пароль указан неверно")
@@ -154,7 +165,8 @@ def logout(db: DBSession, user: AuthUser, response: Response, upgrade_session: s
 @router.get("/builds")
 def builds(db: DBSession, user: AuthUser, response: Response):
     response.headers["Cache-Control"] = "no-store"
-    return [{"id": b.id, "created_at": b.created_at, **json.loads(b.data)} for b in
+    from app.services.saved_prices import saved_build_view
+    return [saved_build_view(db, b) for b in
             db.scalars(select(SavedBuild).where(SavedBuild.user_id == user.id).order_by(SavedBuild.id.desc()))]
 
 
@@ -165,10 +177,23 @@ def save_build(payload: BuildRequest | CalculateRequest, db: DBSession, user: Au
     if result.get('status') == 'partial':
         raise HTTPException(400, 'Полная сборка пока не найдена. Для сохранения выберите готовую конфигурацию после подбора.')
     config={**payload.model_dump(mode="json"),**result.get('actual_config',{})}
-    build = SavedBuild(user_id=user.id, data=json.dumps({"config": config, "result": result}, ensure_ascii=False, default=str))
+    from app.services.saved_prices import capture_snapshot
+    build = SavedBuild(user_id=user.id, created_at=db_now(), data=json.dumps({"config": config, "result": result,
+        "price_snapshot": capture_snapshot(db, result)}, ensure_ascii=False, default=str))
     db.add(build)
     db.commit()
     return {"id": build.id}
+
+
+@router.post("/builds/{build_id}/prices")
+def check_saved_prices(build_id: int, db: DBSession, user: AuthUser, response: Response):
+    """No external requests: source permissions are not confirmed for UpgradeLab."""
+    build = db.get(SavedBuild, build_id)
+    if not build or build.user_id != user.id:
+        raise HTTPException(404, "Сборка не найдена")
+    response.headers["Cache-Control"] = "no-store"
+    from app.services.saved_prices import saved_build_view
+    return saved_build_view(db, build)
 
 
 @router.delete("/builds/{build_id}", status_code=204)

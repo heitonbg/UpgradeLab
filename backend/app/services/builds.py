@@ -143,6 +143,10 @@ def assemble(payload: BuildRequest, db):
             raise HTTPException(422, f"Укажите деталь {key} или включите автоматический подбор")
         elif invalid_manual_part(manual.name, key):
             raise HTTPException(422, "Для сборки нужны комплектные детали: внешние накопители, крепления и аксессуары не подходят.")
+        if key == "motherboard":
+            inferred_socket = board_socket(offer.name if offer else manual.name)
+            if inferred_socket and inferred_socket != payload.socket:
+                raise HTTPException(400, "Сокет платы из названия не соответствует выбранной платформе")
         if offer:
             if key == "motherboard":
                 selected_board = offer
@@ -160,11 +164,11 @@ def assemble(payload: BuildRequest, db):
     prices = price_map(db, payload.price_sources)
     hardware = list(db.scalars(select(Hardware)))
     cpus = [h for h in hardware if h.type == "CPU" and h.socket == payload.socket and h.id in prices]
-    if selected_board and re.search(r"\b(?:A520|B550)M?\b", selected_board.name, re.I):
-        # These chipsets do not support the earlier Ryzen generations, including
-        # Picasso 3200G/3400G, despite the identical AM4 socket.
-        cpus = [h for h in cpus if re.search(r"Ryzen\s+[3579]\s+(?:[3-9]\d{3}|\d{5})", h.name, re.I)
-                and not re.search(r"\b(?:3200G|3400G)\b", h.name, re.I)]
+    # The same socket can span incompatible CPU generations. Apply the
+    # automatic solver's existing chipset rules to offers and manual titles.
+    from app.services.automatic_builds import cpu_board_matches
+    board = selected_board or payload.motherboard
+    cpus = [h for h in cpus if cpu_board_matches(h, board)]
     gpus = [h for h in hardware if h.type == "GPU" and h.id in prices and desktop_gpu(h.name)]
     memory_factor = 1.16 if payload.ram_type == "DDR5" else 1.07
     options = []

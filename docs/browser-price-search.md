@@ -1,3 +1,12 @@
+## Безопасность сети — итерация 4
+
+HTTP-загрузка использует проверку публичных A/AAAA и соединение с закреплённым IP. Native Chromium и внешний CDP отключены до реализации проверенной изоляции egress на уровне ОС: настройка OFFERS_BROWSER_ENABLED не снимает запрет. Работает HTTP-путь; источники, требующие JavaScript, могут быть недоступны. Подробности и ограничения: [SSRF_SECURITY.md](SSRF_SECURITY.md).
+
+## Архив прежнего браузерного режима
+
+Следующие инструкции и результаты относятся к реализации до итерации 4. Команды browser/CDP сейчас завершаются отказом безопасности; установка Chromium и флаги их не включают.
+
+
 # Поиск цен через магазины и браузер
 
 Реестр включает 12 источников: Ozon, Avito, WB, Яндекс Маркет, DNS, Ситилинк, Регард, OLDI, KNS, XCOM-SHOP, ОНЛАЙН ТРЕЙД и НИКС. Это список проверяемых источников, а не гарантия доступа ко всем магазинам России.
@@ -42,7 +51,7 @@ uv pip install --python .venv/Scripts/python.exe -r requirements-browser.txt
 По умолчанию используется установленный Edge (`OFFERS_BROWSER_CHANNEL=msedge`); Playwright поддерживает его через [channel](https://playwright.dev/python/docs/browsers#google-chrome--microsoft-edge). Если Edge отсутствует, выполните `.venv/Scripts/python.exe -m playwright install chromium` и задайте пустой `OFFERS_BROWSER_CHANNEL=`.
 
 ```dotenv
-OFFERS_BROWSER_ENABLED=true
+OFFERS_BROWSER_ENABLED=false
 OFFERS_BROWSER_CHANNEL=msedge
 OFFERS_BROWSER_CDP_URL=
 OFFERS_BROWSER_TIMEOUT_MS=12000

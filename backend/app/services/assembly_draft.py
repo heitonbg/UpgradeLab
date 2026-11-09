@@ -1,5 +1,6 @@
 """A compatible estimate from real observations when live shops are unavailable."""
 import json
+from app.core.price_time import past_utc, iso_utc
 from fastapi import HTTPException
 from app.services.adaptive_builds import solve_profiles
 from app.services.offers import available_offers
@@ -10,14 +11,15 @@ def quote_evidence(row):
     data=json.loads(row.attributes)
     verification=data.get('price_verification',{})
     history=data.get('last_verified_price',{})
-    checked=verification.get('checked_at') if verification.get('status')=='verified' else history.get('checked_at')
-    # Earlier product-page verifications predate the explicit history field.
-    # Their observation timestamp was written by the successful page read.
-    if not checked and row.origin=='product_page':
-        checked=row.observed_at.isoformat()
-    return {'price_status':'previously_verified' if checked else 'unconfirmed',
-            'price_last_verified_at':checked.rstrip('Z')+'Z' if checked else None,
-            'price_observed_at':row.observed_at.isoformat()+'Z',
+    raw=verification.get('checked_at') if verification.get('status')=='verified' else history.get('checked_at')
+    checked=past_utc(raw)
+    # Only genuinely legacy rows without explicit verification/history metadata
+    # can use the page-read timestamp. Malformed/future metadata is not evidence.
+    if not verification and not history and row.origin=='product_page':
+        checked=past_utc(row.observed_at)
+    return {'price_status':'previously_verified' if checked is not None else 'unconfirmed',
+            'price_last_verified_at':iso_utc(checked),
+            'price_observed_at':iso_utc(row.observed_at),
             'price_verified_at':None}
 
 

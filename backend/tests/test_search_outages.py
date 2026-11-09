@@ -51,7 +51,7 @@ class SearchOutageTests(unittest.TestCase):
         self.assertTrue(all(part['price_last_verified_at']==checked+'Z' for part in result['parts']))
 
     def test_deadline_does_not_start_http_or_mark_unread_products_unavailable(self):
-        with patch('app.services.store_providers.requests.get') as request:
+        with patch('app.services.store_providers.SafeSession.get') as request:
             with self.assertRaises(TimeoutError):fetch('https://www.regard.ru/product/123/test',store='regard',deadline=time.monotonic()-1)
             request.assert_not_called()
         row=self.db.scalar(select(StoreOffer))

@@ -5,7 +5,7 @@ CAPTCHA token, or third-party copy of a product price is involved.
 """
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from app.core.price_time import db_now, iso_utc
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 from app.core.stores import STORES
@@ -82,7 +82,7 @@ def discover_public_offers(source, query, category, deadline):
             rows = parse_html(source, body, category, url, require_single_price=True)
             for row in rows:
                 row.attributes['price_verification'] = {'status': 'verified',
-                    'checked_at': datetime.utcnow().isoformat(), 'method': 'http_discovered_product'}
+                    'checked_at': iso_utc(db_now()), 'method': 'http_discovered_product'}
                 found[row.url] = row
         except Exception as error:
             errors.append(str(error)[:160])

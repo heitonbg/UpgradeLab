@@ -27,30 +27,27 @@ class StoreParsingTests(unittest.TestCase):
         self.assertEqual(result,html)
         page.wait_for_timeout.assert_not_called()
 
-    def test_linux_uses_bundled_chromium_even_if_local_edge_channel_is_configured(self):
+    def test_linux_bundled_chromium_does_not_bypass_network_isolation(self):
         playwright=Mock();playwright.chromium.executable_path='/ms-playwright/chromium/chrome'
         with patch('app.services.browser_offers.sys.platform','linux'),patch(
-                'app.services.browser_offers.Path.is_file',return_value=True),patch.object(settings,'offers_browser_channel','msedge'):
-            launch_browser(playwright,time.monotonic()+20)
-        options=playwright.chromium.launch.call_args.kwargs
-        self.assertEqual(options['channel'],'chromium')
-        self.assertIn('--disable-dev-shm-usage',options['args'])
-
-    def test_missing_edge_falls_back_to_bundled_chromium(self):
-        playwright=Mock();playwright.chromium.executable_path='C:/browser/chrome.exe'
-        playwright.chromium.launch.side_effect=[RuntimeError('Edge missing'),Mock()]
-        with patch('app.services.browser_offers.sys.platform','win32'),patch(
-                'app.services.browser_offers.Path.is_file',return_value=True),patch.object(settings,'offers_browser_channel','msedge'):
-            launch_browser(playwright,time.monotonic()+20)
-        self.assertEqual(playwright.chromium.launch.call_count,2)
-        self.assertNotIn('channel',playwright.chromium.launch.call_args.kwargs)
-
-    def test_missing_hosted_browser_reports_rebuild_instead_of_generic_error(self):
-        playwright=Mock();playwright.chromium.executable_path='/missing/chromium'
-        playwright.chromium.launch.side_effect=RuntimeError('Missing executable')
-        with patch('app.services.browser_offers.Path.is_file',return_value=False):
-            with self.assertRaisesRegex(RuntimeError,'Chromium не установлен'):
+                'app.services.browser_offers.Path.is_file',return_value=True):
+            with self.assertRaisesRegex(RuntimeError,'изоляция'):
                 launch_browser(playwright,time.monotonic()+20)
+        playwright.chromium.launch.assert_not_called()
+
+    def test_windows_channel_does_not_bypass_network_isolation(self):
+        playwright=Mock();playwright.chromium.executable_path='C:/browser/chrome.exe'
+        with patch('app.services.browser_offers.sys.platform','win32'),patch.object(settings,'offers_browser_channel','msedge'):
+            with self.assertRaisesRegex(RuntimeError,'изоляция'):
+                launch_browser(playwright,time.monotonic()+20)
+        playwright.chromium.launch.assert_not_called()
+
+    def test_missing_browser_keeps_the_network_security_diagnostic(self):
+        playwright=Mock();playwright.chromium.executable_path='/missing/chromium'
+        with patch('app.services.browser_offers.Path.is_file',return_value=False):
+            with self.assertRaisesRegex(RuntimeError,'изоляция'):
+                launch_browser(playwright,time.monotonic()+20)
+        playwright.chromium.launch.assert_not_called()
 
     def test_avito_direct_browser_search_confirms_the_listing_price(self):
         url='https://www.avito.ru/moskva/tovary_dlya_kompyutera/rtx_3060_123456789'
@@ -122,18 +119,18 @@ class StoreParsingTests(unittest.TestCase):
             SearchOffers(query='RTX 5060',category='GPU',method='browser')
 
     def test_redirects_only_within_store_and_no_feed_token_forwarding(self):
-        first=Mock(status_code=302,headers={'Location':'https://www.regard.ru/catalog/1013?search=RTX+5060'})
-        first.__enter__=Mock(return_value=first);first.__exit__=Mock(return_value=False)
-        second=Mock(status_code=200,encoding='utf-8');second.iter_content.return_value=[b'<html>test</html>']
-        second.__enter__=Mock(return_value=second);second.__exit__=Mock(return_value=False)
-        with patch('app.services.store_providers.requests.Session') as factory:
-            request=factory.return_value.__enter__.return_value.get
-            request.side_effect=[first,second]
+        from app.services.safe_http import SafeSession,SafeResponse
+        from app.services.network_policy import Address
+        from requests.structures import CaseInsensitiveDict
+        import socket
+        first=SafeResponse(302,CaseInsensitiveDict({'Location':'https://www.regard.ru/catalog/1013?search=RTX+5060'}),b'','https://www.regard.ru')
+        second=SafeResponse(200,CaseInsensitiveDict(),b'<html>test</html>','https://www.regard.ru')
+        with patch('app.services.safe_http.resolve_public',return_value=(Address(socket.AF_INET,'93.184.216.34'),)),patch.object(
+                SafeSession,'_once',side_effect=[first,second]) as request:
             self.assertEqual(fetch('https://www.regard.ru/catalog?search=test',store='regard'),'<html>test</html>')
             self.assertEqual(request.call_count,2)
-        with patch('app.services.store_providers.requests.Session') as factory:
-            request=factory.return_value.__enter__.return_value.get
-            request.return_value=first
+        with patch('app.services.safe_http.resolve_public',return_value=(Address(socket.AF_INET,'93.184.216.34'),)),patch.object(
+                SafeSession,'_once',return_value=first) as request:
             with self.assertRaises(RuntimeError):
                 fetch('https://feed.example/offers',token='secret')
             self.assertEqual(request.call_count,1)

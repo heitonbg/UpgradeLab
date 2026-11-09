@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+from app.core.price_time import as_utc, as_naive_utc, is_fresh, current_verification, OBSERVATION_SKEW, OFFER_TTL
 from sqlalchemy import select
 from app.db.models import HardwarePrice
 import json
@@ -14,9 +15,8 @@ def price_map(db, sources=None, allowed_offer_ids=None, preferred_source=None, o
     """Only sourced observations may participate in a budget calculation."""
     quotes = {}
     for quote in db.scalars(select(HardwarePrice)) if sources is None else []:
-        age = datetime.utcnow() - quote.observed_at
         lifetime = timedelta(days=30 if quote.market == "used_ru" else 7)
-        if age > lifetime or quote.price_rub <= 0:
+        if not is_fresh(quote.observed_at, lifetime, inclusive=True, future_tolerance=OBSERVATION_SKEW) or quote.price_rub <= 0:
             continue
         previous = quotes.get(quote.hardware_id)
         priority = {"retail_ru": 3, "used_ru": 2, "retail_us_converted": 1}
@@ -39,7 +39,7 @@ def price_map(db, sources=None, allowed_offer_ids=None, preferred_source=None, o
                 market="used_ru" if offer.condition == "used" else "retail_ru",
                 source_url=offer.url, observed_at=offer.observed_at, sample_count=1,
                 offer_id=offer.id, origin=offer.origin, offer_name=offer.name,
-                verified_at=verification['checked_at'] + 'Z' if verification.get('status') == 'verified' and verification.get('checked_at') else None)
+                verified_at=current_verification(verification))
     return quotes
 
 
@@ -50,8 +50,9 @@ def public_price(quote):
             "sample_count": getattr(quote, 'sample_count', 1), "average_method": getattr(quote, 'average_method', None),
             "price_window_days": getattr(quote, 'observation_days', None),
             "offer_id": getattr(quote, "offer_id", None), "price_offer_name": getattr(quote, "offer_name", None), "price_origin": getattr(quote, "origin", "snapshot"),
-            "price_verified_at": getattr(quote, 'verified_at', None),
-            "price_date": quote.observed_at.replace(tzinfo=timezone.utc), "price_market": quote.market, "price_url": quote.source_url}
+            "price_verified_at": (current_verification({'status': 'verified', 'checked_at': getattr(quote, 'verified_at', None)})
+                                  if is_fresh(quote.observed_at, OFFER_TTL, inclusive=True, future_tolerance=OBSERVATION_SKEW) else None),
+            "price_date": as_utc(quote.observed_at), "price_market": quote.market, "price_url": quote.source_url}
 
 
 def load_price_cache(db):
@@ -70,9 +71,12 @@ def load_price_cache(db):
         hw_id = lookup.get((row["type"], model_key(row["name"])))
         if hw_id is None:
             continue
-        observed = datetime.fromisoformat(row["observed_at"])
+        observed = as_naive_utc(row.get("observed_at"))
+        if observed is None or not is_fresh(observed, timedelta.max, inclusive=True, future_tolerance=OBSERVATION_SKEW):
+            continue
         quote = db.get(HardwarePrice, (hw_id, row["source"]))
-        if quote and quote.observed_at >= observed:
+        if (quote and is_fresh(quote.observed_at, timedelta.max, inclusive=True, future_tolerance=OBSERVATION_SKEW)
+                and as_utc(quote.observed_at) >= as_utc(observed)):
             continue
         if quote is None:
             quote = HardwarePrice(hardware_id=hw_id, source=row["source"])

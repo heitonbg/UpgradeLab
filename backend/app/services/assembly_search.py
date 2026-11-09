@@ -11,7 +11,7 @@ from app.services.automatic_builds import board_matches, memory_matches, part
 from app.services.adaptive_builds import platform_candidates, solve_profiles
 from app.services.component_quality import quality_check
 from app.services.gaming_selection import gaming_cases
-from app.services.offers import available_offers, search_offers as default_search, batch_search_offers
+from app.services.offers import available_offers, fresh, search_offers as default_search, batch_search_offers
 from app.services.price_verification import pending_build_prices, recent_check, verify_build_prices
 from app.services.store_providers import search_url, source_blocked
 from app.services.assembly_draft import draft_build, observed_rows, quote_evidence
@@ -28,7 +28,7 @@ STORE_ORDER = ('regard', 'kns', 'oldi', 'xcom', 'citilink', 'onlinetrade', 'nix'
 
 def confirmed(row):
     check = json.loads(row.attributes).get('price_verification', {})
-    return row.origin == 'feed' or check.get('status') == 'verified' and recent_check(check)
+    return fresh(row) and (row.origin == 'feed' or check.get('status') == 'verified' and recent_check(check))
 
 
 def queries_for(payload):

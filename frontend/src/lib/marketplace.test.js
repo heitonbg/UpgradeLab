@@ -20,3 +20,17 @@ test('search, deal type, condition and category combine',()=>{
   assert.deepEqual(filterListings(listings,{}).map(l=>l.id),[3,2,1])
   assert.deepEqual(listings.map(l=>l.id),[1,2,3])
 })
+
+test('city filtering excludes other cities and unknown location',()=>{
+  const rows=[{...listings[0],id:1,city_id:'ru:kemerovo'},{...listings[0],id:2,city_id:'ru:kem'},{...listings[0],id:3}]
+  assert.deepEqual(filterListings(rows,{city_id:'ru:kemerovo'}).map(row=>row.id),[1])
+})
+test('sold and withdrawn listings never remain in cached public results',()=>{
+  assert.deepEqual(filterListings([{...listings[0],publication_status:'sold'},{...listings[1],publication_status:'withdrawn'}],{}),[])
+})
+test('broken condition is distinct from used and explicit category beats title guesses',()=>{
+  const row={...listings[0],condition:'Неисправное',category:'GPU'}
+  assert.deepEqual(filterListings([row],{condition:'used'}),[])
+  assert.equal(filterListings([row],{condition:'broken'}).length,1)
+  assert.equal(listingCategory(row),'gpu')
+})

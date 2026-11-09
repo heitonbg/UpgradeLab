@@ -5,17 +5,12 @@ from app.api import hardware, calculate, listings, autodetect, account
 from app.db.base import Base, engine, SessionLocal
 from app.db import models  # noqa: F401
 from app.db.models import Hardware
-from sqlalchemy import select, inspect, text
+from sqlalchemy import select
 
 def create_app() -> FastAPI:
     Base.metadata.create_all(bind=engine)
-    # Additive migration for existing installations; no listings are discarded.
-    columns = {column["name"] for column in inspect(engine).get_columns("listings")}
-    with engine.begin() as connection:
-        for name, definition in {"listing_type": "VARCHAR(20) NOT NULL DEFAULT 'sale'",
-                                 "exchange_for": "VARCHAR(500)", "photo_url": "TEXT"}.items():
-            if name not in columns:
-                connection.execute(text(f"ALTER TABLE listings ADD COLUMN {name} {definition}"))
+    from app.db.migrations import migrate_listings
+    migrate_listings(engine)
     with SessionLocal() as db:
         has_hardware = db.scalar(select(Hardware.id).limit(1)) is not None
     if not has_hardware:

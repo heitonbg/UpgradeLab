@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
         unknown_ram = client.post("/api/calculate", json={**payload, "ram_manual": {"capacity_gb": 8, "type": "DDR3", "channels": None}})
         assert unknown_ram.status_code == 200, unknown_ram.text
         assert client.post("/api/calculate", json={**payload, "ram_id": cpus[0]["id"]}).status_code == 400
-        assert client.post("/api/listings", json={"title": "Test GPU", "condition": "Б/У", "price": "1000", "contact": "@test"}).status_code == 401
+        assert client.post("/api/listings", json={"title": "Test GPU", "condition": "Б/У", "price": "1000", "contact": "@test", "city_id": "ru:kemerovo"}).status_code == 401
 
         registered = client.post("/api/auth/register", json={"name": "Тест", "email": "test@example.com", "password": "longpassword"})
         assert registered.status_code == 201, registered.text
@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
         build = client.post("/api/builds", json=payload)
         assert build.status_code == 201, build.text
         assert len(client.get("/api/builds").json()) == 2
-        lot = {"title": "Test GPU", "condition": "Б/У", "price": "1000", "contact": "@test"}
+        lot = {"title": "Test GPU", "condition": "Б/У", "price": "1000", "contact": "@test", "city_id": "ru:kemerovo"}
         assert client.get("/api/auth/discord/start").status_code == 404
         assert client.post("/api/listings", json={**lot, "listing_type": "exchange"}).status_code == 422
         assert client.post("/api/listings", json={**lot, "photo_url": "javascript:alert(1)"}).status_code == 422
@@ -138,7 +138,7 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
                 quote.observed_at = datetime.utcnow() - timedelta(days=31)
             db.commit()
         assert client.post("/api/assemble", json=assembly).status_code == 400
-        listing = client.post("/api/listings", json={"title": "Test GPU", "condition": "Б/У", "price": "1000", "contact": "@test"})
+        listing = client.post("/api/listings", json={"title": "Test GPU", "condition": "Б/У", "price": "1000", "contact": "@test", "city_id": "ru:kemerovo"})
         assert listing.status_code == 201, listing.text
         listing_id = listing.json()["id"]
         assert len(client.get("/api/my/listings").json()) == 1
@@ -149,6 +149,14 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
             assert stranger.get("/api/builds").json() == []
             assert stranger.delete(f"/api/builds/{build.json()['id']}").status_code == 404
             assert stranger.delete(f"/api/listings/{listing_id}").status_code == 404
+            assert stranger.patch(f"/api/listings/{listing_id}",json={"price":"1"}).status_code == 404
+        updated=client.patch(f"/api/listings/{listing_id}",json={"price":"2000","city_id":"ru:kem"})
+        assert updated.status_code==200,updated.text
+        assert updated.json()['created_at']==listing.json()['created_at']
+        assert updated.json()['city_label']=='Кемь · Республика Карелия'
+        assert updated.json()['availability_confirmed_at'] is None
+        assert client.get('/api/cities?q=Кем').status_code==200
+        assert client.get('/api/listings?city_id=ru:kem').json()[0]['id']==listing_id
         assert client.delete(f"/api/listings/{listing_id}").status_code == 204
         assert client.delete(f"/api/builds/{build.json()['id']}").status_code == 204
         assert client.post("/api/auth/logout").status_code == 204

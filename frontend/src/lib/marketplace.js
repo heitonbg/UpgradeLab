@@ -1,6 +1,7 @@
 export const CATEGORIES = [['all','Все комплектующие'],['cpu','Процессоры'],['gpu','Видеокарты'],['motherboard','Материнские платы'],['memory','Оперативная память'],['storage','Накопители'],['psu','Блоки питания'],['case','Корпуса'],['cooler','Охлаждение']]
 
 export function listingCategory(listing) {
+  if (listing.category) return ({CPU:'cpu',GPU:'gpu'})[listing.category] || listing.category
   const text = `${listing.title} ${listing.description || ''}`.toLowerCase()
   if (/материнск|motherboard/.test(text)) return 'motherboard'
   if (/блок питан|power supply|\bpsu\b/.test(text)) return 'psu'
@@ -20,13 +21,15 @@ export function listingPrice(listing) {
   return Number.isFinite(price) ? price : null
 }
 
-export function filterListings(listings, { search='', deal='all', category='all', condition='all', min='', max='', sort='newest' }) {
+export function filterListings(listings, { search='', deal='all', category='all', condition='all', min='', max='', sort='newest', city_id=null }) {
   const filtered = listings.filter(item => {
+    if (item.publication_status && item.publication_status !== 'active') return false
+    if (city_id && item.city_id !== city_id) return false
     if (search.trim() && !`${item.title} ${item.description || ''}`.toLowerCase().includes(search.trim().toLowerCase())) return false
     const type = item.listing_type || 'sale'
     if (deal !== 'all' && type !== deal) return false
     if (category !== 'all' && listingCategory(item) !== category) return false
-    if (condition !== 'all' && (item.condition === 'Новое' ? 'new' : 'used') !== condition) return false
+    if (condition !== 'all' && (item.condition === 'Новое' ? 'new' : item.condition === 'Неисправное' ? 'broken' : 'used') !== condition) return false
     if (min !== '' || max !== '') {
       const price = listingPrice(item)
       if (type === 'exchange' || price === null) return false

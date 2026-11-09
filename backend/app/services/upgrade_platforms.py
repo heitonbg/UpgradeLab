@@ -1,6 +1,7 @@
 """Price a platform change as a complete CPU/board/RAM/cooler package."""
 from types import SimpleNamespace
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.price_time import is_fresh
 import json
 import re
 
@@ -32,7 +33,7 @@ def platform_choices(payload, db, hardware, prices, current_cpu, gpu, current_fp
             continue
         # Every included price must be observed; no synthetic supporting costs.
         quote = prices[cpu.id]
-        if quote.market == 'retail_us_converted' or quote.observed_at < datetime.utcnow()-timedelta(days=7):
+        if quote.market == 'retail_us_converted' or not is_fresh(quote.observed_at, timedelta(days=7), inclusive=True):
             continue
         profile = SimpleNamespace(socket=cpu.socket, ram_type=profiles[cpu.socket], ram_capacity_gb=capacity)
         boards = [row for row in rows if row.category == 'motherboard' and board_matches(row, profile)

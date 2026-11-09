@@ -2,16 +2,17 @@
 Challenges and unavailable pages are errors, never empty successful searches."""
 import json
 import re
-from datetime import datetime
+from app.core.price_time import db_now
 from urllib.parse import urlencode, urljoin, urlsplit
 from bs4 import BeautifulSoup, SoupStrainer
-import requests
 import time
 from threading import Lock
 from pydantic import ValidationError
 from app.schemas.offers import OfferInput
 from app.core.stores import STORES
-from app.services.search_time import remaining, request_timeout
+from app.services.search_time import remaining
+from app.services.network_policy import Policy, validate_url
+from app.services.safe_http import SafeSession
 
 _blocked_until = {}
 _block_lock = Lock()
@@ -40,8 +41,9 @@ def resolved_search_url(source, query, deadline=None):
     if source != "nix":
         return search_url(source, query)
     # This read-only search is the same operation used by NIX's public form.
-    response = requests.post("https://www.nix.ru/scripts/action.php/FastSearch/fullTextSearch",
-                             data={"keywords": query}, timeout=request_timeout(deadline), allow_redirects=False)
+    with SafeSession(Policy(hosts=('www.nix.ru','nix.ru'))) as session:
+        response = session.post("https://www.nix.ru/scripts/action.php/FastSearch/fullTextSearch",
+                                data={"keywords": query}, deadline=deadline, allow_redirects=False)
     response.raise_for_status()
     url = urljoin("https://www.nix.ru", response.json()["href"])
     parsed = urlsplit(url)
@@ -52,47 +54,20 @@ def resolved_search_url(source, query, deadline=None):
 
 def fetch(url, params=None, token=None, store=None, deadline=None, product=False, redirect_hosts=()):
     remaining(deadline, 5)
-    # Some storefronts set a region/session cookie before redirecting to the
-    # search page. Retain it for this request without sharing users' sessions.
-    with requests.Session() as session:
-        return _fetch_session(session, url, params, token, store, deadline, product, redirect_hosts)
-
-
-def _fetch_session(session, url, params=None, token=None, store=None, deadline=None, product=False, redirect_hosts=()):
-    # URLs originate only from fixed store hosts or administrator configuration.
-    # Limit response size and do not follow redirects off the configured host.
-    headers = {"User-Agent": "UpgradeLab/1.0", "Accept-Language": "ru-RU"}
     if store and source_blocked(store, product=product):
         raise RuntimeError('Площадка ранее ограничила доступ; повторные запросы приостановлены на 10 минут')
-    if token:
-        headers["Authorization"] = "Bearer " + token
-    for _ in range(4):
-        with session.get(url, params=params, timeout=request_timeout(deadline), stream=True,
-                          headers=headers, allow_redirects=False) as response:
-            if response.status_code in (301, 302, 303, 307, 308):
-                location = urljoin(url, response.headers.get("Location", ""))
-                parsed = urlsplit(location)
-                domain = STORES[store]["domain"] if store else ""
-                host = parsed.hostname or ""
-                allowed = (store and (host == domain or host.endswith('.'+domain))) or host in redirect_hosts
-                if token or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None,443) or not allowed:
-                    raise RuntimeError("Источник перенаправил запрос за пределы площадки")
-                url, params = location, None
-                continue
-            if response.status_code in (401, 403, 429, 439):
-                if store:
-                    pause_source(store, product=product)
-                raise RuntimeError(f"Площадка ограничила доступ (HTTP {response.status_code})")
-            response.raise_for_status()
-            content = bytearray()
-            for chunk in response.iter_content(65536):
-                remaining(deadline, 5)
-                content.extend(chunk)
-                if len(content) > 8 * 1024 * 1024:
-                    raise RuntimeError("Ответ источника слишком большой")
-            encoding = response.encoding if response.encoding and response.encoding.lower() not in ("iso-8859-1", "ascii") else "utf-8"
-            return content.decode(encoding, errors="replace")
-    raise RuntimeError("Слишком много перенаправлений площадки")
+    target=validate_url(url)
+    policy=(Policy(domains=(STORES[store]['domain'],)) if store else
+            Policy(hosts=tuple(dict.fromkeys((target.host,*redirect_hosts)))))
+    validate_url(url,policy)
+    headers={'Authorization':'Bearer '+token} if token else {}
+    with SafeSession(policy) as session:
+        response=session.get(url,params=params,headers=headers,deadline=deadline)
+    if response.status_code in (401,403,429,439):
+        if store:pause_source(store,product=product)
+        raise RuntimeError(f'Площадка ограничила доступ (HTTP {response.status_code})')
+    response.raise_for_status()
+    return response.text
 
 
 def money(value):
@@ -122,7 +97,7 @@ def parse_html(source, html, category, page_url=None, require_single_price=False
         left = re.sub(r'\W', '', str(name).lower())
         right = re.sub(r'\W', '', main_name.lower())
         return min(len(left), len(right)) >= 8 and (left in right or right in left)
-    observed = datetime.utcnow()
+    observed = db_now()
     found = {}
     prices = {}
 

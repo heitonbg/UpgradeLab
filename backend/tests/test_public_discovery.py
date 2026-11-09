@@ -55,15 +55,17 @@ class PublicDiscoveryTests(unittest.TestCase):
 
     def test_http_search_can_follow_only_its_explicit_search_engine_domains(self):
         from app.services.store_providers import fetch
-        first=Mock(status_code=302,headers={'Location':'https://www.google.com/search?q=test&gbv=1'})
-        first.__enter__=Mock(return_value=first);first.__exit__=Mock(return_value=False)
-        second=Mock(status_code=200,encoding='utf-8');second.iter_content.return_value=[b'<html>results</html>']
-        second.__enter__=Mock(return_value=second);second.__exit__=Mock(return_value=False)
-        with patch('app.services.store_providers.requests.Session') as factory:
-            factory.return_value.__enter__.return_value.get.side_effect=[first,second]
+        from app.services.safe_http import SafeSession,SafeResponse
+        from app.services.network_policy import Address
+        from requests.structures import CaseInsensitiveDict
+        import socket
+        first=SafeResponse(302,CaseInsensitiveDict({'Location':'https://www.google.com/search?q=test&gbv=1'}),b'','https://google.com')
+        second=SafeResponse(200,CaseInsensitiveDict(),b'<html>results</html>','https://www.google.com')
+        with patch('app.services.safe_http.resolve_public',return_value=(Address(socket.AF_INET,'93.184.216.34'),)),patch.object(
+                SafeSession,'_once',side_effect=[first,second]):
             self.assertEqual(fetch('https://google.com/search?q=test',redirect_hosts={'www.google.com'}),'<html>results</html>')
-        first.headers={'Location':'https://unrelated.example/search'}
-        with patch('app.services.store_providers.requests.Session') as factory:
-            factory.return_value.__enter__.return_value.get.return_value=first
+        first.headers['Location']='https://unrelated.example/search'
+        with patch('app.services.safe_http.resolve_public',return_value=(Address(socket.AF_INET,'93.184.216.34'),)),patch.object(
+                SafeSession,'_once',return_value=first):
             with self.assertRaises(RuntimeError):
                 fetch('https://google.com/search?q=test',redirect_hosts={'www.google.com'})

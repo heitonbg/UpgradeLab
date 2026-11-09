@@ -4,16 +4,20 @@ Run from backend: python -m scripts.refresh_prices
 PassMark affiliate prices are foreign retail prices converted at the CBR rate.
 Rows with '*' (last-seen / unavailable) and missing prices are excluded.
 """
+from contextlib import closing
 import html
 import json
 import re
 import sqlite3
 import statistics
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.price_time import as_utc, as_naive_utc, db_now, iso_utc, is_fresh, OBSERVATION_SKEW
 from pathlib import Path
 
 import requests
+from app.services.safe_http import SafeSession
+from app.services.network_policy import Policy
 from sqlalchemy import select
 from app.db.base import Base, SessionLocal, engine
 from app.db.models import Hardware, HardwarePrice
@@ -24,8 +28,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def upsert(db, hw_id, source, amount, market, url, observed, count=1):
+    observed = as_naive_utc(observed)
+    if observed is None or not is_fresh(observed, timedelta.max, inclusive=True, future_tolerance=OBSERVATION_SKEW):
+        return
     quote = db.get(HardwarePrice, (hw_id, source))
-    if quote and quote.observed_at > observed:
+    if (quote and is_fresh(quote.observed_at, timedelta.max, inclusive=True, future_tolerance=OBSERVATION_SKEW)
+            and as_utc(quote.observed_at) > as_utc(observed)):
         return
     if quote is None:
         quote = HardwarePrice(hardware_id=hw_id, source=source)
@@ -39,7 +47,8 @@ def upsert(db, hw_id, source, amount, market, url, observed, count=1):
 
 
 def usd_rate():
-    response = requests.get("https://www.cbr.ru/scripts/XML_daily.asp", timeout=20)
+    with SafeSession(Policy(domains=('cbr.ru',))) as session:
+        response = session.get("https://www.cbr.ru/scripts/XML_daily.asp", timeout=20)
     response.raise_for_status()
     root = ET.fromstring(response.content)
     for currency in root.findall("Valute"):
@@ -93,7 +102,7 @@ def refresh_passmark(db, hardware, rate):
                 amount = float(price.replace("$", "").replace(",", "")) * rate
                 if not 10 <= amount <= 10000000:
                     continue
-                upsert(db, matches[0].id, "passmark", amount, "retail_us_converted", page, datetime.utcnow())
+                upsert(db, matches[0].id, "passmark", amount, "retail_us_converted", page, db_now())
                 count += 1
             counts[hw_type] = count
             db.commit()
@@ -107,7 +116,7 @@ def import_avito_snapshot(db, hardware):
     path = ROOT / "avito_prices.db"
     if not path.exists():
         return 0
-    with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as snapshot:
+    with closing(sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)) as snapshot:
         rows = snapshot.execute("SELECT title, price, last_updated, item_id FROM current_prices").fetchall()
     # A title must contain a complete model designation; generic service ads,
     # bundles, model families and ambiguous matches are not price observations.
@@ -118,8 +127,8 @@ def import_avito_snapshot(db, hardware):
             continue
         if re.search(r"ремонт|скуп|куплю|обмен|комплект|сборк|компьютер|ноутбук|неисправ|нерабоч|разбор|запчаст|процессор[ыа]\b", title, re.I):
             continue
-        observed = datetime.fromisoformat(updated)
-        if datetime.utcnow() - observed > timedelta(days=30):
+        observed = as_naive_utc(updated)
+        if not is_fresh(observed, timedelta(days=30), inclusive=True):
             continue
         key = model_key(title)
         candidates = [(hw, name) for hw, name in lookup if name and name in key]
@@ -144,7 +153,7 @@ def import_avito_snapshot(db, hardware):
 
 def main():
     Base.metadata.create_all(engine)
-    report = {"updated_at": datetime.utcnow().isoformat(), "errors": []}
+    report = {"updated_at": iso_utc(db_now()), "errors": []}
     cache_path = ROOT / "price_data.json"
     previous = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
     metadata = previous.get("metadata", [])
@@ -160,13 +169,13 @@ def main():
                 metadata = refreshed_metadata
             report["passmark"] = counts
             report["errors"].extend(errors)
-        except (requests.RequestException, ValueError, ET.ParseError) as exc:
+        except (requests.RequestException, ValueError, RuntimeError, ET.ParseError) as exc:
             report["errors"].append(f"CBR: {exc}")
         # A portable cache is committed with the source so a fresh installation
         # can use the same dated observations. Old quotes still expire normally.
         quotes = [{"type": db.get(Hardware, q.hardware_id).type, "name": db.get(Hardware, q.hardware_id).name,
                    "price_rub": q.price_rub, "source": q.source, "market": q.market, "source_url": q.source_url,
-                   "observed_at": q.observed_at.isoformat(), "sample_count": q.sample_count}
+                   "observed_at": iso_utc(q.observed_at), "sample_count": q.sample_count}
                   for q in db.scalars(select(HardwarePrice))]
         cache_path.write_text(json.dumps({"report": report, "quotes": quotes, "metadata": metadata}, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))

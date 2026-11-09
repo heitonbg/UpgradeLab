@@ -5,7 +5,8 @@ import time
 import requests
 from urllib.parse import unquote, urlsplit
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+from app.core.price_time import as_utc, db_now, iso_utc, is_fresh, current_verification, OFFER_TTL, SEARCH_TTL, OBSERVATION_SKEW
 from pathlib import Path
 from functools import lru_cache
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from app.services.store_providers import fetch, search_public, search_url
 
 
 def fresh(offer):
-    return datetime.utcnow() - timedelta(hours=24) <= offer.observed_at <= datetime.utcnow() + timedelta(minutes=5)
+    return is_fresh(offer.observed_at, OFFER_TTL, inclusive=True, future_tolerance=OBSERVATION_SKEW)
 
 
 @lru_cache(maxsize=32768)
@@ -115,7 +116,8 @@ def upsert(db, rows, origin, commit=True):
         if category and category != row.category:
             continue
         existing = db.scalar(select(StoreOffer).where(StoreOffer.url == row.url))
-        if existing and existing.observed_at > row.observed_at:
+        if (existing and is_fresh(existing.observed_at, timedelta.max, inclusive=True, future_tolerance=OBSERVATION_SKEW)
+                and as_utc(existing.observed_at) > as_utc(row.observed_at)):
             continue
         repairing = bool(existing and existing.category != row.category and category == row.category
             and title_category(existing.name) == row.category and existing.origin in ('public_page', 'browser_page'))
@@ -125,7 +127,7 @@ def upsert(db, rows, origin, commit=True):
             if existing:
                 db.delete(existing)
             continue
-        incoming_page_check = origin in ('product_page', 'browser_page') and row.attributes.get('price_verification', {}).get('status') == 'verified'
+        incoming_page_check = origin in ('product_page', 'browser_page') and current_verification(row.attributes.get('price_verification', {})) is not None
         if existing and origin != 'feed' and not incoming_page_check and not repairing:
             from app.services.price_verification import recent_check
             verification = json.loads(existing.attributes).get('price_verification', {})
@@ -161,17 +163,18 @@ def load_offer_file(db, filename=None):
 
 def public_offer(row):
     verification = json.loads(row.attributes).get('price_verification', {})
-    checked = verification.get('checked_at') if verification.get('status') == 'verified' else None
+    checked = current_verification(verification) if fresh(row) else None
     return {"id": row.id, "source": row.source, "source_label": LABELS[row.source], "name": row.name,
             "category": row.category, "price_rub": row.price_rub, "url": row.url, "condition": row.condition,
-            "observed_at": row.observed_at.replace(tzinfo=timezone.utc), "origin": row.origin,
+            "observed_at": as_utc(row.observed_at), "origin": row.origin,
             "hardware_id": row.hardware_id, "attributes": json.loads(row.attributes),
-            "price_verified_at": checked + 'Z' if checked else None}
+            "price_verified_at": checked}
 
 
 def available_offers(db, sources=None, category=None, include_unavailable=False):
-    query = select(StoreOffer).where(StoreOffer.observed_at >= datetime.utcnow() - timedelta(hours=24),
-                                     StoreOffer.observed_at <= datetime.utcnow() + timedelta(minutes=5))
+    now = db_now()
+    query = select(StoreOffer).where(StoreOffer.observed_at >= now - OFFER_TTL,
+                                     StoreOffer.observed_at <= now + OBSERVATION_SKEW)
     if category:
         query = query.where(StoreOffer.category == category)
     from app.services.offer_safety import safe_offers
@@ -233,13 +236,13 @@ def collect_source(source, payload, deadline, feeds, tokens):
 
 def persist_search(db, payload, responses, commit=True):
     statuses = []
-    checked = datetime.utcnow()
+    checked = db_now()
     for source, rows, origin, message, details in responses:
         if rows:
             upsert(db, rows, origin, commit=False)
         statuses.append({'source': source, 'label': LABELS[source], 'status': origin,
             'attempted': details.get('attempted', True),
-            'method': payload.method, 'message': message, 'checked_at': checked.isoformat() + 'Z',
+            'method': payload.method, 'message': message, 'checked_at': iso_utc(checked),
             'search_url': search_url(source, payload.query), 'discovered_urls': details.get('links', []),
             'search_engines': details.get('search_engines', [])})
     previous = db.get(OfferSearch, search_key(payload)) or OfferSearch(key=search_key(payload))
@@ -266,7 +269,7 @@ def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
         if key in pending:
             continue
         previous = db.get(OfferSearch, key)
-        if previous and previous.checked_at >= datetime.utcnow() - timedelta(minutes=10):
+        if previous and is_fresh(previous.checked_at, SEARCH_TTL, inclusive=True):
             results.append({'category': payload.category, 'query': payload.query, 'sources': json.loads(previous.statuses)})
             continue
         pending[key] = (payload, [])
@@ -296,7 +299,8 @@ def search_offers(db, payload):
     feeds, tokens = json.loads(settings.offers_feed_urls), json.loads(settings.offers_feed_tokens)
     previous = db.get(OfferSearch, search_key(payload))
     statuses = json.loads(previous.statuses) if previous else []
-    if previous is None or previous.checked_at < datetime.utcnow() - timedelta(minutes=10):
+    search_cached = previous is not None and is_fresh(previous.checked_at, SEARCH_TTL, inclusive=True)
+    if not search_cached:
         with ThreadPoolExecutor(max_workers=settings.offers_http_workers) as pool:
             responses = list(pool.map(lambda source: collect_source(source, payload, deadline, feeds, tokens),
                                       dict.fromkeys(payload.sources)))
@@ -315,6 +319,9 @@ def search_offers(db, payload):
             rows = [r for r in rows if all(word in r.name.lower() for word in words)]
     candidates = [{"source": status["source"], "source_label": status["label"], "name": payload.query, "url": url}
                   for status in statuses for url in status.get("discovered_urls", [])]
+    unavailable = [item['source'] for item in statuses if item['status'] in ('unavailable', 'timeout', 'disabled')]
     return {"offers": [public_offer(r) for r in rows[:100]], "sources": statuses, "candidates": candidates,
-            "checked_at": previous.checked_at.replace(tzinfo=timezone.utc),
-            "note": "Цены действуют 24 часа. Обмен, выкуп, неисправные товары и подозрительно низкие цены исключаются эвристическим фильтром; он не гарантирует добросовестность продавца. Условия доставки, регион и скидки проверьте на площадке."}
+            "search_cached": search_cached, "unavailable_sources": unavailable,
+            "partial_result": bool(rows and unavailable),
+            "checked_at": as_utc(previous.checked_at),
+            "note": "Предложения для подбора хранятся до 24 часов с даты наблюдения; это не гарантия актуальности цены. Подтверждение страницы действительно менее 15 минут. Обмен, выкуп, неисправные товары и подозрительно низкие цены исключаются эвристическим фильтром; он не гарантирует добросовестность продавца. Условия доставки, регион и скидки проверьте на площадке."}
