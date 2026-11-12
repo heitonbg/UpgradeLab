@@ -7,16 +7,20 @@ import re
 from app.core.stores import STORES
 from app.services.network_policy import NetworkPolicyError, Policy, validate_url
 
-Source = Literal["ozon", "avito", "wb", "yandex", "dns", "citilink", "regard", "oldi", "kns", "xcom", "onlinetrade", "nix"]
+Source = Literal["ozon", "avito", "wb", "yandex", "dns", "citilink", "regard", "oldi", "kns", "xcom", "onlinetrade", "nix", "upgradelab"]
 Category = Literal["CPU", "GPU", "motherboard", "memory", "storage", "psu", "case", "cooler"]
 DOMAINS = {key: store["domain"] for key, store in STORES.items()}
 LABELS = {key: store["name"] for key, store in STORES.items()}
+LABELS["upgradelab"]="Биржа UpgradeLab"
 
 
 def store_url(source, url):
     try:
         target=validate_url(url,Policy(domains=(DOMAINS[source],)))
-        return bool(re.search(STORES[source]["product"],urlsplit(target.url).path,re.I))
+        path=urlsplit(target.url).path
+        if source=='regard' and re.fullmatch(r'/product/[1-9][0-9]*',path):
+            return True
+        return bool(re.search(STORES[source]["product"],path,re.I))
     except (NetworkPolicyError,KeyError,ValueError):
         return False
 
@@ -66,12 +70,16 @@ class OfferInput(BaseModel):
         return self
 
 
-class SearchOffers(BaseModel):
+from app.schemas.geography import GeoQuery
+
+class SearchOffers(GeoQuery):
+    _catalog_only: bool = PrivateAttr(default=False)
+    _catalog_sources: set[str] = PrivateAttr(default_factory=set)
     _deadline: float | None = PrivateAttr(default=None)
     _source_timeout: float | None = PrivateAttr(default=None)
     query: str = Field(min_length=2, max_length=160)
     category: Category
-    sources: list[Source] = Field(default_factory=lambda: list(DOMAINS), min_length=1, max_length=len(STORES))
+    sources: list[Source] = Field(default_factory=lambda: list(LABELS), min_length=1, max_length=len(STORES)+1)
     hardware_id: int | None = Field(default=None, gt=0)
     method: Literal["http", "web", "browser", "discovery"] = "http"
 

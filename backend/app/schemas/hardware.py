@@ -19,5 +19,9 @@ class HardwareOut(BaseModel):
     sample_count: int | None = None
     average_method: str | None = None
     price_origin: str | None = None
+    source_price_at: datetime | None = None
+    price_freshness: str | None = None
+    optimizer_eligibility: bool | None = None
+    purchase_ready: bool | None = None
 
     model_config = {"from_attributes": True}

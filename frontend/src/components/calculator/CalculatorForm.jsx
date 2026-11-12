@@ -1,3 +1,6 @@
+import { publicSourceIds } from '../../lib/publicSources'
+import { Select } from '../ui/Select'
+import { GeoControls } from '../GeoControls'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/Button'
 import { HardwareSearch } from '../ui/HardwareSearch'
@@ -25,7 +28,8 @@ export function CalculatorForm({ cpus, gpus, onSubmit, loading, resaleEditReques
   const [game, setGame] = useState(GAMES[0].value)
   const [mode, setMode] = useState(MODES[0].value)
   const [budget, setBudget] = useState('')
-  const [priceSources,setPriceSources] = useState(null)
+  const [geo,setGeo]=useState({city_id:null,geo_mode:'all',max_price:null})
+  const [priceSources,setPriceSources] = useState(['regard','upgradelab'])
   const [targetFps, setTargetFps] = useState(60)
   const [aiMode, setAiMode] = useState('off')
   const [sellMode, setSellMode] = useState('budget_only')
@@ -76,7 +80,7 @@ export function CalculatorForm({ cpus, gpus, onSubmit, loading, resaleEditReques
     if(!flow.validateAll())return
     if (!cpuId || !gpuId) { flow.go(0);setError('Выберите процессор и видеокарту из списка найденных моделей.');return }
     if(priceSources?.length===0){setError('Выберите хотя бы одну площадку.');return}
-    onSubmit({ cpuId, gpuId, ramId: null, ramManual: memory.capacity_gb ? { capacity_gb: Number(memory.capacity_gb), type: memory.type || null, channels: memory.channels ? Number(memory.channels) : null } : null, game, mode, budget: budget === '' ? null : Number(budget), aiMode, sellMode, targetFps: Number(targetFps), priceSources, expectedSalePrice: sellMode === 'budget_plus_sell' && expectedSalePrice !== '' ? Number(expectedSalePrice) : null })
+    onSubmit({ geo, cpuId, gpuId, ramId: null, ramManual: memory.capacity_gb ? { capacity_gb: Number(memory.capacity_gb), type: memory.type || null, channels: memory.channels ? Number(memory.channels) : null } : null, game, mode, budget: budget === '' ? null : Number(budget), aiMode, sellMode, targetFps: Number(targetFps), priceSources:publicSourceIds(priceSources), expectedSalePrice: sellMode === 'budget_plus_sell' && expectedSalePrice !== '' ? Number(expectedSalePrice) : null })
   }
 
   function navigate(index) {
@@ -98,13 +102,13 @@ export function CalculatorForm({ cpus, gpus, onSubmit, loading, resaleEditReques
       <StepHeading flow={flow} steps={STEPS}/>
       <div className="flow-panel" data-flow-panel="0" hidden={flow.step!==0}>
       <fieldset><legend>Комплектующие</legend><p className="field-hint">Начните вводить модель: например, fx6100, rtx3060 или i5 12400f.</p><div className="form-grid"><HardwareSearch label="Процессор" items={cpus} value={cpuId} onChange={setCpuId} placeholder="Найти процессор"/><HardwareSearch label="Видеокарта" items={gpus} value={gpuId} onChange={setGpuId} placeholder="Найти видеокарту"/></div><AutoDetectButton onDetect={(_, id)=>setGpuId(id)}/></fieldset>
-      <fieldset><legend>Оперативная память</legend><p className="field-hint">Укажите параметры памяти. Неизвестные значения можно оставить пустыми.</p><div className="form-grid three-columns"><label>Общий объём, ГБ<input type="number" min="2" max="512" step="1" placeholder="Например, 8" value={memory.capacity_gb} onChange={e=>setMemory({...memory,capacity_gb:e.target.value})}/></label><label>Тип памяти<select value={memory.type} onChange={e=>setMemory({...memory,type:e.target.value})}><option value="">Неизвестен</option>{['DDR3','DDR4','DDR5'].map(t=><option key={t}>{t}</option>)}</select></label><label>Канальный режим<select value={memory.channels} onChange={e=>setMemory({...memory,channels:e.target.value})}><option value="">Неизвестен</option><option value="1">Один канал</option><option value="2">Два канала</option></select></label></div></fieldset>
+      <fieldset><legend>Оперативная память</legend><p className="field-hint">Укажите параметры памяти. Неизвестные значения можно оставить пустыми.</p><div className="form-grid three-columns"><label>Общий объём, ГБ<input type="number" min="2" max="512" step="1" placeholder="Например, 8" value={memory.capacity_gb} onChange={e=>setMemory({...memory,capacity_gb:e.target.value})}/></label><label>Тип памяти<Select value={memory.type} onChange={e=>setMemory({...memory,type:e.target.value})}><option value="">Неизвестен</option>{['DDR3','DDR4','DDR5'].map(t=><option key={t}>{t}</option>)}</Select></label><label>Канальный режим<Select value={memory.channels} onChange={e=>setMemory({...memory,channels:e.target.value})}><option value="">Неизвестен</option><option value="1">Один канал</option><option value="2">Два канала</option></Select></label></div></fieldset>
       </div><div className="flow-panel" data-flow-panel="1" hidden={flow.step!==1}>
-      <fieldset><legend>Сценарий и бюджет</legend><div className="form-grid"><GamePicker value={game} onChange={setGame}/><label>Разрешение и графика<select value={mode} onChange={e=>setMode(e.target.value)}>{MODES.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label><label>Бюджет на апгрейд, ₽<input type="number" min="0" max="10000000" step="100" placeholder="Без ограничения" value={budget} onChange={e=>setBudget(e.target.value)}/></label><label>Использование нейросетей<select value={aiMode} onChange={e=>setAiMode(e.target.value)}><option value="off">Не планирую</option><option value="light">Генерация изображений, небольшие LLM</option><option value="heavy">SDXL, крупные модели</option></select></label></div><label className="checkbox-label"><input type="checkbox" checked={sellMode==='budget_plus_sell'} onChange={e=>setSellMode(e.target.checked?'budget_plus_sell':'budget_only')}/><span>Добавить к бюджету цену продажи старого компонента<small>При наличии свежей цены на вторичном рынке.</small></span></label></fieldset>
-      {sellMode === 'budget_plus_sell' && <label>Ожидаемая цена продажи старой детали, ₽<input ref={saleInput} type="number" min="0" max="10000000" step="100" placeholder="Автоматически по Avito" value={expectedSalePrice} onChange={e=>setExpectedSalePrice(e.target.value)}/><small>Оставьте пустым для оценки по объявлениям Avito. Если площадка не отдала цену, общая сумма после продажи останется неизвестной. Указанная вами цена прибавится к деньгам после предполагаемой продажи.</small></label>}
+      <fieldset><legend>Сценарий и бюджет</legend><div className="form-grid"><GamePicker value={game} onChange={setGame}/><label>Разрешение и графика<Select value={mode} onChange={e=>setMode(e.target.value)}>{MODES.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</Select></label><label>Бюджет на апгрейд, ₽<input type="number" min="0" max="10000000" step="100" placeholder="Без ограничения" value={budget} onChange={e=>setBudget(e.target.value)}/></label><label>Использование нейросетей<Select value={aiMode} onChange={e=>setAiMode(e.target.value)}><option value="off">Не планирую</option><option value="light">Генерация изображений, небольшие LLM</option><option value="heavy">SDXL, крупные модели</option></Select></label></div><label className="checkbox-label"><input type="checkbox" checked={sellMode==='budget_plus_sell'} onChange={e=>setSellMode(e.target.checked?'budget_plus_sell':'budget_only')}/><span>Добавить к бюджету цену продажи старого компонента<small>При наличии свежей цены на вторичном рынке.</small></span></label></fieldset>
+      {sellMode === 'budget_plus_sell' && <label>Ожидаемая цена продажи старой детали, ₽<input ref={saleInput} type="number" min="0" max="10000000" step="100" placeholder="Ваша ожидаемая цена" value={expectedSalePrice} onChange={e=>setExpectedSalePrice(e.target.value)}/><small>Оставьте пустым для оценки по объявлениям Avito. Если площадка не отдала цену, общая сумма после продажи останется неизвестной. Указанная вами цена прибавится к деньгам после предполагаемой продажи.</small></label>}
       <label>Желаемый FPS<input required type="number" min="1" max="1000" value={targetFps} onChange={e=>setTargetFps(e.target.value)}/><small>Цель сравнивается с центральным прогнозом FPS. Диапазон неопределённости доступен в пояснении расчёта.</small></label>
       </div><div className="flow-panel" data-flow-panel="2" hidden={flow.step!==2}>
-      <PriceSources value={priceSources} onChange={setPriceSources} upgrade/>
+      <GeoControls value={geo} onChange={setGeo}/><PriceSources value={priceSources} onChange={setPriceSources} upgrade/>
       </div><div className="flow-panel" data-flow-panel="3" hidden={flow.step!==3}>
       <ReviewSummary onEdit={navigate} items={[
         {label:'Процессор',value:cpus.find(cpu=>cpu.id===cpuId)?.name||'Не выбран',icon:'chip',step:0},

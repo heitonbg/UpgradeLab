@@ -19,6 +19,8 @@ from requests.structures import CaseInsensitiveDict
 NOW=datetime(2026,11,9,12,tzinfo=timezone.utc)
 class SourceOutcomeTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.engine=create_engine('sqlite://');Base.metadata.create_all(self.engine);self.db=Session(self.engine)
         self.addCleanup(self.engine.dispose);self.addCleanup(self.db.close)
         self.addCleanup(patch.stopall)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createListing, getListings } from '../api/listings'
 
 export function useListings() {
@@ -6,16 +6,20 @@ export function useListings() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const sequence=useRef(0)
   const reload = useCallback(async () => {
+    const current=++sequence.current
     setLoading(true)
     try {
       const data = await getListings()
+      if(!Array.isArray(data))throw Error('Некорректный ответ списка объявлений')
+      if(current!==sequence.current)return
       setListings(data)
       setError(null)
     } catch (e) {
-      setError(e)
+      if(current===sequence.current)setError(e)
     } finally {
-      setLoading(false)
+      if(current===sequence.current)setLoading(false)
     }
   }, [])
 

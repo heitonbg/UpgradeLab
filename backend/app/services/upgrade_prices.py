@@ -16,20 +16,30 @@ from app.services.prices import price_map
 def upgrade_market_rows(db, sources=None):
     """Safe seven-day observations for estimates, never a current-stock claim."""
     from app.services.offer_safety import safe_offers
+    from app.services.internal_offers import sync_internal
+    sync_internal(db)
     hardware = {h.id: h for h in db.scalars(select(Hardware))}
     now = db_now()
     rows = list(db.scalars(select(StoreOffer).where(
         StoreOffer.observed_at >= now - timedelta(days=7),
         StoreOffer.observed_at <= now)))
     result = []
-    for row in safe_offers(rows, hardware):
-        verification = json.loads(row.attributes).get('price_verification', {})
+    from app.services.catalog_access import filter_catalog
+    for row in filter_catalog(db,safe_offers(rows, hardware)):
+        from app.services.catalog_freshness import observation_usable
+        if row.origin == 'catalog_import' and not observation_usable(row):
+            continue
+        attrs = json.loads(row.attributes)
+        if attrs.get('optimizer_eligible') is False:
+            continue
+        verification = attrs.get('price_verification', {})
         if re.search(r'не соответствует выбранной|модель.*не соответствует|outofstock|soldout|нет в наличии',
                      str(verification.get('message', '')), re.I):
             continue
         if (row.price_rub > 300 or row.category == 'CPU' and row.price_rub >= 100) and (sources is None or row.source in sources):
             result.append(row)
-    return result
+    from app.services.offer_geography import filter_geography,costed
+    return [costed(row) for row in filter_geography(result)]
 
 
 def avito_price_estimates(db):
@@ -91,7 +101,10 @@ def upgrade_price_map(db, sources=None):
             row_rank = (as_utc(row.observed_at) < cutoff, row.price_rub)
             if previous_rank <= row_rank:
                 continue
-        verification = json.loads(row.attributes).get('price_verification', {})
+        attrs = json.loads(row.attributes)
+        if attrs.get('optimizer_eligible') is False:
+            continue
+        verification = attrs.get('price_verification', {})
         quotes[row.hardware_id] = SimpleNamespace(
             price_rub=row.price_rub, source=row.source,
             market='used_ru' if row.condition == 'used' else 'retail_ru',
@@ -210,8 +223,11 @@ def refresh_upgrade_prices(db, hardware, cpu, gpu, deadline, search, sources=Non
     def request_for(item, method='http', stores=None):
         model = signature(item.name, item.type)
         query = 'AMD FX-' + model[2:] if item.type == 'CPU' and model and model.startswith('fx') else item.name
+        from app.services.offer_geography import query_scope
+        scope=query_scope()
+        geo={key:getattr(scope,key) for key in ('city_id','geo_mode','max_price','limit')} if scope else {}
         request = SearchOffers(query=query, category=item.type, sources=stores or request_sources,
-                               hardware_id=item.id, method=method)
+                               hardware_id=item.id, method=method,**geo)
         request._deadline = http_deadline if method == 'http' else deadline
         request._source_timeout = 4
         return request

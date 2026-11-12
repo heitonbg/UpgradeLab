@@ -23,6 +23,14 @@ def post_assemble(payload: BuildRequest, db: DBSession):
 
 @router.post("/calculate", response_model=CalculateResponse)
 def post_calculate(payload: CalculateRequest, db: DBSession):
+    from app.services.offer_geography import offer_scope
+    from app.services.internal_offers import sync_internal
+    if sync_internal(db):db.commit()
+    with offer_scope(payload):
+        return _post_calculate(payload,db)
+
+
+def _post_calculate(payload: CalculateRequest, db: DBSession):
     if payload.selected_upgrade_id and payload.selected_platform:
         raise HTTPException(422, 'Выберите один вариант: замену детали или смену платформы.')
     cpu = hw_crud.get_by_id(db, payload.cpu_id)
@@ -33,8 +41,11 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
     if gpu is None or gpu.type != "GPU":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "GPU не найдена")
 
+    if cpu.raw_score<=0 or gpu.raw_score<=0:
+        raise HTTPException(400,'Недостаточно достоверных аппаратных показателей для оценки FPS.')
+
     # Получаем все CPU и GPU для поиска апгрейда в рамках бюджета
-    all_hw = list(db.scalars(select(Hardware)))
+    all_hw = [h for h in db.scalars(select(Hardware)) if h.type not in ("CPU","GPU") or h.raw_score>0]
     ram_type, ram_channels = None, None
     if payload.ram_id:
         ram = db.get(Hardware, payload.ram_id)
@@ -64,11 +75,11 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
         return resale_quotes[hardware_id].price_rub if hardware_id in resale_quotes else 0
     all_cpus = [
         {"id": h.id, "name": h.name, "raw_score": h.raw_score, "avg_price": prices[h.id].price_rub if h.id in prices else None, "socket": h.socket}
-        for h in all_hw if h.type == "CPU"
+        for h in all_hw if h.type == "CPU" and h.raw_score>0
     ]
     all_gpus = [
         {"id": h.id, "name": h.name, "raw_score": h.raw_score, "avg_price": prices[h.id].price_rub if h.id in prices else None, "vram": h.vram}
-        for h in all_hw if h.type == "GPU"
+        for h in all_hw if h.type == "GPU" and h.raw_score>0
     ]
     all_rams = [
         {"id": h.id, "name": h.name, "raw_score": h.raw_score, "ram_type": h.ram_type, "ram_capacity_gb": h.ram_capacity_gb, "ram_channels": h.ram_channels}

@@ -32,7 +32,12 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
     pending = pending_build_prices(db, result)
     if not pending:
         return False
+    from app.services.catalog_access import recheck_blocked_ids
+    blocked_catalog = recheck_blocked_ids(db)
+    from app.services.source_permissions import network_allowed
     def inspect(row):
+        if row.id in blocked_catalog or row.source in ('avito','upgradelab') or not network_allowed(row.source):
+            return row.id, None, 'catalog_check_not_authorized'
         try:
             remaining(deadline,5)
             kwargs={'deadline':deadline} if deadline is not None else {}
@@ -60,7 +65,7 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
     for row_id, candidate, error in outcomes:
         row = db.get(StoreOffer, row_id)
         data = json.loads(row.attributes)
-        if error=='request_deadline':
+        if error in ('request_deadline','catalog_check_not_authorized'):
             continue
         previous_check=data.get('price_verification',{})
         if previous_check.get('status')=='verified':
@@ -87,6 +92,8 @@ def verify_build_prices(db, result, browser_sources=None, deadline=None):
     # prices and hit it again. Already confirmed quotes and feeds remain usable.
     if blocked:
         for row in db.scalars(select(StoreOffer).where(StoreOffer.source.in_(blocked))):
+            if row.id in blocked_catalog or row.source in ('avito','upgradelab') or not network_allowed(row.source):
+                continue
             data = json.loads(row.attributes)
             verification = data.get('price_verification', {})
             if row.origin == 'feed' or verification.get('status') == 'verified' and recent_check(verification):

@@ -319,3 +319,62 @@ UL-005 исправлен: старый result больше не показыв�
 23 новых backend-теста. Полная регрессия: 339 обнаружено, 337 успешно, 2 пропущены при discover; standalone smoke/recovery успешны. Frontend 47/47. Frontend-код не менялся, повторная production-сборка не требовалась. git diff --check успешен.
 
 Следующий рекомендуемый шаг: централизованный permission/capability gate и один согласованный feed с разрешёнными образцами. Avito после отказа не включать. Коммит/публикация не выполнялись.
+
+
+## Итерация 9: импорт прайс-листов
+
+Подтверждено: прежний JSON feed использовал integer RUB и особый статус feed, который нельзя выдавать новому CSV/XLSX за проверку страницы. Реализован отдельный origin=catalog_import с точным Decimal в staging, честным draft и сохранением исходного времени. Новые таблицы не меняют исторические SavedBuild. Файловый импорт закрыт локальным CLI, права раздельные, Avito запрещён. Ограничены CSV/ZIP/XML; формулы и активный Excel-контент не выполняются. Реального Регарда нет; внешняя интеграция и права не подтверждены. Копейки остаются staging из-за существующего integer-контракта. Инструкция и риски: [PRICE_FEED_IMPORT.md](PRICE_FEED_IMPORT.md).
+
+
+## Аудит локальных артефактов live-80000
+
+Исследован снимок реального запуска без повторных обращений к магазинам. Исправлены budget cap до общего решения, неверные причины partial, округление дробной цены и потеря типа transport failure. Avito автоматический сбор/сверка теперь явно fail-closed. Доступность/лицензии/остатки не объявляются подтверждёнными по тестам. На прежних данных остаётся partial 6/8: неподтверждённая NVMe-совместимость плат и недоступный по цене проверенный PSU. Доказательства, пределы наблюдаемости, запросы всех источников и все PSU: [LIVE_80000_DIAGNOSTIC.md](LIVE_80000_DIAGNOSTIC.md).
+
+
+## Итерация 10 — объединённые предложения
+
+Новых live-запросов нет. Синтетический путь React/API/SQLite-поиск/биржа/прайс/сборка и апгрейд проверен, внешние интеграции не объявлены рабочими. source_permissions запрещает сеть без основания; Avito fail-closed. География и доставка не выводятся из домена, неизвестные цены доставки не нулевые. Неоднозначные Hardware и закрытые ID не проходят; cached jobs повторно проверяют доступ. Новая ListingDelivery создаётся только на тестовых/копированных БД в этой работе. Старый live replay: partial, 6/8, 65 488 ₽; новая synthetic смесь: 8/8, 52 000 ₽, draft. Детали и технические ограничения: [UNIFIED_GEO_OFFERS.md](UNIFIED_GEO_OFFERS.md).
+
+
+## Итерация 11 — контроль доверия собственной биржи
+
+Устранён разрыв между восемью категориями Listing и адаптером CPU/GPU/RAM. Характеристики продавца сохраняются отдельно, не принимают доверенные вложенные поля; Hardware/technical reference не подтверждают цену. Проверяются точная модель/VRAM/ревизия и профиль, закрытые каталоги не используются в публичном assessment. Устранено смешение RAM channels с физическими модулями; неизвестные GPU/PSU исключены также из upgrade estimates. Известные физические конфликты корпуса/GPU/кулера не проходят полный solver. Авторизация и owner checks сохранены, опубликованный contact отделён от закрытого email аккаунта. Старые данные и исторические снимки не перезаписаны. Реальные источники/доставка/подлинность остаются неподтверждёнными. Контракт, доказательства и ограничения: MARKETPLACE_ALL_CATEGORIES.md.
+
+Проверки итерации 11: backend 468 обнаружено / 466 успешно / 2 skipped, новые marketplace 44/44; frontend 62/62, production build и git diff --check успешны. UI: 78 измерений 320–1920 px, 8 публикаций через форму, ошибок JS/переполнения нет.
+
+
+## Итерация 12 — проверенные границы
+
+Настоящий owner-supplied Regard XLSX прочитан без сетевого сбора. Все 4 991 выбранная строка сохранены закрыто; пригодные для анализа 2 335 StoreOffer не являются in_stock/verified/public. Контекст привязан к отдельной .analysis.db и отсутствует в HTTP, cache повторно фильтруется; внешние URL не вымышлены. Native reader имеет отдельные archive/row/string лимиты и не ослабляет generic CSV/XLSX. Неизвестный timezone отмечен как допущение конфигурации, а не доказательство. Missing/shrink/error/idempotency и запрет public audience покрыты тестами.
+
+Frontend использует настоящие локальные оптимизированные изображения и исходные вычисления, без копирования цифр mockup. Историческая/последняя/текущая цена в сохранениях различаются. Перенос offer_id не отменяет серверную проверку, данные продавца не становятся verified. Backend 485 успешно/2 skipped, frontend 69, 196 UI проверок; детали/ограничения в REGARD_REAL_FEED.md и UI_VISUAL_AUDIT.md. Публичное использование feed, live integrations и production performance не подтверждены.
+
+
+## FPS Engine v2 — результат проверки данных (2026-11-10)
+
+UL-009 частично исправлен: оба сборщика теперь передают cpu_name, RAM-правило объединено с апгрейдом, каталог названий отделён от FPS evidence. Новая калиброванная модель не включена. Из 85 архивных записей Open GPU Benchmarks только 3 подходят под native Windows desktop, все из одной серии; train/test без утечки невозможен. Внешняя диагностика legacy на двух настройках одной связки: MAE 86.385 FPS, MAPE 46.559%, interval coverage 0/2. Это ограниченная проверка, не глобальная метрика. ST/архитектура/L3 и эффект X3D по играм остаются без достаточных данных. Явные режимы reference/offers/hybrid не превращают прошлую цену в актуальную и сохраняют filter_catalog/проверку прав. См. FPS_ENGINE_V2.md.
+
+
+## Benchmark Data & Calibration (2026-11-10)
+
+Нормализованы 81 measured observation (73 raw runs, 8 publisher points) из 2 разрешённых издателей, 72 конфигурации/4 серии. Windows native stock: только 3 конфигурации одной связки; контролируемых CS2/X3D пар нет. MAE legacy 86.385 FPS на 2 настройках не является глобальной оценкой. Source-held-out сравнение не даёт общего support кандидатам; новая модель не включена. Выявлены/покрыты тестами: недопустимый прогноз при score=0 (исправлен), потеря более выгодной справочной альтернативы из-за category-first hybrid (политика сохранена и ограничение задокументировано), смешение повторных прогонов/версий в сводках (для новой калибровки используются raw records). Подробности и разрешения: FPS_BENCHMARK_DATA.md.
+
+
+## Regard history / external discovery — 10.11.2026
+
+Добавлены аддитивная миграция с online backup, transactional daily prices (14 source-calendar days), OS-lock и журнал. Старые saved-build JSON не изменяются. AI discovery авторизован и изолирован по владельцу, не повышает ссылки/сниппеты до текущих цен и не пишет Hardware/StoreOffer. Ключ backend-only, реальный .env не переписывался. SQLite-бюджет резервируется до HTTP; платные tools default-off. HTTP MIME-расширение XLSX применяется только явной выделенной сессией; SSRF pinning/redirect/TLS-ограничения сохранены.
+
+Закрытый импорт настоящего XLSX и сборка 80 000 ₽ проверены без sockets, на отдельной .analysis.db. Публичные товары/фото и работающий автоматический Regard не заявляются: endpoint 403, права не установлены. Реальный платный AI-поиск и Amvera deployment не проводились. Полная регрессия: 562 pass, 2 skip backend; 77 pass frontend; production build и diff check успешны. Подробнее: [итоговый отчёт](CATALOG_INTELLIGENCE_REPORT.md).
+
+
+## Regard: снят технический блокер скачивания
+
+Минимальный GET воспроизвёл 403; стандартные Accept/Referer с UpgradeLab/1.0 дали 200 без cookies/прогрева. Конкретное серверное правило 403 не установлено. Настоящий файл 4 789 293 байта/5991 PC parts импортирован в копию analysis-БД; старый прайс отклонён, повтор идемпотентен. Никакой CAPTCHA/IP/TLS-защиты не обходили. Production-права и доступность Amvera не подтверждены, scheduler не активирован. См. [отчёт](REGARD_DOWNLOAD_DIAGNOSTICS.md).
+## Regard catalog display audit — 2026-11-11
+
+The ordinary local runtime SQLite did not contain CatalogProduct rows and its legacy Regard StoreOffer rows were outside the existing 24-hour freshness window. The latest imported workbook was present in a separate `regard.analysis.db`, with development-only rights and zero public/commercial/automatic-download grants. Public `available_offers` and price-history gates remain unchanged. A loopback-only, token-protected owner view was added against a verified isolated copy; it reports price origin/date and missing availability, product URL and image without fabricating them. Counts, exact paths, access model and browser evidence: [REGARD_PRIVATE_CATALOG.md](REGARD_PRIVATE_CATALOG.md).
+
+
+## Каталог, TTL и реальный E2E — 2026-11-11
+
+Эта запись уточняет прежние ограничения закрытого каталога: владелец разрешил публичный некоммерческий показ данного прайса, automatic_download/commercial остаются отдельными правами. Regard catalog_import использует отдельное CATALOG_PRELIMINARY_HOURS=72: fresh до 24 часов, stale до окна — только предварительная оценка, затем historical. imported_at не заменяет дату цены; live TTL/подтверждение не продлены. Поиск, ручной выбор, автоматический подбор, upgrade и saved review используют этот контракт. Публичная витрина не отправляет пустой category; frontend разделяет in-flight hardware запрос. Права и database-bound analysis проверяются один раз на выборку без глобального кеша. Подробные измерения, семь исправленных тестов, исходные даты, 12 реальных расчётов и инструкция Amvera: [FULL_PRODUCT_READINESS.md](FULL_PRODUCT_READINESS.md).

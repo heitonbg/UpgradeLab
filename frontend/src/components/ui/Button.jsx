@@ -1,19 +1,4 @@
-export function Button({
-  variant = 'primary',
-  className = '',
-  loading = false,
-  children,
-  ...props
-}) {
-  const base =
-    'inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ' +
-    'transition disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none ' +
-    'focus:ring-2 focus:ring-accent/40'
-  const variants = {
-    primary: 'primary-btn',
-    secondary: 'secondary-btn',
-    ghost: 'text-gray-300 hover:text-white',
-    danger: 'text-red-400 hover:text-red-300',
-  }
-  return <button className={`${base} ${variants[variant]} ${className}`} {...props} disabled={loading || props.disabled} aria-busy={loading || undefined}>{loading && <span className="loading-ring" aria-hidden="true"/>}{children}</button>
+export function Button({variant='primary',className='',loading=false,iconOnly=false,children,...props}) {
+ const variants={primary:'primary-btn',secondary:'secondary-btn',outline:'outline-btn',ghost:'ghost-btn',danger:'destructive-btn',destructive:'destructive-btn'}
+ return <button {...props} className={`ui-button ${variants[variant]||variants.secondary} ${iconOnly?'ui-button-icon':''} ${className}`} disabled={loading||props.disabled} aria-busy={loading||undefined}>{loading&&<span className="loading-ring" aria-hidden="true"/>}{children}</button>
 }

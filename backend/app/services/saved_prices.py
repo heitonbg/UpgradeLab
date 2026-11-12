@@ -21,22 +21,29 @@ def snapshot_items(result):
             parts = [{**quote, 'price': result['avg_price'],
                       'name': result.get('upgrade_name') or result.get('upgrade_component') or 'Апгрейд'}]
     return [{
-        'name': part.get('name') or 'Компонент', 'type': part.get('type'),
+        'name': part.get('name') or 'Компонент', 'type': part.get('type'), 'price_basis':part.get('price_basis'),
         'historical_price': amount(part.get('price')),
         'offer_id': part.get('offer_id'), 'url': part.get('price_url'),
         'offer_name': part.get('price_offer_name'),
         'observed_at': iso_utc(part.get('price_observed_at') or part.get('price_date')),
         'verified_at': iso_utc(part.get('price_verified_at')),
+        'goods_price_rub':part.get('goods_price_rub'),'delivery_cost_rub':part.get('delivery_cost_rub'),
+        'geography':part.get('geography'),
+        'delivery_cost_unknown':part.get('geography',{}).get('delivery_cost_unknown',False),
     } for part in parts if isinstance(part, dict)]
 
 
 def linked_offer(db, item):
+    if item.get('price_basis')=='reference':return None
     url = item.get('url')
     if not url:
         return None
     row = db.get(StoreOffer, item['offer_id']) if isinstance(item.get('offer_id'), int) else db.scalar(
         select(StoreOffer).where(StoreOffer.url == url))
     if row is None or row.url != url or item.get('type') and row.category != item['type']:
+        return None
+    from app.services.catalog_access import filter_catalog
+    if not filter_catalog(db, [row]):
         return None
     name = item.get('offer_name') or item.get('name') or ''
     normalized = lambda value: re.sub(r'\W', '', value.lower())
@@ -93,6 +100,10 @@ def review_prices(db, data):
         entry = {**item, 'historical_price': price, 'latest_price': price if observed else None,
                  'latest_observed_at': observed, 'confirmed_price': None, 'confirmed_at': None,
                  'valid_until': None, 'changed': False, 'state': 'unknown'}
+        if item.get('price_basis')=='reference':
+            entry['state']='historical_observation'
+            output.append(entry)
+            continue
         if not item.get('offer_id') and not item.get('url'):
             entry['state'] = 'user_zero_cost' if price == 0 else (
                 'historical_observation' if item.get('observed_at') else 'manual')
@@ -105,6 +116,22 @@ def review_prices(db, data):
             entry['state'] = 'missing'
             output.append(entry)
             continue
+        saved_geo=item.get('geography') or {}
+        if saved_geo.get('target_city_id'):
+            from app.services.offer_geography import geo_details
+            from app.schemas.geography import GeoQuery
+            current_geo=geo_details(row,GeoQuery(city_id=saved_geo['target_city_id']))
+            if saved_geo.get('local_match') and not current_geo['local_match'] or saved_geo.get('delivery_match') and not current_geo['delivery_match']:
+                entry.update(state='unconfirmed',latest_price=row.price_rub,latest_observed_at=iso_utc(row.observed_at))
+                output.append(entry)
+                continue
+        if item.get('delivery_cost_rub') or item.get('delivery_cost_unknown'):
+            entry.update(latest_price=row.price_rub,latest_observed_at=iso_utc(row.observed_at),state='unconfirmed')
+            output.append(entry)
+            continue
+        if row.origin == 'catalog_import':
+            from app.services.catalog_freshness import catalog_price_state
+            entry.update(catalog_price_state(row.observed_at))
         entry.update(latest_price=row.price_rub, latest_observed_at=iso_utc(row.observed_at),
                      changed=price is not None and row.price_rub != price, state='unconfirmed')
         try:

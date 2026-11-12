@@ -1,0 +1,50 @@
+/* Single colour palette for UpgradeLab. Components reference these tokens. */
+:root {
+  --background: #101114;
+  --background-rgb: 16 17 20;
+  --surface: #17191f;
+  --surface-rgb: 23 25 31;
+  --surface-raised: #20232b;
+  --surface-raised-rgb: 32 35 43;
+  --input-surface: #121419;
+  --input-surface-rgb: 18 20 25;
+  --surface-selected: #292f47;
+  --surface-selected-rgb: 41 47 71;
+  --surface-hover: #272b35;
+  --surface-hover-rgb: 39 43 53;
+  --border: #30343f;
+  --border-rgb: 48 52 63;
+  --control-border: #626a7c;
+  --control-border-rgb: 98 106 124;
+  --border-strong: #7488bb;
+  --border-strong-rgb: 116 136 187;
+  --text-primary: #f0f1f4;
+  --text-primary-rgb: 240 241 244;
+  --text-secondary: #c0c4ce;
+  --text-secondary-rgb: 192 196 206;
+  --text-muted: #a1a8b7;
+  --text-muted-rgb: 161 168 183;
+  --text-disabled: #7d8ba2;
+  --text-disabled-rgb: 125 139 162;
+  --accent: #7f98ff;
+  --accent-rgb: 127 152 255;
+  --accent-hover: #a3b5ff;
+  --accent-hover-rgb: 163 181 255;
+  --accent-text: #c2cfff;
+  --accent-text-rgb: 194 207 255;
+  --on-accent: #0c1324;
+  --on-accent-rgb: 12 19 36;
+  --success: #86c7a4;
+  --success-rgb: 134 199 164;
+  --warning: #e1b974;
+  --warning-rgb: 225 185 116;
+  --error: #ef969b;
+  --error-rgb: 239 150 155;
+  --shadow-color: #000000;
+  --shadow-color-rgb: 0 0 0;
+  --focus-ring: 0 0 0 3px rgb(var(--accent-rgb) / .24);
+  --dialog-shadow: 0 18px 60px rgb(var(--shadow-color-rgb) / .44);
+  --control-height: 44px;
+}
+
+:root { --space-5:20px; --space-10:40px; --text-xs:12px; --text-sm:14px; --text-md:16px; --text-lg:20px; --radius-control:8px; --radius-panel:12px; --duration-fast:160ms; --popover-z:90; }

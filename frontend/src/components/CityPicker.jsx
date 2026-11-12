@@ -1,49 +1,16 @@
-import { useEffect, useId, useState } from 'react'
+import { useCallback,useEffect,useState } from 'react'
 import { request } from '../api/client'
-import { cityLabel, citySuggestions } from '../lib/cities'
-let pending
-export function CityPicker({ value, onChange, label='Город' }) {
-  const id=useId()
-  const [cities,setCities]=useState([])
-  const [query,setQuery]=useState('')
-  const [error,setError]=useState('')
-  useEffect(()=>{
-    let alive=true
-    if(!pending) pending=request('/api/cities').catch(error=>{pending=null;throw error})
-    pending.then(data=>{if(alive)setCities(data)}).catch(()=>{if(alive)setError('Не удалось загрузить справочник городов')})
-    return()=>{alive=false}
-  },[])
-  useEffect(()=>{
-    const city=cities.find(city=>city.city_id===value)
-    if(city)setQuery(cityLabel(city))
-  },[value,cities])
-  useEffect(()=>{
-    if(!query || cities.some(city=>cityLabel(city)===query))return
-    let alive=true
-    const timer=setTimeout(()=>{
-      request('/api/cities?q='+encodeURIComponent(query.slice(0,100))).then(found=>{
-        if(alive)setCities(previous=>[...new Map([...previous,...found].map(city=>[city.city_id,city])).values()])
-      }).catch(()=>{if(alive)setError('Не удалось найти город; повторите ввод')})
-    },180)
-    return()=>{alive=false;clearTimeout(timer)}
-  },[query])
-  useEffect(()=>{
-    if(!value)return
-    let alive=true
-    request('/api/cities?q='+encodeURIComponent(value)).then(found=>{
-      if(alive)setCities(previous=>[...new Map([...previous,...found].map(city=>[city.city_id,city])).values()])
-    }).catch(()=>{})
-    return()=>{alive=false}
-  },[value])
-  function choose(text) {
-    setQuery(text)
-    const city=cities.find(city=>cityLabel(city)===text)
-    onChange(city?.city_id||null)
-  }
-  return <label className="city-picker">{label}<input aria-label={label} type="search" list={id} value={query} maxLength={150}
-    placeholder="Все города / начните вводить название" onChange={e=>choose(e.target.value)}/>
-    <datalist id={id}>{citySuggestions(cities,query).map(city=><option key={city.city_id} value={cityLabel(city)}/>)}</datalist>
-    {(query||value)&&<button type="button" className="text-btn" onClick={()=>choose('')}>Очистить город</button>}
-    <small>{error || (cities.some(city=>city.city_id===value) ? 'Город выбран из справочника' : query ? 'Выберите подсказку с регионом' : 'Город не указан; география неизвестна')}</small>
-  </label>
+import { createCityLoader } from '../lib/cityLoader'
+import { citySuggestions } from '../lib/cities'
+import { Combobox } from './ui/Combobox'
+const loader=createCityLoader(request)
+export function CityPicker({value,onChange,label='Город',required=false}) {
+ const [cities,setCities]=useState([]),[query,setQuery]=useState(''),[loading,setLoading]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0)
+ const merge=useCallback(rows=>setCities(previous=>[...new Map([...previous,...rows].map(c=>[c.city_id,c])).values()]),[])
+ useEffect(()=>{let alive=true;setLoading(true);const timer=setTimeout(async()=>{try{const rows=query?await loader.search(query):await loader.load(retry>0);if(alive){merge(rows);setError('')}}catch{if(alive)setError('Не удалось загрузить города. Выбранный город сохранён.')}finally{if(alive)setLoading(false)}},180);return()=>{alive=false;clearTimeout(timer)}},[query,retry,merge])
+ useEffect(()=>{if(!value)return;let alive=true;loader.search(value).then(rows=>{if(alive)merge(rows)}).catch(()=>{if(alive)setError('Не удалось загрузить название выбранного города.')});return()=>{alive=false}},[value,merge])
+ const suggestions=citySuggestions(cities,query)
+ const selected=cities.find(c=>c.city_id===value)
+ const options=[...new Map([...(selected?[selected]:[]),...suggestions].map(c=>[c.city_id,{value:c.city_id,label:c.name,description:c.region}])).values()]
+ return <Combobox required={required} label={label} value={value} options={options} onChange={onChange} onQueryChange={setQuery} loading={loading} error={error} onRetry={()=>setRetry(n=>n+1)} clearable placeholder="Город или регион" hint={selected?selected.region:'Выберите город из списка; регион указан в подсказке.'}/>
 }

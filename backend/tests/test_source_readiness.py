@@ -25,6 +25,8 @@ NOW=datetime(2026,11,9,12,tzinfo=timezone.utc)
 
 class SourceReadinessTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.engine=create_engine('sqlite://')
         Base.metadata.create_all(self.engine)
         self.db=Session(self.engine)
@@ -49,6 +51,10 @@ class SourceReadinessTests(unittest.TestCase):
                         'app.services.safe_http.resolve_public',return_value=()),patch(
                         'app.services.safe_http.SafeSession._once',return_value=response):
                         result=collect_source(source,payload,time.monotonic()+5,{}, {})
+                    if source=='avito':
+                        self.assertEqual(result[4]['outcome'],'access_not_permitted')
+                        self.assertFalse(result[4]['attempted']);self.assertEqual(result[1],[])
+                        continue
                     self.assertEqual(result[2],'public_page',result[3])
                     self.assertEqual([(r.name,r.price_rub,r.category) for r in result[1]],[(name,price,category)])
                     upsert(self.db,result[1],result[2])
@@ -71,7 +77,10 @@ class SourceReadinessTests(unittest.TestCase):
             with self.subTest(source=source):
                 payload=SearchOffers(query='Ryzen 5 5600',category='CPU',sources=[source],method='browser')
                 result=collect_source(source,payload,time.monotonic()+5,{}, {})
-                self.assertEqual(result[2],'unavailable');self.assertIn('изоляц',result[3])
+                if source=='avito':
+                    self.assertEqual(result[4]['outcome'],'access_not_permitted');self.assertFalse(result[4]['attempted'])
+                else:
+                    self.assertEqual(result[2],'unavailable');self.assertIn('изоляц',result[3])
 
     def test_cached_outage_reports_cache_and_partial_result_without_new_confirmation(self):
         url='https://www.kns.ru/product/test/'
@@ -126,7 +135,7 @@ class SourceReadinessTests(unittest.TestCase):
         from app.api.offers import status
         with patch('app.services.browser_offers.browser_diagnostics',return_value={'enabled':False}):
             result=status(self.db)
-        self.assertEqual(len(result['sources']),12)
+        self.assertEqual(len(result['sources']),13)
         self.assertTrue(all(item['live_status']=='not_checked' and not item['browser_enabled']
                             for item in result['sources']))
 

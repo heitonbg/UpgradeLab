@@ -11,6 +11,12 @@ from app.services.search_time import remaining
 class NetworkPolicyError(RuntimeError):
     pass
 
+
+class NetworkTransportError(NetworkPolicyError):
+    def __init__(self,outcome,message):
+        super().__init__(message)
+        self.outcome=outcome
+
 @dataclass(frozen=True)
 class Target:
     url: str
@@ -124,7 +130,7 @@ def resolve_public(target,deadline):
         # slots until completion; timed-out callers never start a connection.
         raise TimeoutError('DNS-проверка превысила лимит времени') from None
     except OSError:
-        raise NetworkPolicyError('Не удалось определить публичный адрес источника') from None
+        raise NetworkTransportError('dns_error','Не удалось определить публичный адрес источника') from None
     addresses=[]
     for family,_,_,_,sockaddr in records:
         if family not in (socket.AF_INET,socket.AF_INET6):

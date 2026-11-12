@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/lib/hardware.test.js src/lib/performance.test.js src/lib/marketplace.test.js src/api/searchJobs.test.js src/lib/authChallenge.test.js src/api/auth.test.js src/lib/sourceDiagnostics.test.js src/lib/savedPrices.test.js src/lib/contacts.test.js"
+    "test": "node --test src/lib/hardware.test.js src/lib/performance.test.js src/lib/marketplace.test.js src/api/searchJobs.test.js src/lib/authChallenge.test.js src/api/auth.test.js src/lib/sourceDiagnostics.test.js src/lib/savedPrices.test.js src/lib/contacts.test.js src/lib/offerEvidence.test.js src/lib/listingDetails.test.js src/lib/fpsChart.test.js src/lib/catalogView.test.js src/lib/uiConsistency.test.js src/lib/buildPresentation.test.js src/lib/publicSources.test.js src/lib/uiTokens.test.js src/lib/geoPolicy.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",

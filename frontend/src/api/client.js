@@ -25,7 +25,7 @@ export async function request(path, options = {}) {
   finally { pendingRequests -= 1; publishRequests() }
 }
 
-async function performRequest(path, { method = 'GET', body, timeoutMs } = {}) {
+async function performRequest(path, { method = 'GET', body, timeoutMs, headers = {} } = {}) {
   const url = apiUrl(path)
   const controller = timeoutMs ? new AbortController() : null
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
@@ -34,7 +34,7 @@ async function performRequest(path, { method = 'GET', body, timeoutMs } = {}) {
     method,
     credentials: 'include',
     cache: 'no-store',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers },
     body: body ? JSON.stringify(body) : undefined,
     signal: controller?.signal,
   }) } catch {

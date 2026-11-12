@@ -15,7 +15,7 @@ import zlib
 import requests
 from requests.cookies import RequestsCookieJar
 from requests.structures import CaseInsensitiveDict
-from app.services.network_policy import NetworkPolicyError, Policy, public_address, resolve_public, validate_url
+from app.services.network_policy import NetworkPolicyError, NetworkTransportError, Policy, public_address, resolve_public, validate_url
 from app.services.search_time import remaining
 
 MAX_BYTES=8*1024*1024
@@ -93,7 +93,7 @@ class SafeResponse:
             response.status_code=self.status_code
             raise requests.HTTPError(f'HTTP {self.status_code}',response=response)
 
-def read_body(response,connection,deadline,max_bytes):
+def read_body(response,connection,deadline,max_bytes,extra_media_types=(),sink=None):
     length=response.getheader('Content-Length')
     if length is not None:
         try:
@@ -101,7 +101,7 @@ def read_body(response,connection,deadline,max_bytes):
         except ValueError:
             raise NetworkPolicyError('Ответ источника слишком большой или имеет некорректный размер') from None
     media=(response.getheader('Content-Type') or '').split(';',1)[0].strip().lower()
-    if media and not (media in ('text/html','text/plain','text/xml','text/javascript',
+    if media and media not in extra_media_types and not (media in ('text/html','text/plain','text/xml','text/javascript',
                       'application/xhtml+xml','application/json','application/xml','application/rss+xml') or
                       media.startswith('application/') and media.endswith(('+json','+xml'))):
         raise NetworkPolicyError('Источник вернул неподдерживаемый Content-Type')
@@ -110,7 +110,7 @@ def read_body(response,connection,deadline,max_bytes):
         raise NetworkPolicyError('Источник вернул неподдерживаемое сжатие')
     decoder=zlib.decompressobj(31 if encoding=='gzip' else zlib.MAX_WBITS) if encoding!='identity' else None
     body=bytearray()
-    wire=0
+    wire=0;decoded_size=0
     while True:
         timeout=remaining(deadline,5)
         if connection.live_socket is not None:
@@ -121,12 +121,14 @@ def read_body(response,connection,deadline,max_bytes):
         if wire>max_bytes:
             raise NetworkPolicyError('Ответ источника слишком большой')
         try:
-            decoded=decoder.decompress(chunk,max_bytes-len(body)+1) if decoder else chunk
+            decoded=decoder.decompress(chunk,max_bytes-decoded_size+1) if decoder else chunk
         except zlib.error:
             raise NetworkPolicyError('Некорректный сжатый ответ источника') from None
-        if len(body)+len(decoded)>max_bytes:
+        if decoded_size+len(decoded)>max_bytes:
             raise NetworkPolicyError('Распакованный ответ источника слишком большой')
-        body.extend(decoded)
+        decoded_size+=len(decoded)
+        if sink is None:body.extend(decoded)
+        else:sink.write(decoded)
     if decoder and (not decoder.eof or decoder.unused_data):
         raise NetworkPolicyError('Неполный или неоднозначный сжатый ответ')
     remaining(deadline,5)
@@ -135,8 +137,9 @@ def read_body(response,connection,deadline,max_bytes):
 class SafeSession:
     """Small session interface for existing catalog scripts; every hop is pinned."""
     trust_env=False
-    def __init__(self,policy=Policy()):
+    def __init__(self,policy=Policy(),*,extra_media_types=()):
         self.policy=policy
+        self.extra_media_types=tuple(extra_media_types)
         self.headers={'User-Agent':'UpgradeLab/1.0','Accept-Language':'ru-RU'}
         self.cookies=RequestsCookieJar()
 
@@ -145,9 +148,10 @@ class SafeSession:
     def close(self):pass  # Each response/socket is already closed before returning.
     def get(self,url,**kwargs):return self.request('GET',url,**kwargs)
     def post(self,url,**kwargs):return self.request('POST',url,**kwargs)
+    def get_to(self,url,sink,**kwargs):return self.request('GET',url,_sink=sink,**kwargs)
 
     def request(self,method,url,*,params=None,data=None,headers=None,deadline=None,
-                timeout=None,allow_redirects=True,max_bytes=MAX_BYTES):
+                timeout=None,allow_redirects=True,max_bytes=MAX_BYTES,_sink=None):
         if method not in ('GET','POST'):
             raise NetworkPolicyError('Неподдерживаемый метод загрузки')
         deadline=min(deadline,time.monotonic()+30) if deadline is not None else time.monotonic()+30
@@ -172,7 +176,7 @@ class SafeSession:
         outgoing['Accept-Encoding']='gzip, deflate'
         outgoing['Connection']='close'
         payload=urlencode(data,doseq=True).encode('ascii') if isinstance(data,dict) else data
-        if payload is not None:
+        if payload is not None and 'Content-Type' not in outgoing:
             outgoing['Content-Type']='application/x-www-form-urlencoded'
         if not _http_slots.acquire(timeout=remaining(deadline,5)):
             raise TimeoutError('Сетевые загрузки временно заняты')
@@ -180,7 +184,7 @@ class SafeSession:
             for hop in range(MAX_REDIRECTS+1):
                 target=validate_url(target.url,policy)
                 addresses=resolve_public(target,deadline)
-                response=self._once(method,target,addresses,outgoing,payload,deadline,max_bytes)
+                response=self._once(method,target,addresses,outgoing,payload,deadline,max_bytes,**({'sink':_sink} if _sink is not None else {}))
                 if response.status_code not in (301,302,303,307,308):
                     return response
                 if not allow_redirects or 'Authorization' in outgoing:
@@ -197,7 +201,7 @@ class SafeSession:
         finally:
             _http_slots.release()
 
-    def _once(self,method,target,addresses,headers,payload,deadline,max_bytes):
+    def _once(self,method,target,addresses,headers,payload,deadline,max_bytes,sink=None):
         connection=PinnedHTTPSConnection(target,addresses,deadline)
         expired=Event()
         def abort():
@@ -220,16 +224,24 @@ class SafeSession:
             connection.request(method,target.path,body=payload,headers=dict(outgoing))
             response=connection.getresponse()
             self.cookies.extract_cookies(response,request)
-            body=read_body(response,connection,deadline,max_bytes)
+            body=read_body(response,connection,deadline,max_bytes,self.extra_media_types,sink if response.status==200 else None)
             if expired.is_set():
                 raise TimeoutError('Истёк срок загрузки')
             return SafeResponse(response.status,CaseInsensitiveDict(response.getheaders()),body,target.url)
         except (socket.timeout,TimeoutError):
             raise TimeoutError('Источник не ответил за отведённое время') from None
-        except (OSError,http.client.HTTPException):
+        except ssl.SSLCertVerificationError:
+            raise NetworkTransportError('certificate_error','Сертификат HTTPS источника не прошёл проверку') from None
+        except ssl.SSLError:
+            raise NetworkTransportError('tls_error','Не удалось согласовать защищённое TLS-соединение') from None
+        except ConnectionError:
+            raise NetworkTransportError('connection_error','Соединение с источником прервано или отклонено') from None
+        except http.client.HTTPException:
+            raise NetworkTransportError('http_protocol_error','Некорректный ответ протокола HTTP') from None
+        except OSError:
             if expired.is_set():
                 raise TimeoutError('Источник превысил общее время загрузки') from None
-            raise NetworkPolicyError('Не удалось установить проверенное HTTPS-соединение') from None
+            raise NetworkTransportError('network_error','Не удалось установить проверенное HTTPS-соединение') from None
         finally:
             timer.cancel()
             if response is not None:response.close()

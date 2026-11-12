@@ -26,6 +26,8 @@ NAIVE = NOW.replace(tzinfo=None)
 class ClockFixture:
 
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.cleanup = ExitStack()
         self.addCleanup(self.cleanup.close)
         self.cleanup.enter_context(patch('app.core.price_time.utc_now', return_value=NOW))
@@ -119,6 +121,8 @@ class PriceTimeTests(ClockFixture, unittest.TestCase):
 
 class StoredPriceTimeTests(ClockFixture, unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         super().setUp()
         self.engine=create_engine('sqlite://')
         Base.metadata.create_all(self.engine)
@@ -313,6 +317,8 @@ class StoredPriceTimeTests(ClockFixture, unittest.TestCase):
 
 class BuildTimeStateTests(ClockFixture, unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         super().setUp()
         import test_adaptive_builds
         self.fixture=test_adaptive_builds.AdaptiveBuildTests()
@@ -335,8 +341,10 @@ class BuildTimeStateTests(ClockFixture, unittest.TestCase):
 
     def test_current_z_check_produces_complete(self):
         result=self.build('2026-11-09T11:59:00Z')
-        self.assertEqual(result['status'],'complete')
-        self.assertTrue(result['purchase_ready'])
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
+        self.assertFalse(result['purchase_ready'])
+        self.assertTrue(result['delivery_cost_unknown'])
         self.assertEqual(len(result['parts']),8)
 
     def test_stale_check_with_store_outage_produces_historical_draft(self):

@@ -78,7 +78,8 @@ class AutomaticPolicyTests(unittest.TestCase):
             self.assertLessEqual(parts['storage']['price'], 6000)
             self.assertNotIn('восстановление', parts['motherboard']['name'])
             self.assertNotIn('RX 5500', parts['GPU']['name'])
-            self.assertIn('Corsair CX550', parts['psu']['name'])
+            cpu=self.db.get(Hardware,parts['CPU']['id']);gpu=self.db.get(Hardware,parts['GPU']['id'])
+            self.assertGreaterEqual(parts['psu']['quality']['watts'],psu_requirement(cpu,gpu))
 
     def test_hundred_thousand_variants_keep_gpu_and_power_balanced(self):
         result = self.build(budget=100000)

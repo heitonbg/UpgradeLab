@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "schedule": "0 4 * * *",
+  "timezone": "UTC",
+  "display_time": "07:00 Europe/Moscow",
+  "executor": "single external CLI process",
+  "command": "python -m scripts.regard_sync --database /data/pc_upgrade.db --schema /data/regard-schema.json --rights /data/regard-rights.json",
+  "prerequisites": [
+    "confirmed download and display rights",
+    "verified Amvera scheduler facility",
+    "persistent /data and backup",
+    "OPENROUTER independent of sync"
+  ]
+}

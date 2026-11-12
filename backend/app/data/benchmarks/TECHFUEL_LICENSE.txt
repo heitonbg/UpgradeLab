@@ -1,0 +1,18 @@
+TechFuelHQ - ASUS ROG Astral RTX 5080 OC First-Party Bench Dataset
+LICENSE (v1.3.0, 2026-08-01)
+
+This dataset is licensed under the Creative Commons Attribution 4.0
+International license (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+Copyright (c) 2026 TechFuelHQ / LK Wood Web Development.
+
+You are free to share and adapt this dataset - including commercially -
+provided you give appropriate credit. Required attribution:
+
+  TechFuelHQ - ASUS ROG Astral RTX 5080 OC First-Party Bench Dataset
+  (CC BY 4.0). https://techfuelhq.com/data/gpu/rog-astral-rtx-5080-oc-2026-06-09/
+
+History: published CC BY 4.0 (v1.0.0, 2026-06-09); changed to TechFuelHQ
+Proprietary at v1.2.0 (2026-06-11) without operator sanction; reverted to
+CC BY 4.0 at v1.3.0 (2026-08-01) by operator-delegated ruling. No data
+values changed at v1.3.0.

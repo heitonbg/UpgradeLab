@@ -7,7 +7,7 @@ from app.core.price_time import iso_utc
 OUTCOMES = frozenset({
     'success','no_results','partial','blocked','rate_limited','timeout','network_error',
     'parse_error','parser_drift','unauthorized','access_not_permitted','unavailable',
-    'disabled','not_tested',
+    'disabled','not_tested','dns_error','certificate_error','tls_error','connection_error','http_protocol_error',
 })
 
 class SourceFailure(RuntimeError):
@@ -44,7 +44,7 @@ def diagnose_source(function):
             if rows and details.get('error'):
                 code='partial'
         payload=args[1] if len(args)>1 else kwargs.get('payload')
-        if payload is not None and payload.method in ('browser','discovery') and not rows:
+        if payload is not None and payload.method in ('browser','discovery') and not rows and code!='access_not_permitted':
             # Native browser/CDP is fail-closed in this runtime.
             code='disabled'
             details['attempted']=False

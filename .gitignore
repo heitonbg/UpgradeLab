@@ -24,3 +24,6 @@ Thumbs.db
 
 # Isolated third-party source research (never part of the application)
 .research/
+
+# Local owner-supplied price lists, schemas, permissions and reports
+.catalog-imports/

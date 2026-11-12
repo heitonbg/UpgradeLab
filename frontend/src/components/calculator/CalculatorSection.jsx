@@ -18,7 +18,7 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
   const [resaleEditRequest, setResaleEditRequest] = useState(0)
   const editResale = () => { setChoicesOpen(false); setResaleEditRequest(value=>value+1) }
 
-  const handleCalculate = async ({ cpuId, gpuId, ramId, ramManual, game, mode, budget, aiMode, sellMode, targetFps, priceSources, manualCpu, manualGpu, expectedSalePrice }) => {
+  const handleCalculate = async ({ geo, cpuId, gpuId, ramId, ramManual, game, mode, budget, aiMode, sellMode, targetFps, priceSources, manualCpu, manualGpu, expectedSalePrice }) => {
     setLoading(true)
     setError(null)
     try {
@@ -58,6 +58,7 @@ export function CalculatorSection({ cpus, gpus, rams, hardwareLoading, onFindOnM
       }
 
       const payload = {
+        ...geo,
         cpu_id: finalCpuId,
         gpu_id: finalGpuId,
         ram_id: ramId,

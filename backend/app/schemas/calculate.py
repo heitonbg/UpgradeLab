@@ -51,7 +51,9 @@ class PlatformUpgradeSelection(BaseModel):
     cooler_offer_id: int = Field(gt=0)
 
 
-class CalculateRequest(BaseModel):
+from app.schemas.geography import GeoQuery
+
+class CalculateRequest(GeoQuery):
     cpu_id: int = Field(gt=0)
     gpu_id: int = Field(gt=0)
     ram_id: int | None = Field(default=None, gt=0)
@@ -62,7 +64,7 @@ class CalculateRequest(BaseModel):
     ai_mode: AIOption = Field(default=AIOption.OFF)
     sell_mode: str = Field(default="budget_only", pattern="^(budget_only|budget_plus_sell)$")
     target_fps: int = Field(default=60, ge=1, le=1000)
-    price_sources: list[Source] | None = Field(default=None, min_length=1, max_length=12)
+    price_sources: list[Source] | None = Field(default=None, min_length=1, max_length=13)
     refresh_avito_prices: bool = False
     selected_upgrade_id: int | None = Field(default=None, gt=0)
     price_lookup_id: int | None = Field(default=None, gt=0)

@@ -1,0 +1,430 @@
+{
+  "dataset_id": "rog-astral-rtx-5080-oc-2026-06-09",
+  "title": "ASUS ROG Astral RTX 5080 OC — TechFuelHQ First-Party Bench Dataset",
+  "version": "1.4.1",
+  "version_history": [
+    {
+      "version": "1.0.0",
+      "date": "2026-06-09",
+      "note": "Initial publication with 6 charts: generational positioning, Time Spy stock-vs-OC, clock headroom, thermals/power, DLSS 4 MFG Cyberpunk, 4K native gaming 8-game gauntlet."
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-06-11",
+      "note": "PR K expansion: full 5-test synthetic ladder (Time Spy, Time Spy Extreme, Port Royal, Speed Way, Steel Nomad) x 3 tune tiers (Stock / Factory OC / Manual OC) = 15 new first-party data points. 4K gaming chart re-shot with 5 configurations across 3 games plus 1% lows (Cyberpunk Ultra raster, Cyberpunk RT DLSS-Q, Cyberpunk PT native, Alan Wake 2 RT DLSS-Q, Wukong Cinematic). DLSS 4 MFG ladder expanded to a 4-mode ladder (Native PT, DLSS-Q no FG, MFG 2x, MFG 4x) with PC Latency overlay (Reflex on). Power & Thermal converted to side-by-side comparison of two TechFuelHQ-measured profiles on the same Astral card."
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-10-03",
+      "note": "Added JSON and CSV exports of the owner's existing subjective coil-whine observation for the same physical card. No benchmark values or benchmark provenance changed."
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-11-05",
+      "note": "Qualified the five June gaming configurations (three games) with the hand-tuned GPU profile, and distinguished native rendering, DLSS Quality and unspecified settings. The original v1.4.0 export is retained. No new test and no change to any measured value."
+    }
+  ],
+  "publisher": {
+    "name": "TechFuelHQ",
+    "url": "https://techfuelhq.com",
+    "author": "Lowell K. Wood IV (LK Wood IV)",
+    "contact": "contact@techfuelhq.com"
+  },
+  "publication_date": "2026-06-09",
+  "last_updated": "2026-11-05",
+  "license": {
+    "name": "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+    "spdx_id": "CC-BY-4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "copyright": "(c) 2026 TechFuelHQ / LK Wood Web Development. Licensed CC BY 4.0.",
+    "redistribution": "permitted with attribution (CC BY 4.0)",
+    "ai_training_use": "permitted under CC BY 4.0 terms with attribution",
+    "fair_use_quotation": "permitted with attribution",
+    "attribution_required": "TechFuelHQ - ASUS ROG Astral RTX 5080 OC First-Party Bench Dataset (CC BY 4.0). https://techfuelhq.com/data/gpu/rog-astral-rtx-5080-oc-2026-06-09/"
+  },
+  "card_under_test": {
+    "model": "ASUS ROG Astral GeForce RTX 5080 OC Edition",
+    "chip": "NVIDIA GB203 (Blackwell)",
+    "die_size_mm2": 378,
+    "transistors_millions": 45600,
+    "shaders": 10752,
+    "rops_tmus": "112/336",
+    "memory": "16 GB GDDR7",
+    "memory_bus_bits": 256,
+    "memory_bandwidth_gbps": 960.0,
+    "bios": "98.03.3B.C0.AS56 / 98.03.3B.C0.70",
+    "device_id": "10DE-2C02",
+    "cooler": "Quad-fan + vapor chamber",
+    "identity_verification": "ASUSGPUZ identity card on file; retained by publisher and available on request"
+  },
+  "system_under_test": {
+    "gpu": "ASUS ROG Astral RTX 5080 OC",
+    "cpu": "AMD Ryzen 7 7800X3D",
+    "motherboard": "ASUS ROG STRIX B650-A GAMING WIFI (Rev 1.xx, BIOS 3854 04/03/2026)",
+    "memory": "64 GB DDR5-6000 (TEAMGROUP UD5-6000, SK Hynix dies, XMP 3.0 at 1.300 V)",
+    "storage_boot": "1 TB Samsung M.2 NVMe",
+    "psu_watts": 1000,
+    "cpu_cooling": "NZXT Kraken AIO",
+    "pcie_link": "PCI-Express 5.0 x16 capable, running 4.0 x16 at 16.0 GT/s",
+    "test_date_window": "2026-06-08 to 2026-06-11",
+    "location": "St. Louis County, Missouri, United States",
+    "tester": "Lowell K. Wood IV",
+    "oc_tooling": "ASUS GPU Tweak III",
+    "oc_offsets_manual_profile": {
+      "profile_name": "User Mode 2",
+      "core_clock_offset_mhz": 328,
+      "memory_clock_offset_mhz": 2996,
+      "power_target_pct": 112,
+      "gpu_voltage_offset_pct": 0,
+      "fan_speed_pct": 33,
+      "frame_rate_target_fps": 0
+    },
+    "system_validation": "ROG CPU-Z signed validation file (CPU-Z .cvf) retained by publisher and available on request",
+    "methodology_notes": [
+      "Every measurement on this page is a TechFuelHQ first-party run on Lowell K. Wood IV's home test bench in St. Louis County, MO.",
+      "Thermals and board power captured with HWiNFO64 during sustained-load runs.",
+      "Board power is read at the GPU sensor (board power, not wall power).",
+      "OC tuning done in ASUS GPU Tweak III; no shunt mods, no LN2, no driver hacks.",
+      "Three tune profiles per synthetic test: Stock (out-of-box defaults), Factory OC (the ASUS-shipped OC profile / silent BIOS), and Manual OC (hand-tuned offsets in GPU Tweak III User Mode 2: +328 MHz core, +2996 MHz memory, +12% power target).",
+      "Cyberpunk 2077 runs use the in-game benchmark scene at 3840x2160 native, max preset, RT Overdrive where indicated.",
+      "DLSS 4 MFG ladder uses the in-game benchmark scene with DLSS Quality + Reflex on; FPS and PC Latency captured together.",
+      "Power & Thermal is a side-by-side comparison of two TechFuelHQ-measured profiles on the same Astral card: Astral Stock (out-of-box defaults) and Astral Manual OC (User Mode 2 offsets above).",
+      "Generational Positioning index normalizes 4K rasterization throughput to RTX 4080 Super = 100. All four index points are TechFuelHQ first-party: the Astral 5080 OC on the current bench, and the RTX 4080, RTX 4080 Super, and RTX 5080 FE measured on the retired 2024-2025 bench."
+    ]
+  },
+  "charts": [
+    {
+      "chart_id": "01-generational-positioning",
+      "title": "Generational Positioning — 4K Raster",
+      "asset": "01-generational-positioning-4k-raster.jpeg",
+      "data_points": [
+        {
+          "label": "RTX 4080",
+          "value": 96,
+          "unit": "index",
+          "source": "TechFuelHQ first-party (retired 2024-2025 bench)"
+        },
+        {
+          "label": "RTX 4080 Super",
+          "value": 100,
+          "unit": "index (baseline)",
+          "source": "TechFuelHQ first-party (index baseline = 100; retired 2024-2025 bench)"
+        },
+        {
+          "label": "RTX 5080 FE",
+          "value": 114,
+          "unit": "index",
+          "source": "TechFuelHQ first-party (retired 2024-2025 bench)"
+        },
+        {
+          "label": "Astral 5080 OC",
+          "value": 123,
+          "unit": "index",
+          "source": "TechFuelHQ first-party"
+        }
+      ]
+    },
+    {
+      "chart_id": "02-3dmark-time-spy",
+      "title": "3DMark Time Spy Graphics — Stock / Factory OC / Manual OC",
+      "asset": "02-3dmark-time-spy-stock-vs-oc.jpeg",
+      "data_points": [
+        {
+          "label": "Stock",
+          "value": 32350,
+          "unit": "score",
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Factory OC",
+          "value": 33200,
+          "unit": "score",
+          "delta_pct_vs_stock": 2.6,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Manual OC",
+          "value": 34500,
+          "unit": "score",
+          "delta_pct_vs_stock": 6.6,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        }
+      ]
+    },
+    {
+      "chart_id": "02b-3dmark-time-spy-extreme",
+      "title": "3DMark Time Spy Extreme — Stock / Factory OC / Manual OC",
+      "asset": "02b-3dmark-time-spy-extreme.jpeg",
+      "data_points": [
+        {
+          "label": "Stock",
+          "value": 16244,
+          "unit": "score",
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Factory OC",
+          "value": 16961,
+          "unit": "score",
+          "delta_pct_vs_stock": 4.4,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Manual OC",
+          "value": 17600,
+          "unit": "score",
+          "delta_pct_vs_stock": 8.3,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        }
+      ]
+    },
+    {
+      "chart_id": "02c-3dmark-port-royal",
+      "title": "3DMark Port Royal — Stock / Factory OC / Manual OC",
+      "asset": "02c-3dmark-port-royal.jpeg",
+      "data_points": [
+        {
+          "label": "Stock",
+          "value": 20300,
+          "unit": "score",
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Factory OC",
+          "value": 21673,
+          "unit": "score",
+          "delta_pct_vs_stock": 6.8,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Manual OC",
+          "value": 22500,
+          "unit": "score",
+          "delta_pct_vs_stock": 10.8,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        }
+      ]
+    },
+    {
+      "chart_id": "02d-3dmark-speed-way",
+      "title": "3DMark Speed Way — Stock / Factory OC / Manual OC",
+      "asset": "02d-3dmark-speed-way.jpeg",
+      "data_points": [
+        {
+          "label": "Stock",
+          "value": 9010,
+          "unit": "score",
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Factory OC",
+          "value": 9100,
+          "unit": "score",
+          "delta_pct_vs_stock": 1.0,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Manual OC",
+          "value": 9900,
+          "unit": "score",
+          "delta_pct_vs_stock": 9.9,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        }
+      ]
+    },
+    {
+      "chart_id": "02e-3dmark-steel-nomad",
+      "title": "3DMark Steel Nomad — Stock / Factory OC / Manual OC",
+      "asset": "02e-3dmark-steel-nomad.jpeg",
+      "data_points": [
+        {
+          "label": "Stock",
+          "value": 8150,
+          "unit": "score",
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Factory OC",
+          "value": 8400,
+          "unit": "score",
+          "delta_pct_vs_stock": 3.1,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        },
+        {
+          "label": "Manual OC",
+          "value": 9200,
+          "unit": "score",
+          "delta_pct_vs_stock": 12.9,
+          "source": "TechFuelHQ first-party (2026-06-11)"
+        }
+      ]
+    },
+    {
+      "chart_id": "03-clock-headroom",
+      "title": "Clock Headroom — FE vs Astral OC",
+      "asset": "03-clock-headroom-fe-vs-astral-oc.jpeg",
+      "data_points": [
+        {
+          "label": "RTX 5080 FE (ref boost)",
+          "value": 2671,
+          "unit": "MHz",
+          "source": "TechFuelHQ first-party (FE reference-profile run, retired 2024-2025 bench)"
+        },
+        {
+          "label": "Astral OC Default",
+          "value": 2784,
+          "unit": "MHz",
+          "source": "TechFuelHQ first-party"
+        },
+        {
+          "label": "Astral OC Mode (BIOS)",
+          "value": 2885,
+          "unit": "MHz",
+          "source": "TechFuelHQ first-party"
+        },
+        {
+          "label": "Astral OC Manual",
+          "value": 2918,
+          "unit": "MHz",
+          "source": "TechFuelHQ first-party"
+        }
+      ]
+    },
+    {
+      "chart_id": "04-power-thermal",
+      "title": "Power & Thermal — Astral Stock vs Astral Manual OC",
+      "asset": "04-thermals-power.png",
+      "metrics": [
+        {
+          "metric": "Idle power",
+          "astral_stock": "13-20 W",
+          "astral_manual_oc": "20-30 W"
+        },
+        {
+          "metric": "Gaming power",
+          "astral_stock": "266-340 W",
+          "astral_manual_oc": "~271 W"
+        },
+        {
+          "metric": "Max / stress power",
+          "astral_stock": "360 W",
+          "astral_manual_oc": "400 W (450 W VBIOS)"
+        },
+        {
+          "metric": "Transient spikes",
+          "astral_stock": "500-600 W",
+          "astral_manual_oc": "500-600 W"
+        },
+        {
+          "metric": "Idle temp",
+          "astral_stock": "30-42 C",
+          "astral_manual_oc": "< ~50 C"
+        },
+        {
+          "metric": "Gaming core temp",
+          "astral_stock": "63-72 C",
+          "astral_manual_oc": "~58 C"
+        },
+        {
+          "metric": "Stress core temp",
+          "astral_stock": "—",
+          "astral_manual_oc": "~66 C"
+        },
+        {
+          "metric": "Memory junction",
+          "astral_stock": "72-82 C",
+          "astral_manual_oc": "60-72 C"
+        },
+        {
+          "metric": "Load noise",
+          "astral_stock": "Near-silent",
+          "astral_manual_oc": "Up to ~51 dBA"
+        }
+      ],
+      "astral_stock_source": "TechFuelHQ first-party, HWiNFO64 during sustained-load runs (out-of-box defaults)",
+      "astral_manual_oc_source": "TechFuelHQ first-party, HWiNFO64 during sustained-load runs (GPU Tweak III User Mode 2 offsets: +328 MHz core, +2996 MHz memory, +12% power target)"
+    },
+    {
+      "chart_id": "05-dlss4-mfg-cyberpunk",
+      "title": "DLSS 4 Multi-Frame Generation — Cyberpunk 4K Path Tracing",
+      "asset": "05-dlss4-mfg-cyberpunk-4k.jpeg",
+      "data_points": [
+        {
+          "label": "Native PT (no DLSS, no FG)",
+          "fps": 19,
+          "pc_latency_ms": 95,
+          "source": "TechFuelHQ first-party"
+        },
+        {
+          "label": "DLSS-Q, no FG",
+          "fps": 40,
+          "pc_latency_ms": 45,
+          "source": "TechFuelHQ first-party"
+        },
+        {
+          "label": "MFG 2x",
+          "fps": 90,
+          "pc_latency_ms": 55,
+          "source": "TechFuelHQ first-party"
+        },
+        {
+          "label": "MFG 4x",
+          "fps": 135,
+          "pc_latency_ms": 62,
+          "source": "TechFuelHQ first-party"
+        }
+      ],
+      "notes": [
+        "Cyberpunk 2077 in-game benchmark, RT Overdrive preset, 3840x2160.",
+        "DLSS Quality across all DLSS-on runs; Reflex on.",
+        "PC Latency captured via in-game overlay; cross-checked against NVIDIA Reflex telemetry."
+      ],
+      "gpu_profile": "Manual OC (GPU Tweak III User Mode 2)"
+    },
+    {
+      "chart_id": "06-4k-gaming",
+      "title": "4K Gaming — Avg FPS and 1% Lows",
+      "asset": "06-4k-native-gaming-8-game.png",
+      "data_points": [
+        {
+          "label": "Cyberpunk Ultra (raster)",
+          "avg_fps": 58,
+          "low_1pct_fps": 49,
+          "source": "TechFuelHQ first-party",
+          "render_mode": "4K native raster"
+        },
+        {
+          "label": "Cyberpunk RT-Ultra + DLSS-Q",
+          "avg_fps": 50,
+          "low_1pct_fps": 41,
+          "source": "TechFuelHQ first-party",
+          "render_mode": "4K output, DLSS Quality"
+        },
+        {
+          "label": "Cyberpunk Path Tracing (native)",
+          "avg_fps": 19,
+          "low_1pct_fps": 15,
+          "source": "TechFuelHQ first-party",
+          "render_mode": "4K native path tracing"
+        },
+        {
+          "label": "Alan Wake 2 RT + DLSS-Q",
+          "avg_fps": 49,
+          "low_1pct_fps": 38,
+          "source": "TechFuelHQ first-party",
+          "render_mode": "4K output, DLSS Quality"
+        },
+        {
+          "label": "Black Myth: Wukong Cinematic",
+          "avg_fps": 34,
+          "low_1pct_fps": 27,
+          "source": "TechFuelHQ first-party",
+          "render_mode": "4K output, render scale unspecified"
+        }
+      ],
+      "gpu_profile": "Manual OC (GPU Tweak III User Mode 2)",
+      "profile_source": "https://techfuelhq.com/gpu-reviews/rog-astral-rtx-5080-oc-review-2026/#4k-gaming-results-five-tests",
+      "profile_scope": "All five configurations use the manual profile. No matching stock or factory-profile result was measured."
+    }
+  ]
+}

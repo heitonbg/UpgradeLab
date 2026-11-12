@@ -117,7 +117,7 @@ def quality_check(offer, socket=None):
         return None, "Это объявление о целом устройстве, а не об отдельной комплектующей."
     if ACCESSORIES.search(title) or BROKEN.search(title) or UNSUITABLE.search(title):
         return None, "Объявление описывает аксессуар, отдельную деталь или неисправный товар."
-    used_storage = offer.category == 'storage' and getattr(offer, 'source', None) == 'avito' and offer.condition == 'used'
+    used_storage = offer.category == 'storage' and getattr(offer, 'source', None) in ('avito','upgradelab') and offer.condition == 'used'
     if offer.condition != 'new' and not used_storage:
         return None, "Для БП и охлаждения нужны новые детали; б/у SSD допускаются только из выбранного Avito."
     storage_condition = ('Б/у SSD с Avito: запросите SMART, состояние, объём записей и тест полного объёма перед покупкой'
@@ -128,6 +128,8 @@ def quality_check(offer, socket=None):
         if re.search(r'ошибк[аи].*(?:smart|смарт)|(?:smart|смарт).*(?:ошибк|плох)|bad\s*block|битые сектор|ресурс (?:0|исчерпан)|износ (?:9\d|100)\s*%', description, re.I):
             return None, 'В объявлении указаны ошибки или исчерпанный ресурс SSD.'
     if offer.category == 'psu':
+        if re.search(r'\b(?:V[2-9]|REV[. ]*[2-9])\b',title,re.I):
+            return None, 'Ревизия БП не подтверждена существующим профилем модели.'
         for pattern, model, watts, rating, url, protections in PSUS:
             if re.search(pattern, title, re.I):
                 # A seller's arbitrary '80 Plus' string is not proof of a model.

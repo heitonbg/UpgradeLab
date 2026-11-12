@@ -17,10 +17,14 @@ def quote_evidence(row):
     # can use the page-read timestamp. Malformed/future metadata is not evidence.
     if not verification and not history and row.origin=='product_page':
         checked=past_utc(row.observed_at)
-    return {'price_status':'previously_verified' if checked is not None else 'unconfirmed',
+    from app.services.catalog_freshness import catalog_price_state
+    catalog = catalog_price_state(row.observed_at) if row.origin == 'catalog_import' else {}
+    return {**catalog, 'price_status':'previously_verified' if checked is not None else 'catalog_import' if row.origin=='catalog_import' else 'unconfirmed',
             'price_last_verified_at':iso_utc(checked),
             'price_observed_at':iso_utc(row.observed_at),
-            'price_verified_at':None}
+            'price_verified_at':None,
+            'imported_at':data.get('catalog_import',{}).get('imported_at'),
+            'stock_status':data.get('catalog_import',{}).get('availability','unknown')}
 
 
 def observed_rows(db,sources):

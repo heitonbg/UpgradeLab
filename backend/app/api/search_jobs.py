@@ -36,4 +36,4 @@ def get(job_id: str, db: DBSession, response: Response):
     job = db.get(SearchJob, job_id)
     if job is None:
         raise HTTPException(404, 'Поиск не найден или результат уже удалён')
-    return public_job(job)
+    return public_job(job,db)

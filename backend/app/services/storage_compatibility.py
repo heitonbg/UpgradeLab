@@ -6,7 +6,14 @@ import re
 def nvme_board_evidence(board):
     if board is None:
         return None
+    from app.services.technical_evidence import slots
+    structured=slots(board)
+    if structured is not None:
+        eligible=[s for s in structured.slots if s.kind=='M.2' and 'NVMe' in s.interfaces and 2280 in s.sizes and s.available>0]
+        if not eligible:return None
+        return {'basis':structured.basis,'source_url':structured.source_url}
     attrs = json.loads(board.attributes)
+    if 'storage_slots' in attrs:return None
     if attrs.get('nvme_2280') is False:
         return None
     if attrs.get('nvme_2280') is True:

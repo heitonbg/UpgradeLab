@@ -31,7 +31,13 @@ def report_progress(message):
         callback(message[:300])
 
 
-def public_job(job):
+def public_job(job,db=None):
+    if db is not None and job.result:
+        from app.services.result_access import current_result
+        if not current_result(db,json.loads(job.result)):
+            return {'id':job.id,'kind':job.kind,'status':'failed','progress':'Предложения изменились',
+                'created_at':job.created_at.isoformat()+'Z','updated_at':job.updated_at.isoformat()+'Z',
+                'result':None,'error':'Объявления или права доступа изменились. Повторите поиск.'}
     return {'id': job.id, 'kind': job.kind, 'status': job.status, 'progress': job.progress,
             'created_at': job.created_at.isoformat()+'Z', 'updated_at': job.updated_at.isoformat()+'Z',
             'result': json.loads(job.result) if job.result is not None else None, 'error': job.error}
@@ -84,12 +90,13 @@ def run_job(job_id):
 
 
 def create_job(db, kind, payload, client_request_id):
-    canonical = json.dumps([kind, client_request_id, payload], sort_keys=True, ensure_ascii=False)
+    from app.services.result_access import listing_revision
+    canonical = json.dumps([kind, client_request_id, payload,listing_revision(db)], sort_keys=True, ensure_ascii=False)
     request_key = hashlib.sha256(canonical.encode()).hexdigest()
     with submission_lock:
         previous = db.scalar(select(SearchJob).where(SearchJob.request_key == request_key))
         if previous:
-            return public_job(previous)
+            return public_job(previous,db)
         active = list(db.scalars(select(SearchJob.id).where(SearchJob.status.in_(['queued', 'running']))))
         if len(active) >= 4:
             raise HTTPException(429, 'Сервер уже выполняет несколько поисков. Повторите через минуту.')
@@ -103,8 +110,8 @@ def create_job(db, kind, payload, client_request_id):
             db.commit()
         except IntegrityError:
             db.rollback()
-            return public_job(db.scalar(select(SearchJob).where(SearchJob.request_key == request_key)))
-        response = public_job(job)
+            return public_job(db.scalar(select(SearchJob).where(SearchJob.request_key == request_key)),db)
+        response = public_job(job,db)
         executor.submit(run_job, job.id)
         return response
 

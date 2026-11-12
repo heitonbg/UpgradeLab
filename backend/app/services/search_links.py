@@ -11,6 +11,8 @@ ENGINES = (
 
 
 def web_search_links(source, query):
+    if source == 'upgradelab':
+        return []
     text = f'{query} site:{STORES[source]["domain"]}'
     return [{'source': engine, 'label': label, 'url': base + '?' + urlencode({parameter: text})}
             for engine, label, base, parameter in ENGINES]

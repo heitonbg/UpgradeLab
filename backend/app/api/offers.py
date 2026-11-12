@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from app.api.deps import DBSession
+from app.services.source_permissions import network_allowed
 from app.db.models import Hardware
 from app.schemas.offers import SearchOffers, OfferLink, LABELS
-from app.services.offers import search_offers, available_offers, upsert, public_offer
+from app.services.offers import search_offers, available_offers, upsert, public_offer, fresh
 from app.services.store_providers import fetch, parse_html
 from app.api.account import AuthUser
 from app.db.models import StoreOffer, OfferSearch
@@ -34,6 +35,9 @@ def search(payload: SearchOffers, db: DBSession):
 
 @router.post("/from-url")
 def from_url(payload: OfferLink, db: DBSession, user: AuthUser):
+    from app.services.source_permissions import network_allowed
+    if not network_allowed(payload.source):
+        raise HTTPException(403,"Доступ к этому источнику не разрешён владельцем проекта")
     if payload.method == "browser":
         from app.services.browser_offers import BROWSER_SECURITY_MESSAGE
         raise HTTPException(503, BROWSER_SECURITY_MESSAGE)
@@ -79,9 +83,10 @@ def status(db: DBSession):
     return {"search_mode": "public_pages", "search_revision": "server-jobs-http-v2",
             "http_workers": settings.offers_http_workers, "browser": browser_diagnostics(),
             "sources": [{"source": source, "label": label,
-                         "fresh_offers": sum(row.source == source for row in rows),
+                         "fresh_offers": sum(row.source == source and fresh(row) for row in rows),
+                         "preliminary_offers": sum(row.source == source for row in rows),
                          "feed_configured": source in feeds,
-                         "public_search_enabled": settings.offers_live_search,
+                         "public_search_enabled": settings.offers_live_search and network_allowed(source),
                          "browser_enabled": False,
                          "live_status": "not_checked",
                          "live_status_note": "Доступность сайта не подтверждена аудитом; last_search относится только к конкретному запросу.",

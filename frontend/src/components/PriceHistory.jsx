@@ -1,0 +1,9 @@
+import { useState } from 'react'
+import { request } from '../api/client'
+export function PriceHistory({ productId }) {
+ const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+ async function load(days){setBusy(true);setError('');try{setData(await request(`/api/products/${productId}/price-history?days=${days}`))}catch(e){setError(e.message)}finally{setBusy(false)}}
+ if(!productId)return null
+ const rows=data?.observations||[],minimum=Math.min(...rows.map(r=>r.price_rub)),maximum=Math.max(...rows.map(r=>r.price_rub))
+ return <details><summary>История прайс-листа</summary><div className="result-actions">{[7,14].map(days=><button type="button" className="text-btn" key={days} disabled={busy} onClick={()=>load(days)}>{days} дней</button>)}</div>{error&&<p role="alert">История недоступна.</p>}{data&&<><p className="field-hint">{data.note}</p>{rows.length?<><svg viewBox="0 0 400 130" role="img" aria-label="Дневные наблюдения цены без интерполяции"><title>Цена по дням прайс-листа</title>{rows.map(row=>{const x=20+((Date.parse(row.date)-Date.parse(rows.at(-1).date))/86400000+data.days-1)*360/Math.max(1,data.days-1),y=110-(row.price_rub-minimum)*90/Math.max(1,maximum-minimum);return <circle key={row.date} cx={x} cy={y} r="4" fill="currentColor"><title>{row.date}: {row.price_rub} ₽</title></circle>})}</svg><ul className="field-hint">{rows.map(row=><li key={row.date}>{row.date}: {row.price_rub.toLocaleString('ru-RU')} ₽</li>)}</ul><p className="field-hint">Минимум {data.minimum.toLocaleString('ru-RU')} ₽ · максимум {data.maximum.toLocaleString('ru-RU')} ₽ · среднее {Math.round(data.mean).toLocaleString('ru-RU')} ₽{data.change_rub!==null&&` · изменение ${data.change_rub.toLocaleString('ru-RU')} ₽`}</p></>:<p>За этот период наблюдений нет.</p>}</>}</details>
+}

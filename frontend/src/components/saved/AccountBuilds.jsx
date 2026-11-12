@@ -6,10 +6,11 @@ import { currentItemPrice, currentSavedTotal, savedItemState, money, reviewTime 
 const date = value => value && Number.isFinite(Date.parse(value))
   ? new Date(value).toLocaleString('ru-RU') : 'Дата неизвестна'
 
-function SavedEntry({ build, onRemove, now }) {
+function SavedEntry({ build, onRemove, onRecalculate, now }) {
   const [review, setReview] = useState(build.price_review)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [redoing,setRedoing]=useState(false)
   useEffect(() => setReview(build.price_review), [build])
   const result = build.result || {}
   const config = build.config || {}
@@ -19,6 +20,8 @@ function SavedEntry({ build, onRemove, now }) {
   if (received.current.review !== review) received.current = {review, at: performance.now()}
   const priceNow = reviewTime(review, performance.now() - received.current.at)
   const current = currentSavedTotal(review, priceNow)
+  const latest=review?.items?.length&&review.items.every(item=>typeof item.latest_price==='number'&&Number.isFinite(item.latest_price)&&item.latest_price>=0&&item.latest_observed_at)?review.items.reduce((sum,item)=>sum+item.latest_price,0):null
+  async function redo(){setRedoing(true);setError('');try{await onRecalculate(build)}catch(e){setError(e.message)}finally{setRedoing(false)}}
   async function check() {
     setBusy(true); setError('')
     try {
@@ -32,8 +35,7 @@ function SavedEntry({ build, onRemove, now }) {
       ? fpsText(result.fps,result.fps_outlook)
       : `~${result.current_fps} → ~${result.upgraded_fps}`} FPS на момент расчёта</summary>
     <p className="field-hint">Сохранено {date(build.created_at)} · {config.mode}</p>
-    <p><strong>Историческая стоимость: {money(historical)}</strong> · на момент сохранения</p>
-    <p>Актуальная стоимость покупки: <strong>{money(current)}</strong></p>
+    <div className="saved-price-ledger"><div><span>При сохранении</span><strong>{money(historical)}</strong><small>Историческая стоимость</small></div><div><span>Последнее наблюдение</span><strong>{money(latest)}</strong><small>Не подтверждает текущую цену</small></div><div><span>Подтверждено сейчас</span><strong>{money(current)}</strong><small>По действующим правилам свежести</small></div></div>
     <p className="field-hint">Статус сохранённого расчёта: {result.status || 'не указан'}. Он относится к моменту расчёта и не подтверждает сегодняшние цены. Доставка и персональные скидки не учтены.</p>
     <p className="field-hint">{review?.note || 'Это исторический снимок. Свежесть цен неизвестна.'}</p>
     {review?.items?.map((item,index) => <div className="account-item" key={index}>
@@ -51,21 +53,21 @@ function SavedEntry({ build, onRemove, now }) {
     {result.compatibility_notes?.length > 0 && <details><summary>Примечания сохранённого расчёта</summary><ul className="field-hint">{result.compatibility_notes.map((note,index)=><li key={index}>{note}</li>)}</ul></details>}
     <p className="field-hint">Проверено по серверным данным: {date(review?.evaluated_at)}. Эта проверка не обращается к магазинам. Ссылку можно проверить вручную; ручная проверка не меняет статус на сервере.</p>
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="result-actions">
+    <div className="result-actions">{onRecalculate&&build.config&&<button className="primary-btn" disabled={redoing} onClick={redo}>{redoing?'Рассчитываем…':'Создать новый расчёт'}</button>}
       <button className="secondary-btn" disabled={busy} onClick={check}>{busy ? 'Проверяем…' : 'Проверить по серверным предложениям'}</button>
       <button className="secondary-btn" onClick={()=>onRemove(build.id)}>Удалить сохранённый результат</button>
     </div>
   </details>
 }
 
-export function AccountBuilds({ builds, onRemove }) {
+export function AccountBuilds({ builds, onRemove, onRecalculate }) {
   const [now,setNow] = useState(Date.now)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()),1000)
     return () => clearInterval(timer)
   },[])
   return <section className="panel"><h2>Сохранённые сборки и расчёты</h2>
-    {builds.length ? builds.map(build=><SavedEntry key={build.id} build={build} onRemove={onRemove} now={now}/>)
+    {builds.length ? builds.map(build=><SavedEntry key={build.id} build={build} onRemove={onRemove} onRecalculate={onRecalculate} now={now}/>)
       : <p className="empty-copy">Сохраните результат расчёта — он будет доступен в аккаунте с другого устройства.</p>}
   </section>
 }

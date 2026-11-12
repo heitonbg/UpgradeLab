@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import String, Integer, Text, DateTime, Index, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column,relationship
 from app.db.base import Base
 
 
@@ -25,6 +25,13 @@ class Hardware(Base):
 
 class Listing(Base):
     __tablename__ = "listings"
+    details:Mapped["ListingDetails"] = relationship('ListingDetails',uselist=False,cascade='all, delete-orphan',lazy='selectin')
+    @property
+    def characteristics(self):
+        import json
+        try:return json.loads(self.details.data) if self.details else {}
+        except (ValueError,TypeError):return {}
+
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -143,3 +150,97 @@ class AuthChallenge(Base):
     subject_hash: Mapped[str] = mapped_column(String(64))
     bits: Mapped[int] = mapped_column(Integer)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class CatalogAccess(Base):
+    __tablename__ = 'catalog_access'
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    rights: Mapped[str] = mapped_column(Text)
+    public_enabled: Mapped[int] = mapped_column(Integer, default=0)
+    fixture: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class CatalogProduct(Base):
+    """Source identity and private normalized record, not a second hardware catalogue."""
+    __tablename__ = 'catalog_products'
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), index=True)
+    external_key: Mapped[str] = mapped_column(String(200))
+    payload: Mapped[str] = mapped_column(Text)
+    offer_id: Mapped[int | None] = mapped_column(ForeignKey('store_offers.id'), nullable=True, unique=True)
+
+
+class CatalogImport(Base):
+    __tablename__ = 'catalog_imports'
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    report: Mapped[str] = mapped_column(Text)
+
+
+class CatalogObservation(Base):
+    __tablename__ = 'catalog_observations'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_key: Mapped[str] = mapped_column(String(64), index=True)
+    import_key: Mapped[str] = mapped_column(String(64), index=True)
+    payload: Mapped[str] = mapped_column(Text)
+    imported_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ListingDelivery(Base):
+    __tablename__='listing_delivery'
+    listing_id:Mapped[int]=mapped_column(ForeignKey('listings.id'),primary_key=True)
+    evidence:Mapped[str]=mapped_column(Text)
+
+
+class ListingDetails(Base):
+    __tablename__='listing_details'
+    listing_id:Mapped[int]=mapped_column(ForeignKey('listings.id'),primary_key=True)
+    data:Mapped[str]=mapped_column(Text)
+
+
+class CatalogDailyPrice(Base):
+    __tablename__='catalog_daily_prices'
+    product_key:Mapped[str]=mapped_column(String(64),primary_key=True)
+    source_day:Mapped[str]=mapped_column(String(10),primary_key=True)
+    source:Mapped[str]=mapped_column(String(20),index=True)
+    price_kopecks:Mapped[int]=mapped_column(Integer)
+    import_key:Mapped[str]=mapped_column(String(64))
+
+class CatalogPriceCorrection(Base):
+    __tablename__='catalog_price_corrections'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    product_key:Mapped[str]=mapped_column(String(64),index=True)
+    source_day:Mapped[str]=mapped_column(String(10))
+    previous_price_kopecks:Mapped[int]=mapped_column(Integer)
+    previous_import_key:Mapped[str]=mapped_column(String(64))
+    import_key:Mapped[str]=mapped_column(String(64))
+
+class CatalogSyncRun(Base):
+    __tablename__='catalog_sync_runs'
+    id:Mapped[str]=mapped_column(String(64),primary_key=True)
+    source:Mapped[str]=mapped_column(String(20),index=True)
+    started_at:Mapped[datetime]=mapped_column(DateTime)
+    finished_at:Mapped[datetime|None]=mapped_column(DateTime,nullable=True)
+    status:Mapped[str]=mapped_column(String(20))
+    report:Mapped[str]=mapped_column(Text,default='{}')
+
+class ExternalSearchJob(Base):
+    __tablename__='external_search_jobs'
+    id:Mapped[str]=mapped_column(String(64),primary_key=True)
+    user_id:Mapped[int]=mapped_column(ForeignKey('users.id'),index=True)
+    request_key:Mapped[str]=mapped_column(String(64),index=True)
+    created_at:Mapped[datetime]=mapped_column(DateTime,index=True)
+    status:Mapped[str]=mapped_column(String(20))
+    result:Mapped[str]=mapped_column(Text,default='{}')
+
+class AiDailyBudget(Base):
+    __tablename__='ai_daily_budgets'
+    day:Mapped[str]=mapped_column(String(10),primary_key=True)
+    requests:Mapped[int]=mapped_column(Integer,default=0)
+    reserved_tokens:Mapped[int]=mapped_column(Integer,default=0)
+    reserved_microusd:Mapped[int]=mapped_column(Integer,default=0)
+    blocked_until:Mapped[datetime|None]=mapped_column(DateTime,nullable=True)
+    errors:Mapped[int]=mapped_column(Integer,default=0)
+    used_tokens:Mapped[int]=mapped_column(Integer,default=0)
+    used_microusd:Mapped[int]=mapped_column(Integer,default=0)

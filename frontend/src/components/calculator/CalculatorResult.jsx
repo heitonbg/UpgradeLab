@@ -1,3 +1,4 @@
+import { FpsComparison } from './FpsComparison'
 import { upgradeTargetText } from '../../lib/performance'
 import { FpsEvidence } from './FpsEvidence'
 import { StoreOffers } from '../StoreOffers'
@@ -11,11 +12,7 @@ export function CalculatorResult({ result, onFind, onSave, onCompare, onResolveR
   const unavailable = result.price_search_status?.some(source => ['unavailable', 'timeout'].includes(source.status))
   return <section className="panel upgrade-result">
     <h2>{result.upgrade_kind === 'platform' ? 'Апгрейд со сменой платформы' : result.is_maxed_out ? 'Доступный апгрейд не найден' : 'Рекомендация по апгрейду'}</h2>
-    <div className="fps-comparison">
-      <div>Сейчас<strong>~{result.current_fps} FPS</strong><small>Центральный прогноз</small></div><span>→</span>
-      <div>{result.upgrade_component ? 'После замены' : 'Без замены'}<strong>~{result.upgraded_fps} FPS</strong><small>Центральный прогноз</small></div>
-      <div>Прирост<strong>+{result.upgraded_fps - result.current_fps} FPS</strong><small>По расчётной модели</small></div>
-    </div>
+    <FpsComparison result={result}/>
     <p className="field-hint">Цель: {result.target_fps} FPS · {upgradeTargetText(result.upgraded_fps, result.target_fps)}</p>
     <FpsEvidence outlook={result.upgraded_fps_outlook}/>
     <p className="result-note">{result.recommendation}</p>

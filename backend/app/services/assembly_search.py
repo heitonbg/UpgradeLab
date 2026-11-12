@@ -22,7 +22,7 @@ CATEGORIES = ('CPU', 'GPU', 'motherboard', 'memory', 'storage', 'psu', 'case', '
 PART_LABELS = dict(zip(CATEGORIES, ('Процессор', 'Видеокарта', 'Материнская плата',
                                   'Память', 'SSD', 'Блок питания', 'Корпус', 'Кулер')))
 # Readable retail pages first; each failure moves the request to another shop.
-STORE_ORDER = ('regard', 'kns', 'oldi', 'xcom', 'citilink', 'onlinetrade', 'nix',
+STORE_ORDER = ('upgradelab', 'regard', 'kns', 'oldi', 'xcom', 'citilink', 'onlinetrade', 'nix',
                'dns', 'yandex', 'ozon', 'wb', 'avito')
 
 
@@ -69,7 +69,7 @@ def inventory(payload, db, excluded, observed=False):
             if row.category == 'GPU' and not desktop_gpu(hw.name):
                 continue
         else:
-            if row.price_rub > part_limit(row.category, payload.budget, flexible=True):
+            if row.price_rub > payload.budget:
                 continue
             if row.category in ('storage', 'psu', 'cooler') and quality_check(row, payload.socket)[0] is None:
                 continue
@@ -95,6 +95,24 @@ def assemble_resilient(payload, db, search):
     http_deadline = deadline - min(16, SEARCH_SECONDS / 3)
     phase_deadline=deadline
     selected = list(dict.fromkeys(payload.price_sources or LABELS))
+    # The official Regard XLSX and UpgradeLab marketplace are local inventory
+    # sources. When the user explicitly selects only these two, return the
+    # honest preliminary draft directly instead of spending the live-search
+    # deadline probing unrelated stores or rechecking the same unconfirmed data.
+    if selected and set(selected).issubset({'regard', 'upgradelab'}) and not any(
+            confirmed(row) for row in available_offers(db, selected)):
+        local_draft = draft_build(payload, db)
+        if local_draft:
+            return {**local_draft, 'status': 'draft', 'purchase_ready': False,
+                    'prices_confirmed': False,
+                    'search_report': {'selected_sources': selected, 'searched_sources': selected,
+                                      'additional_sources': [], 'rejected_offers': 0,
+                                      'sources': [], 'preferred_source': None, 'elapsed_seconds': 0}}
+        # With only local sources selected, missing categories are a useful
+        # partial result; there is no external store search to wait for.
+        deadline = started
+        http_deadline = started
+        phase_deadline = started
     preferred = 'avito' if 'avito' in selected else None
     # If Avito was selected, its outage must not prevent a complete search on
     # the other configured stores. The user's explicit request is to keep
@@ -191,7 +209,7 @@ def assemble_resilient(payload, db, search):
             return False
         attempted.add(key)
         try:
-            request=SearchOffers(category=category, query=query[:160], sources=sources, method=method)
+            request=SearchOffers(category=category, query=query[:160], sources=sources, method=method,city_id=payload.city_id,geo_mode=payload.geo_mode,max_price=payload.max_price,limit=payload.limit)
             request._deadline=limit
             response = search(db, request)
             record_sources((response or {}).get('sources', []), method)
@@ -265,7 +283,7 @@ def assemble_resilient(payload, db, search):
             for category, index in [(category, index) for index in range(2) for category in ordered]:
                 if index >= len(queries[category]):
                     continue
-                request = SearchOffers(category=category, query=queries[category][index][:160], sources=fast_sources)
+                request = SearchOffers(category=category, query=queries[category][index][:160], sources=fast_sources,city_id=payload.city_id,geo_mode=payload.geo_mode,max_price=payload.max_price,limit=payload.limit)
                 request._deadline = batch_deadline
                 request._source_timeout = 4
                 jobs.append(request)
@@ -424,15 +442,26 @@ def assemble_resilient(payload, db, search):
         allocations['GPU' if 'GPU' in allocations else next(iter(allocations))] += extra
     budget_plan['category_budgets'] = allocations
     web_source = preferred or next(iter(active), 'avito')
+    from app.services.assembly_diagnostics import missing_diagnostic
+    from app.services.offer_geography import offer_scope,filter_geography,geo_details
+    raw_candidates={category:[] for category in CATEGORIES}
+    with offer_scope(payload.model_copy(update={'geo_mode':'all','max_price':None})):
+        raw_rows=observed_rows(db,active)
+    for row in raw_rows:
+        if row.category in raw_candidates:raw_candidates[row.category].append(row)
     missing = [{'type': category, 'label': PART_LABELS[category], 'query': queries[category][0],
                 'budget_limit': allocations.get(category),
-                'observed_min_price': min((row.price_rub for row in budget_pool[category]), default=None),
-                'blocking_reason': ('outside_budget' if budget_pool[category] and
-                    min(row.price_rub for row in budget_pool[category]) > allocations.get(category, 0)
-                    else 'compatibility' if budget_pool[category] else 'no_offers'),
+                **missing_diagnostic(category, raw_candidates[category], budget_pool[category],
+                    allocations.get(category,0),lambda row:partial_compatible(selected_rows,row),
+                    board=next((r for r in selected_rows if r.category=='motherboard'),None)),
                 'web_links': web_search_links(web_source, queries[category][0]),
                 'links': [{'source': source, 'label': LABELS[source], 'url': search_url(source, queries[category][0])}
                           for source in active]} for category in gaps or CATEGORIES]
+    for gap in missing:
+        raw=raw_candidates[gap['type']]
+        if payload.geo_mode!='all' and raw and not filter_geography(raw,payload):
+            gap['blocking_reason']='delivery_unknown' if payload.geo_mode=='delivery' else 'availability_unknown'
+            gap['geography_filtered_count']=len(raw)
     partial_report={**report(),'preferred_parts_count':sum(item['price_source']==LABELS.get(preferred) for item in found)}
     return {'scenario': 'build', 'status': 'partial', 'alternatives': [], 'parts': found,
             'budget_plan': budget_plan,

@@ -32,6 +32,7 @@ def pause_source(source, product=False):
 
 
 def search_url(source, query):
+    if source=="upgradelab":return "/?tab=marketplace"
     store = STORES[source]
     if source == "nix":
         return store["search"] + "?section=video_cards_all#" + urlencode({"keywords": query})
@@ -72,11 +73,14 @@ def fetch(url, params=None, token=None, store=None, deadline=None, product=False
 
 
 def money(value):
-    if isinstance(value, (int, float)):
-        return round(value)
-    value = re.sub(r"[^0-9.,]", "", str(value))
-    # Price markup uses a decimal dot/comma, no ambiguous thousands conversion.
-    return round(float(value.replace(",", ".")))
+    from decimal import Decimal,InvalidOperation
+    text=re.sub(r"\s|руб\.?|₽|RUB|RUR", "", str(value),flags=re.I)
+    if not re.fullmatch(r"[0-9]+(?:[.,][0-9]{1,2})?",text):raise ValueError('invalid_price')
+    try:amount=Decimal(text.replace(",", "."))
+    except InvalidOperation:raise ValueError('invalid_price') from None
+    if not amount.is_finite() or amount<=0 or amount!=amount.to_integral_value():
+        raise ValueError('nonpositive_or_fractional_price_not_supported')
+    return int(amount)
 
 
 def parse_html(source, html, category, page_url=None, require_single_price=False):
@@ -172,6 +176,10 @@ def parse_html(source, html, category, page_url=None, require_single_price=False
             if re.search(r"нет в наличии|последняя цена|снят с производства", card.get_text(" ", strip=True), re.I):
                 stock = "OutOfStock"
             description = card.select_one('[itemprop="description"], [data-marker="item-description"]')
+            if source=='oldi':
+                # OLDI's currency icon is a font glyph 'c', not part of the amount.
+                for icon in price.find_all('span'):
+                    if icon.get_text(strip=True)=='c':icon.decompose()
             add(name.get("content") or name.get_text(" ", strip=True), price.get("content") or price.get_text(" ", strip=True), link.get("href", ""), availability=stock,
                 description=description.get_text(' ', strip=True) if description else '')
     # Microdata is scoped to each Product to keep related goods, delivery fees,

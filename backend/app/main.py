@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+import os
+from starlette.staticfiles import StaticFiles
 from app.core.config import settings
 from app.api import hardware, calculate, listings, autodetect, account
 from app.db.base import Base, engine, SessionLocal
@@ -31,6 +34,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    from app.api import games, catalog_history, product_discovery, catalog_admin, catalog_public
+    app.include_router(product_discovery.router)
+    app.include_router(catalog_history.router)
+    app.include_router(catalog_admin.router)
+    app.include_router(catalog_public.router)
+    app.include_router(games.router)
     app.include_router(hardware.router)
     app.include_router(calculate.router)
     app.include_router(listings.router)
@@ -47,6 +56,12 @@ def create_app() -> FastAPI:
     @app.get("/api/health", tags=["meta"])
     def health():
         return {"status": "ok", "search_revision": "server-jobs-http-v2"}
+
+    # The Amvera root Dockerfile builds Vite and places its production assets
+    # next to this backend. Local development keeps using the Vite dev server.
+    frontend_dist = Path(os.getenv('FRONTEND_DIST', Path(__file__).resolve().parents[2] / 'web-dist')).resolve()
+    if frontend_dist.is_dir():
+        app.mount('/', StaticFiles(directory=frontend_dist, html=True), name='frontend')
 
     return app
 

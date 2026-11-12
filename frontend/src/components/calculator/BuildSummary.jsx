@@ -1,0 +1,6 @@
+import { buildMetric, buildTrust } from '../../lib/buildPresentation'
+import { Button } from '../ui/Button'
+export function BuildSummary({result,onSave,saving}) {
+ const final=buildTrust(result).kind==='verified',metric=buildMetric(result)
+ return <aside className="build-summary" aria-label="Итоговая сборка"><div className="summary-title"><h3>Ваша сборка</h3><span>{final?'Сверена':'Предварительная'}</span></div><p className="summary-count">{result.parts.length} компонентов</p><div className="summary-total"><small>{final?'Стоимость по проверенным предложениям':'Предварительная стоимость'}</small><strong>{result.total_price.toLocaleString('ru-RU')} ₽</strong></div>{result.delivery_cost_unknown&&<p className="field-hint">Доставка не рассчитана. Итог покупки неизвестен.</p>}<dl><div><dt>Остаток бюджета</dt><dd>{result.remaining_budget.toLocaleString('ru-RU')} ₽</dd></div><div><dt>{metric.kind==='cpu'?'Ориентир CPU Mark':'Прогноз FPS'}</dt><dd>{metric.value}</dd></div></dl><p className="field-hint">{metric.note} {final?'Цена и наличие могут измениться.':'Цены, наличие и технические ограничения требуют проверки.'}</p>{onSave&&<Button type="button" loading={saving} onClick={onSave}>{saving?'Сохраняем…':'Сохранить сборку'}</Button>}</aside>
+}

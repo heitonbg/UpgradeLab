@@ -42,6 +42,8 @@ class FakeResponse:
 
 class PolicyTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.socket=patch('socket.socket',side_effect=AssertionError('No real socket in tests')).start()
         self.addCleanup(patch.stopall)
 
@@ -105,6 +107,8 @@ class PolicyTests(unittest.TestCase):
 
 class TransportTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.socket=patch('socket.socket',side_effect=AssertionError('No real socket in tests')).start()
         self.dns=patch('socket.getaddrinfo',return_value=[dns(PUBLIC)]).start()
         self.addCleanup(patch.stopall)
@@ -113,6 +117,40 @@ class TransportTests(unittest.TestCase):
         conn=Mock()
         conn.getresponse.return_value=response
         return conn
+
+    def test_json_post_preserves_explicit_content_type(self):
+        response=FakeResponse(b'{}',headers={'Content-Type':'application/json'});conn=self.connection(response)
+        with patch('app.services.safe_http.PinnedHTTPSConnection',return_value=conn):
+            SafeSession().post(URL,data=b'{}',headers={'Content-Type':'application/json'})
+        self.assertEqual(conn.request.call_args.kwargs['headers']['Content-Type'],'application/json')
+
+    def test_xlsx_requires_explicit_narrow_media_permission(self):
+        media='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        with patch('app.services.safe_http.PinnedHTTPSConnection',return_value=self.connection(FakeResponse(b'PK',headers={'Content-Type':media}))):
+            with self.assertRaises(NetworkPolicyError):SafeSession().get(URL)
+        with patch('app.services.safe_http.PinnedHTTPSConnection',return_value=self.connection(FakeResponse(b'PK',headers={'Content-Type':media}))):
+            self.assertEqual(SafeSession(extra_media_types=(media,)).get(URL).content,b'PK')
+
+    def test_streaming_writes_to_sink_without_buffered_content(self):
+        from io import BytesIO
+        payload=b'fixture'*20000;sink=BytesIO()
+        with patch('app.services.safe_http.PinnedHTTPSConnection',return_value=self.connection(FakeResponse(gzip.compress(payload),headers={'Content-Encoding':'gzip'}))):
+            response=SafeSession().get_to(URL,sink,max_bytes=len(payload)+1)
+        self.assertEqual(sink.getvalue(),payload);self.assertEqual(response.content,b'')
+
+    def test_streaming_keeps_decompression_limit(self):
+        from io import BytesIO
+        sink=BytesIO()
+        with patch('app.services.safe_http.PinnedHTTPSConnection',return_value=self.connection(FakeResponse(gzip.compress(b'x'*100000),headers={'Content-Encoding':'gzip'}))):
+            with self.assertRaises(NetworkPolicyError):SafeSession().get_to(URL,sink,max_bytes=1000)
+        self.assertLessEqual(len(sink.getvalue()),1000)
+
+    def test_streaming_error_body_does_not_overwrite_sink(self):
+        from io import BytesIO
+        sink=BytesIO()
+        with patch('app.services.safe_http.PinnedHTTPSConnection',return_value=self.connection(FakeResponse(b'forbidden',status=403))):
+            response=SafeSession().get_to(URL,sink)
+        self.assertEqual(sink.getvalue(),b'');self.assertEqual(response.content,b'forbidden')
 
     def test_regular_https_preserves_expected_host_and_closes_response(self):
         response=FakeResponse(b'<html>fixture</html>')

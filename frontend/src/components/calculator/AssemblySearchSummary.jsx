@@ -1,3 +1,4 @@
+import { missingPartNotice } from '../../lib/sourceDiagnostics.js'
 import { STORES } from '../StoreOffers'
 import { Icon } from '../ui/Icon'
 import { Button } from '../ui/Button'
@@ -17,8 +18,11 @@ export function AssemblyPriceNotice({ draft, note }) {
 }
 
 export function PartPriceEvidence({ part }) {
+  if(part.price_basis==='reference')return <small className="part-price-unconfirmed">Справочная цена · наблюдалась {part.price_observed_at?new Date(part.price_observed_at).toLocaleDateString('ru-RU'):'дата неизвестна'}. Текущая цена и наличие не подтверждены.</small>
+  if(part.price_status==='seller_declared')return <small className="part-price-unconfirmed">Цена и наличие заявлены продавцом; магазинной проверки нет.</small>
+  if(part.price_status==='catalog_import')return <small className="part-price-unconfirmed">{part.price_freshness==='stale'?'Прайс старше 24 часов · предварительная цена':'Цена по прайс-листу'} · {part.source_price_at?new Date(part.source_price_at).toLocaleString('ru-RU'):'дата неизвестна'} · наличие и текущая цена не подтверждены.</small>
   if(!part.price_status)return null
-  return <small className="part-price-unconfirmed">{part.price_status==='previously_verified'
+  return <small className="part-price-unconfirmed">{part.price_status==='catalog_import' ? 'Цена по прайс-листу · актуальность страницы не подтверждена' : part.price_status==='previously_verified'
     ? `Проверялась ${new Date(part.price_last_verified_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · сейчас не подтверждена`
     : 'Цена из полученного объявления · сейчас не подтверждена'}</small>
 }
@@ -45,17 +49,17 @@ export function AssemblyPartialResult({ data, onRetry, onEdit }) {
   const count = data.parts?.length || 0
   const plan = data.budget_plan
   return <section className="panel assembly-partial result-reveal" aria-labelledby="partial-build-title">
-    <header><span className="section-icon"><Icon name="box" size={23}/></span><div><p className="eyebrow">Ваш план сборки</p><h2 id="partial-build-title">{count?'Сохранили подходящие предложения':'Продолжим поиск комплектующих'}</h2></div><span className="assembly-count"><strong>{count}</strong> / 8 категорий</span></header>
+    <header><span className="section-icon"><Icon name="box" size={23}/></span><div><p className="eyebrow">Ваш план сборки</p><h2 id="partial-build-title">{count?'Нашли часть комплектующих':'Пока недостаточно предложений'}</h2></div><span className="assembly-count"><strong>{count}</strong> / 8 категорий</span></header>
     <div className="assembly-progress" role="progressbar" aria-label="Категории с найденными предложениями" aria-valuemin={0} aria-valuemax={8} aria-valuenow={count}><span style={{width:`${count / 8 * 100}%`}}/></div>
     {plan&&<div className="assembly-budget-overview"><div><span>На весь системный блок</span><strong>{rub(plan.budget)}</strong></div><div><span>Найденные детали</span><strong>{rub(plan.known_parts_subtotal)}</strong></div><div><span>Остаётся на поиск</span><strong>{rub(plan.budget_remaining)}</strong></div></div>}
-    <p>Полная совместимая сборка пока не подтверждена. Найденные предложения сохранены ниже; недостающие детали можно проверить на площадках или поискать через поисковики.</p>
-    {plan&&<p className="field-hint">Бюджеты пустых категорий — план расходов, а не цены товаров. Их сумма вместе с найденными деталями учитывается в общем бюджете. Доставка оплачивается отдельно.</p>}
+    <p>Полная совместимая сборка пока не подтверждена. Найденные предложения сохранены ниже; недостающие детали можно поискать в Regard или на бирже. Справочные цены вместо предложений не подставляются.</p>
+    {plan&&<p className="field-hint">Бюджеты пустых категорий — план расходов, а не цены товаров. Их сумма вместе с найденными деталями учитывается в общем бюджете. Доставка оплачивается отдельно; доступность товара в вашем городе и возможность доставки не подтверждены.</p>}
     <div className="assembly-slot-grid">{slots.map(([type,label,icon],index)=>{
       const part = parts[type]
       const gap = missing[type]
       return <article className={`assembly-slot ${part?'has-offer':'needs-offer'}`} key={type}>
         <header><span className="slot-icon"><Icon name={icon} size={19}/></span><div><small>{String(index+1).padStart(2,'0')}</small><h3>{label}</h3></div><span className="slot-state">{part?'Предложение':'Нужно найти'}</span></header>
-        {part?<><strong className="slot-model">{part.name}</strong><div className="slot-price">{rub(part.price)}<small>{part.price_source}</small></div><PartPriceEvidence part={part}/><a className="slot-primary-link" href={part.price_url} target="_blank" rel="noopener noreferrer">Открыть предложение <Icon name="arrow" size={14}/></a></>:<><strong className="slot-model">{gap?.query || 'Подходящая модель ещё не найдена'}</strong>{gap?.budget_limit!=null&&<div className="slot-price">{rub(gap.budget_limit)}<small>Плановый бюджет категории</small></div>}<p className="slot-hint">{gap?.observed_min_price ? `Есть предложения от ${rub(gap.observed_min_price)}. ${gap.blocking_reason === 'outside_budget' ? 'Нужно перераспределить бюджет.' : 'Нужно проверить совместимость и состав.'}` : 'Сравните объявления в поиске. Цена и наличие проверяются на странице товара.'}</p>{Boolean(gap?.web_links?.length)&&<div className="slot-web-links" aria-label={`Поиск: ${label}`}>{gap.web_links.map(link=><a key={link.source} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</div>}{Boolean(gap?.links?.length)&&<details className="slot-store-links"><summary>Открыть поиск в магазинах</summary><div>{gap.links.map(link=><a key={link.source} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</div></details>}</>}
+        {part?<><strong className="slot-model">{part.name}</strong><div className="slot-price">{rub(part.price)}<small>{part.price_source}</small></div><PartPriceEvidence part={part}/><a className="slot-primary-link" href={part.price_url} target="_blank" rel="noopener noreferrer">Открыть предложение <Icon name="arrow" size={14}/></a></>:<><strong className="slot-model">{gap?.query || 'Подходящая модель ещё не найдена'}</strong>{gap?.budget_limit!=null&&<div className="slot-price">{rub(gap.budget_limit)}<small>Плановый бюджет категории</small></div>}<p className="slot-hint">{gap?.observed_min_price ? `Есть наблюдения от ${rub(gap.observed_min_price)}. ` : ''}{missingPartNotice(gap)}</p>{Boolean(gap?.links?.length)&&<details className="slot-store-links"><summary>Где можно поискать</summary><div>{gap.links.filter(link=>STORES.some(([id])=>id===link.source)).map(link=><a key={link.source} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</div></details>}</>}
       </article>
     })}</div>
     <AssemblySearchSummary report={data.search_report}/>

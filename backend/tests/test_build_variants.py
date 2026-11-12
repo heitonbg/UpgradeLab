@@ -67,6 +67,8 @@ class BuildVariantsTests(unittest.TestCase):
             self.assertEqual(sum(p['price'] for p in nvme['parts']), nvme['total_price'])
 
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.engine = create_engine('sqlite://')
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
@@ -125,8 +127,10 @@ class BuildVariantsTests(unittest.TestCase):
         self.assertFalse(result['target_reached'])
 
     def test_invalid_selected_pair_is_rejected(self):
-        with self.assertRaises(ValidationError):
-            BuildRequest(**self.payload, selected_cpu_id=1)
+        request = BuildRequest(**self.payload, selected_cpu_id=1)
+        self.assertEqual(request.selected_cpu_id, 1)
+        result = assemble(request, self.db)
+        self.assertEqual(result["parts"][0]["id"], 1)
         with self.assertRaises(HTTPException) as error:
             assemble(BuildRequest(**self.payload, selected_cpu_id=99999, selected_gpu_id=3), self.db)
         self.assertEqual(error.exception.status_code, 400)

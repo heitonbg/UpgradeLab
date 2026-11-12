@@ -11,7 +11,7 @@ from app.db.base import Base
 from app.db.models import Hardware,StoreOffer
 from app.core.config import settings
 from app.services.builds import assemble,BuildRequest
-from app.services.automatic_builds import memory_configuration,memory_matches,cpu_board_matches
+from app.services.automatic_builds import memory_configuration,memory_matches,memory_shortlist,memory_candidates,cpu_board_matches
 
 
 class AdaptiveBuildTests(unittest.TestCase):
@@ -52,11 +52,11 @@ class AdaptiveBuildTests(unittest.TestCase):
     def test_cheaper_gpu_frees_budget_for_complete_cpu_board_and_memory(self):
         self.add('GPU','GeForce RTX 4060',30000,3);self.db.commit()
         result=self.build()
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertEqual(result['total_price'],48500)
         self.assertEqual(len(result['parts']),8)
         self.assertEqual(next(part for part in result['parts'] if part['type']=='GPU')['name'],'Radeon RX 6600')
-        self.assertTrue(result['budget_reallocated'])
         self.assertEqual(result['preferred_parts_count'],8)
 
     def test_retail_gpu_does_not_replace_a_complete_avito_pc(self):
@@ -85,7 +85,8 @@ class AdaptiveBuildTests(unittest.TestCase):
         self.add('motherboard','ASRock B450M-HDV R4.0 DDR4',5000,source='regard')
         self.db.commit()
         result=self.build(price_sources=['avito','regard'])
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertEqual(result['preferred_parts_count'],7)
         parts={part['type']:part for part in result['parts']}
         self.assertEqual(parts['GPU']['price_source'],'Avito')
@@ -94,7 +95,8 @@ class AdaptiveBuildTests(unittest.TestCase):
 
     def test_platform_is_replaced_as_a_compatible_set_and_reported_for_saving(self):
         result=self.build(socket='AM5',ram_type='DDR5')
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertEqual(result['actual_config']['socket'],'AM4')
         self.assertEqual(result['actual_config']['ram_type'],'DDR4')
         self.assertTrue(any('AM5/DDR5' in item for item in result['selection_changes']))
@@ -107,17 +109,73 @@ class AdaptiveBuildTests(unittest.TestCase):
             self.assertEqual(memory_configuration(memory)['capacity_gb'],16)
             self.assertTrue(memory_matches(memory,BuildRequest(**self.payload)))
         self.assertEqual(memory_configuration(Obj(name='DDR4 16GB',attributes='{}'))['modules'],1)
+        self.assertEqual(memory_configuration(Obj(name='DDR4 16GB',attributes='{}'))['specification_confidence'],'parsed_from_title')
         self.assertFalse(memory_matches(Obj(name='DDR4 8GB',attributes='{}'),BuildRequest(**self.payload)))
+
+    def test_ram_shortlist_keeps_capacity_module_speed_and_price_tradeoffs(self):
+        offers=[]
+        for title,price in [('DDR4 16GB 2400MHz',4000),('DDR4 2x8GB 2666MHz KIT',8000),
+                            ('DDR4 2x16GB 3200MHz KIT',16000)]:
+            offers.append(self.add('memory',title,price))
+        self.db.commit()
+        result=memory_shortlist(offers,limit=32)
+        configs=[memory_configuration(item) for item in result]
+        self.assertEqual({(item['capacity_gb'],item['modules']) for item in configs}, {(16,1),(16,2),(32,2)})
+        self.assertTrue(any(item['speed_mt_s']==3200 for item in configs))
+
+    def test_separate_single_modules_are_not_fabricated_into_a_factory_kit(self):
+        offers=[self.add('memory','DDR4 8GB 3200MHz',3000),self.add('memory','DDR4 8GB 3200MHz',3000)]
+        self.db.commit()
+        result=memory_shortlist(offers)
+        self.assertTrue(all(memory_configuration(item)['modules']==1 for item in result))
+
+    def test_two_sticks_are_offered_only_when_catalog_confirms_quantity(self):
+        from types import SimpleNamespace
+        confirmed=SimpleNamespace(id=77,source='regard',url='https://www.regard.ru/product/77/x',
+            name='DDR4 8GB 3200MHz',category='memory',price_rub=2500,condition='new',hardware_id=None,
+            observed_at=datetime.utcnow(),origin='catalog_import',
+            attributes=json.dumps({'catalog_import':{'availability':'in_stock','quantity':2}}))
+        unknown=SimpleNamespace(**{**confirmed.__dict__,'id':78,
+            'attributes':json.dumps({'catalog_import':{'availability':'unknown','quantity':None}})})
+        result=memory_candidates([confirmed,unknown])
+        pairs=[item for item in result if getattr(item,'bundle_quantity',None)==2]
+        self.assertEqual(len(pairs),1)
+        self.assertEqual(memory_configuration(pairs[0])['capacity_gb'],16)
+        self.assertEqual(pairs[0].price_rub,5000)
+
+    def test_performance_and_economy_objectives_choose_different_ram_compositions(self):
+        self.add('memory','DDR4 16GB 2400MHz',4000)
+        self.db.scalar(select(StoreOffer).where(StoreOffer.category=='memory')).price_rub=9000
+        self.db.commit()
+        performance=self.build(objective='performance')
+        economy=self.build(objective='economy')
+        self.assertEqual(performance['memory_configuration']['modules'],2)
+        self.assertEqual(economy['memory_configuration']['modules'],1)
+        self.assertNotEqual(performance['parts'][3]['name'],economy['parts'][3]['name'])
+        self.assertIsNotNone(performance['hardware_quality_score'])
+        self.assertIn('cpu_mark',performance['hardware_quality_basis'])
+        self.assertEqual(performance['hardware_metrics']['ram_modules'],2)
+        self.assertIsNone(performance['target_reached'])
+        self.assertIsNone(economy['target_reached'])
 
     def test_single_module_is_allowed_without_a_dual_channel_fps_bonus(self):
         dual=self.build()
         row=self.db.scalar(select(StoreOffer).where(StoreOffer.category=='memory'))
         row.name='DDR4 16GB';self.db.commit()
         single=self.build()
-        self.assertEqual(single['status'],'complete')
+        self.assertEqual(single['status'],'draft')
+        self.assertTrue(single['prices_confirmed'])
         self.assertEqual(single['memory_configuration']['modules'],1)
         self.assertLessEqual(single['fps'],dual['fps'])
         self.assertTrue(any('один модуль' in note for note in single['compatibility_notes']))
+
+    def test_cpu_work_build_does_not_publish_a_game_fps_prediction(self):
+        result=self.build(workload='cpu_work')
+        self.assertEqual(result['selection_score'],21000)
+        self.assertIsNone(result['fps'])
+        self.assertIsNone(result['fps_outlook'])
+        self.assertIsNone(result['target_reached'])
+        self.assertTrue(any('скорость приложений не оценивались' in note for note in result['compatibility_notes']))
 
     def test_same_socket_does_not_make_intel_chipsets_interchangeable(self):
         cpu=Obj(name='Intel Core i5-8400')
@@ -131,7 +189,8 @@ class AdaptiveBuildTests(unittest.TestCase):
         self.db.scalar(select(StoreOffer).where(StoreOffer.category=='storage')).price_rub=10008
         self.db.commit()
         result=self.build()
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertLessEqual(result['total_price'],50000)
         self.assertTrue(result['budget_reallocated'])
 

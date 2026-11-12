@@ -5,7 +5,9 @@ import { upgradeTargetText } from '../../lib/performance'
 export function PriceEvidence({ quote }) {
   if (!quote?.avg_price) return <small>Цена пока не найдена.</small>
   const count = quote.sample_count || 1
-  const label = quote.average_method === 'one_offer' ? 'Цена одного объявления Avito'
+  const label = quote.price_origin === 'seller_declared' ? 'Цена заявлена продавцом UpgradeLab'
+    : quote.price_origin === 'catalog_import' ? 'Цена по прайс-листу; магазинной сверки нет'
+    : quote.average_method === 'one_offer' ? 'Цена одного объявления Avito'
     : quote.average_method === 'mean' ? `Средняя по ${count} объявлениям Avito`
     : quote.average_method === 'limited' ? `Только ${count} объявл. Avito — данных для надёжной средней мало`
     : quote.price_source?.includes('Avito') && quote.price_origin === 'snapshot' ? `Архив Avito · медиана по ${count} объявл.`
@@ -13,6 +15,8 @@ export function PriceEvidence({ quote }) {
   return <small>{label}{quote.price_date && ` · ${new Date(quote.price_date).toLocaleDateString('ru-RU')}`}<br/>
     {quote.price_url && <a href={quote.price_url} target="_blank" rel="noopener noreferrer">Открыть источник{quote.average_method === 'mean' ? ' (пример объявления)' : ''}</a>}
     {['market_average','limited_sample','single_listing'].includes(quote.price_origin) ? ' · цены и наличие сейчас не подтверждены' : ''}
+    {quote.geography?.delivery_cost_unknown && ' · стоимость доставки неизвестна, итог покупки не подтверждён'}
+    {quote.price_origin === 'seller_declared' && ' · наличие заявлено продавцом, независимой проверки нет'}
     {quote.price_market === 'retail_us_converted' && ' · зарубежная розница, без доставки и пошлин'}
   </small>
 }

@@ -5,10 +5,18 @@ import base64
 import binascii
 from urllib.parse import urlsplit
 
+from app.schemas.listing_details import SellerDelivery,validate_characteristics
+
 Condition = Literal["Новое", "Б/У", "Неисправное"]
 
 
 class ListingCreate(BaseModel):
+    characteristics:dict=Field(default_factory=dict)
+    delivery:SellerDelivery|None=None
+    @model_validator(mode="after")
+    def specs_contract(self):
+        self.characteristics=validate_characteristics(self.category,self.characteristics)
+        return self
     title: str = Field(min_length=2, max_length=200)
     condition: Condition
     price: str = Field(min_length=1, max_length=50)
@@ -52,8 +60,11 @@ class ListingCreate(BaseModel):
     def valid_photo(cls, value):
         if not value:
             return None
-        if value.startswith("https://") and urlsplit(value).hostname and len(value) <= 2000:
-            return value
+        if value.startswith('https://') and len(value)<=2000:
+            from app.services.network_policy import validate_url
+            try:return validate_url(value).url
+            except ValueError:raise ValueError('Нужна безопасная HTTPS-ссылка без учётных данных и внутренних адресов') from None
+            except RuntimeError:raise ValueError('Нужна безопасная HTTPS-ссылка без учётных данных и внутренних адресов') from None
         try:
             header, encoded = value.split(",", 1)
             data = base64.b64decode(encoded, validate=True)
@@ -74,6 +85,10 @@ class ListingCreate(BaseModel):
 
 
 class ListingOut(BaseModel):
+    characteristics:dict=Field(default_factory=dict)
+    delivery:dict|None=None
+    technical_assessment:dict=Field(default_factory=dict)
+    seller_name:str|None=None
     id: int
     title: str
     condition: Condition
@@ -114,6 +129,8 @@ class ListingOut(BaseModel):
 
 
 class ListingUpdate(BaseModel):
+    characteristics:dict|None=None
+    delivery:SellerDelivery|None=None
     title: str | None = Field(default=None, min_length=2, max_length=200)
     condition: Condition | None = None
     price: str | None = Field(default=None, min_length=1, max_length=50)

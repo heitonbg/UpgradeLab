@@ -1,0 +1,127 @@
+{
+  "observations": 81,
+  "raw_runs": 73,
+  "publisher_points": 8,
+  "measured_observations": 81,
+  "estimated_observations": 0,
+  "games": 4,
+  "cpus": 3,
+  "gpus": 3,
+  "publishers": 2,
+  "series": 4,
+  "complete_settings": 69,
+  "complete_settings_fraction": 0.8518518518518519,
+  "native_windows_stock": 4,
+  "native_linux_stock": 8,
+  "with_one_percent_low": 78,
+  "by_publisher": {
+    "Open GPU Benchmarks": 73,
+    "TechFuelHQ": 8
+  },
+  "by_game": {
+    "Cyberpunk 2077": 75,
+    "Helldivers 2": 4,
+    "Alan Wake 2": 1,
+    "Black Myth: Wukong": 1
+  },
+  "missing_fields": {
+    "game_version": 8,
+    "ram_channels": 8,
+    "rt": 1,
+    "frame_generation": 4,
+    "os": 8,
+    "driver": 47,
+    "scene": 6,
+    "observed_date": 8
+  },
+  "duplicates_merged": [
+    {
+      "kept": "techfuel:05-dlss4-mfg-cyberpunk:0",
+      "duplicate": "techfuel:06-4k-gaming:2",
+      "reason": "Same publisher/series/settings/mean; repeated chart evidence merged, not counted as an independent run."
+    }
+  ],
+  "excluded": [
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-0",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-1",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-2",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-3",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-4",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-5",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-6",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-7",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-8",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-9",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-10",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-11",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-12",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-13",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-14",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-15",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-16",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-17",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-18",
+      "reason": "Not a measured game workload"
+    },
+    {
+      "source_id": "official-steam_machine_8gb_valve-result_20261109_openbenchmarker_neon_flythrough-19",
+      "reason": "Not a measured game workload"
+    }
+  ],
+  "note": "Observations include source summaries and RT/upscaling/FG/OC cohorts. Counts do not imply calibration eligibility."
+}

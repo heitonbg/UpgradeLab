@@ -14,7 +14,7 @@ def list_recent(db: Session, city_id=None) -> list[Listing]:
 
 def create(db: Session, payload: ListingCreate) -> Listing:
     from app.core.price_time import db_now
-    data = payload.model_dump(exclude={'confirm_availability'})
+    data = payload.model_dump(exclude={'confirm_availability','characteristics','delivery'})
     listing = Listing(**data, created_at=db_now(), updated_at=db_now(),
         availability_confirmed_at=db_now() if payload.confirm_availability and payload.publication_status == 'active' else None)
     db.add(listing)

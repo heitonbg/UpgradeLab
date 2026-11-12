@@ -108,3 +108,75 @@ UL-005 исправлен: старый result больше не показыв�
 23 новых backend-теста. Полная регрессия: 339 обнаружено, 337 успешно, 2 пропущены при discover; standalone smoke/recovery успешны. Frontend 47/47. Frontend-код не менялся, повторная production-сборка не требовалась. git diff --check успешен.
 
 Следующий рекомендуемый шаг: централизованный permission/capability gate и один согласованный feed с разрешёнными образцами. Avito после отказа не включать. Коммит/публикация не выполнялись.
+
+
+## Итерация 9: локальные каталоги
+
+CLI scripts.import_catalog использует CatalogSchema → ограниченный CSV/OpenXML reader → prepare_import → apply_import. Четыре новые таблицы в той же SQLite: CatalogAccess (права), CatalogProduct (staging/идентичность/связь со StoreOffer), CatalogObservation (история), CatalogImport (receipt). Hardware остаётся единственным справочником CPU/GPU. BEGIN IMMEDIATE обеспечивает атомарность. Публичные предложения имеют origin=catalog_import и не получают live-подтверждение. Поиск, ручные offer_id, сохранения и сверка страниц учитывают gate; fixture видим только в локальном контексте. API импорта/скачиватель не добавлены. Полный контракт: [PRICE_FEED_IMPORT.md](PRICE_FEED_IMPORT.md).
+
+
+## Диагностика неполной сборки после аудита live-80000
+
+assembly_diagnostics разделяет наличие безопасных кандидатов, прохождение quality/бюджетных фильтров и совместимость с выбранными деталями. Category budget в partial — оценочный план остатка. Flexible assemble_auto проверяет общий бюджет после совместного выбора; первый проход сохраняет доли категорий. NetworkTransportError дополняет NetworkPolicyError безопасным outcome без raw exceptions. Avito автоматический collector и product verifier не выполняют сеть. Цена с копейками в live-парсере не округляется и не проходит существующий integer-контракт. Полный аудит: LIVE_80000_DIAGNOSTIC.md.
+
+
+## Итерация 10 — единый географический набор
+
+GeoQuery объединяет SearchOffers/BuildRequest/CalculateRequest; ContextVar scope применяется к StoreOffer/ценам/ручным ID и апгрейду. internal_offers материализует только проверяемые CPU/GPU/RAM объявления из Listing/Owner/User, без HTTP. seller_declared не становится verified. ListingDelivery — единственная новая таблица; create_all проверен на старой копии. source_permissions по умолчанию запрещает внешнюю сеть; импортные и сетевые права независимы. technical_evidence возвращает compatible/incompatible/unknown, точные applies_to и provenance защищают от переноса профиля. Известная доставка включается в временную стоимость кандидата, исходный StoreOffer не переписывается. Неизвестная доставка/техника даёт draft, purchase_ready=false и nullable payable total. Cached jobs перепроверяют ID/права/состояние, revision учитывает изменения биржи. Контракт, demo и ограничения: [UNIFIED_GEO_OFFERS.md](UNIFIED_GEO_OFFERS.md).
+
+
+## Итерация 11 — все категории собственной биржи
+
+ListingDetails хранит отдельную JSON-декларацию продавца, восемь Pydantic-схем не вводят второго справочника Hardware. listing_specs отделяет declared/catalog/trusted/missing/contradictory и использует только доступные точные технические профили. internal_offers материализует все восемь категорий; search включает неполные записи, оптимизатор/апгрейд исключают их. Listing + Owner + Details + Delivery сохраняются одной транзакцией. DeliveryEvidence дополнен mode/terms с backward-compatible cities. Геофильтры учитывают pickup/cities/russia; исходная цена не меняется при добавлении доставки. physical_fit исключает известные конфликты, оставляя неизвестные размеры unknown. revision/fingerprint перепроверяют характеристики и доступность профиля; история сохранений неизменна. React использует единые характеристики и редактор доставки при создании/PATCH. Полный контракт и воспроизведение: [MARKETPLACE_ALL_CATEGORIES.md](MARKETPLACE_ALL_CATEGORIES.md). Рабочая БД не изменена, сеть магазинов не использовалась.
+
+
+## Итерация 12 — native Regard и UI 2026
+
+RegardFeedAdapter — bounded streaming OpenXML reader, подключённый к прежним prepare/apply/CatalogProduct/StoreOffer через schema.input_adapter. Реальные URL/остатки не подставляются. closed_catalog_analysis(engine) ограничивает real/private показ отдельной .analysis.db; HTTP не умеет включать этот контекст. Стабильный external_product_id, provenance SHA/version в receipt, история и private-only missing/shrink защищены транзакцией. Публичные/сетевые права остаются выключены; ежедневный local preview подготовлен, не активирован. Подробности: REGARD_REAL_FEED.md.
+
+React SPA получил HomePage, горизонтальную навигацию и отдельный поиск; CategoryImage/PriceOriginBadge/FpsComparison/BuildSummary используют существующие данные/правила. Шесть дополнительных категорий можно перенести из поиска в прежнюю manual form с offer_id и geo scope; CPU/GPU остаются парным выбором. Декоративные local WebP отделены от фото SKU. Сохранения различают history/latest/confirmed и создают новый расчёт без изменения старого. Backend API/авторизация/TTL/FPS не переписаны. DESIGN_SYSTEM.md, REDESIGN_2026.md, ASSET_LICENSES.md, UI_VISUAL_AUDIT.md фиксируют реализацию и проверки.
+
+
+## FPS v2 evidence gate и режимы цен (2026-11-10)
+
+Новая модель не прошла проверку данных и не заменила performance.py. games.router предоставляет локальный /api/games и evidence-gated /api/fps/predict; game_catalog кеширует CC-BY названия отдельно от измерений. fps_validation исключает синтетику/несовместимые условия и разбивает по тестовым сериям; независимого test пока нет. build/automatic_builds передают CPU identity и используют единое RAM-правило. planning_prices ContextVar задаёт read-only inventory для reference/hybrid, существующий solver проверяет технические ограничения. Исторические цены маркируются reference и не получают verified; saved_prices не подтверждает их по URL. Явный offers исключает исторические HardwarePrice. Подробные права, данные, метрики и ограничения: FPS_ENGINE_V2.md.
+
+
+## Offline FPS benchmark data (2026-11-10)
+
+benchmark_data нормализует лицензированные per-run Open GPU и first-party TechFuel наблюдения, сохраняет неизвестные параметры, lineage/hashes, версии, OC и rendering modes. benchmark_calibration объединяет повторные конфигурации и строит held-out-publisher folds; production API не импортирует этот модуль и не использует экспериментальные кандидаты. prepare_fps_benchmarks / evaluate_fps --curated работают по локальным JSON без сети/SQLite. GPU/CPU с score<=0 исключены из обеих ветвей сборки и апгрейда. Offers/reference/hybrid и цены не менялись. См. FPS_BENCHMARK_DATA.md.
+
+
+## Regard sync и внешнее обнаружение (10.11.2026)
+
+Новые аддитивные SQLite-таблицы: catalog_daily_prices, catalog_price_corrections, catalog_sync_runs, external_search_jobs, ai_daily_budgets. Привилегированный CLI импортирует native XLSX в одной транзакции с 14-дневной историей; OS-lock исключает двух локальных исполнителей. Закрытый анализ остаётся на .analysis.db. JSON сохранённых сборок и TTL не меняются. Публичная история защищена правами источника.
+
+OpenRouter используется только в отдельной авторизованной очереди внешнего обнаружения URL. Кандидаты строго привязаны к provider citations и существующим доменам/товарным путям; search_discovered, optimizer_eligible=false, неизвестная цена null. AI не пишет Hardware/StoreOffer и не участвует в matching, совместимости, FPS или подборе. Платный tool default-off, лимиты резервируются в SQLite до сети.
+
+Hybrid сравнивает исходный вариант с расширенным пулом и показывает улучшенную справочную альтернативу отдельно. Независимые CPU/GPU locks, condition, workload gaming/cpu_work и objective поддерживаются ограниченным joint search; глобальный оптимум не обещается. Подробности: [daily sync](REGARD_DAILY_SYNC.md), [история](REGARD_PRICE_HISTORY.md), [AI search](OPENROUTER_PRODUCT_SEARCH.md), [builder](SMART_PC_BUILDER.md), [deployment](DEPLOYMENT_CHECKLIST.md).
+
+
+## Официальный Regard download
+
+SafeSession.get_to записывает ответ 200 в ограниченный файловый sink с прежними DNS pinning/TLS/redirect-проверками. Regard использует постоянные стандартные заголовки и прозрачный User-Agent. До атомарной замены проверяются HTTP/MIME/ZIP/native-структура/CRC; хеш считается на потоке. download() сохраняет все permission gates и передаёт файл прежнему sync/import pipeline. Worker scheduler и новые admin API не добавлены. См. [отчёт](REGARD_DOWNLOAD_DIAGNOSTICS.md).
+## Frontend UI layer (2026-11-11)
+
+Общие controls и визуальные токены определены в `frontend/src/components/ui`, `tokens.css` и `controls.css`. Combobox выбирает только явную опцию, ограничивает remote suggestions и использует portal для viewport-позиционирования; game/city loaders остаются клиентской логикой. `publicSources.js` фильтрует UI-запросы по Regard и бирже UpgradeLab, не меняя backend source grants. `buildPresentation.js` задаёт отображение доверия, совместимости и метрик на основе существующих признаков и не меняет расчёт FPS. Модальные формы и подтверждения используют общий `Modal`/`useConfirm`. Подробности: [PREMIUM_UI_UX_REVIEW.md](PREMIUM_UI_UX_REVIEW.md).
+
+Локальный приватный каталог Regard использует отдельный read-only HTTP capability под `/api/admin/catalog/regard`: он требует loopback peer, токен владельца, отдельную SQLite `*.analysis.db` и валидный development grant. Публичные offers/history и user source grants не ослаблены; обычный `available_offers()` продолжает использовать TTL и `filter_catalog()`. Описание данных/прав и локальный запуск preview: [REGARD_PRIVATE_CATALOG.md](REGARD_PRIVATE_CATALOG.md).
+
+## Gaming optimizer audit (2026-11-11)
+
+Автоматический игровой подбор ранжирует полные конфигурации по catalog-percentile CPU Mark/G3D и объявленным ёмкости/числу модулей RAM; target FPS и legacy FPS не управляют выбором. `target_reached=null` означает, что полная конфигурация не подтверждена игровыми замерами. RAM shortlist сохраняет Pareto варианты до 32 позиций; двухмодульный кандидат из SKU допускается только при подтверждённом наличии двух единиц. Скорость памяти tie-breaker, каналы — potential при поддержке платы, без FPS бонуса. Balanced максимизирует weakest-link hardware proxy (минимум нормированных CPU/GPU/RAM), Performance максимизирует геометрический proxy, Economy минимизирует полную стоимость. Это прозрачная аппаратная эвристика, не доказательство игрового превосходства; `global_optimum_proven=false` остаётся. Ручной/legacy путь не менял target semantics. См. [optimizer implementation](OPTIMIZER_V2_IMPLEMENTATION.md), [gaming audit](GAMING_OPTIMIZER_AUDIT.md), [FPS research](FPS_ENGINE_V3_RESEARCH.md) и [evaluation](FPS_ENGINE_V3_EVALUATION.md).
+
+
+## Каталог, TTL и реальный E2E — 2026-11-11
+
+Эта запись уточняет прежние ограничения закрытого каталога: владелец разрешил публичный некоммерческий показ данного прайса, automatic_download/commercial остаются отдельными правами. Regard catalog_import использует отдельное CATALOG_PRELIMINARY_HOURS=72: fresh до 24 часов, stale до окна — только предварительная оценка, затем historical. imported_at не заменяет дату цены; live TTL/подтверждение не продлены. Поиск, ручной выбор, автоматический подбор, upgrade и saved review используют этот контракт. Публичная витрина не отправляет пустой category; frontend разделяет in-flight hardware запрос. Права и database-bound analysis проверяются один раз на выборку без глобального кеша. Подробные измерения, семь исправленных тестов, исходные даты, 12 реальных расчётов и инструкция Amvera: [FULL_PRODUCT_READINESS.md](FULL_PRODUCT_READINESS.md).
+
+
+## Автоподбор V3 и FPS aggregation
+
+Для `objective=performance` интерфейс и `/api/assemble` используют полный бюджет восьми деталей. CPU/GPU/RAM ранжируются по аппаратному bottleneck proxy; 1 ТБ/2 ТБ SSD выбирается среди совместимых предложений по цене за ГБ и полной стоимости. `target_reached=null` сохраняет границу между аппаратным выбором и неподтверждённым игровым FPS. Детали и ограничения: [GAMING_OPTIMIZER_V3.md](GAMING_OPTIMIZER_V3.md).
+
+Измерения проходят офлайн `benchmark_data` → `benchmark_aggregation` → `aggregates.json`. Сырые записи и ссылки на источники сохраняются. Агрегаты пока не включены в production FPS из-за недостатка независимых сопоставимых серий: [BENCHMARK_AGGREGATION.md](BENCHMARK_AGGREGATION.md).

@@ -15,6 +15,8 @@ from app.services.builds import assemble, BuildRequest
 
 class AssemblyFallbackTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.fixture=test_automatic_policy.AutomaticPolicyTests()
         self.fixture.setUp()
         self.db=self.fixture.db
@@ -27,11 +29,29 @@ class AssemblyFallbackTests(unittest.TestCase):
         payload=BuildRequest(**{**self.payload,'price_sources':['yandex']})
         with patch('app.services.builds.search_offers',return_value={}), patch.object(settings,'offers_browser_enabled',False):
             result=assemble(payload,self.db)
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertEqual(len(result['parts']),8)
         self.assertIn('regard',result['search_report']['additional_sources'])
         self.assertTrue(any(part['price_source']=='Регард' for part in result['parts']))
         self.assertLessEqual(result['total_price'],payload.budget)
+
+    def test_explicit_regard_and_marketplace_scope_uses_local_draft_without_store_probes(self):
+        from unittest.mock import Mock
+        from app.services.assembly_search import assemble_resilient
+        payload=BuildRequest(**{**self.payload,'price_sources':['regard','upgradelab']})
+        search=Mock(side_effect=AssertionError('selected sources are local inventory only'))
+        draft={'scenario':'build','parts':[],'alternatives':[],'total_price':0}
+        for row in self.db.scalars(select(StoreOffer)):
+            row.origin='catalog_import'
+        self.db.commit()
+        with patch('app.services.assembly_search.draft_build',return_value=draft):
+            result=assemble_resilient(payload,self.db,search)
+        self.assertEqual(result['status'],'draft')
+        self.assertFalse(result['purchase_ready'])
+        self.assertFalse(result['prices_confirmed'])
+        self.assertEqual(result['search_report']['additional_sources'],[])
+        search.assert_not_called()
 
     def test_failed_product_is_replaced_from_another_store(self):
         for row in self.db.scalars(select(StoreOffer)):
@@ -53,7 +73,8 @@ class AssemblyFallbackTests(unittest.TestCase):
         with patch('app.services.builds.search_offers',side_effect=search), patch(
                 'app.services.price_verification.fetch',side_effect=RuntimeError('403')) as fetch, patch.object(settings,'offers_browser_enabled',False):
             result=assemble(payload,self.db)
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertEqual(fetch.call_count,1)
         cooler=next(part for part in result['parts'] if part['type']=='cooler')
         self.assertEqual(cooler['price_source'],'Регард')
@@ -67,7 +88,8 @@ class AssemblyFallbackTests(unittest.TestCase):
         self.db.commit()
         with patch('app.services.builds.search_offers',return_value={}), patch('app.services.price_verification.fetch') as fetch:
             result=assemble(BuildRequest(**self.payload),self.db)
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         fetch.assert_not_called()
         self.assertTrue(all(part['price']!=300 for part in result['parts']))
 
@@ -85,7 +107,8 @@ class AssemblyFallbackTests(unittest.TestCase):
         with patch('app.services.builds.search_offers',return_value={}), patch(
                 'app.services.price_verification.fetch',side_effect=fetch) as reader, patch.object(settings,'offers_browser_enabled',False):
             result=assemble(BuildRequest(**self.payload),self.db)
-        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['status'],'draft')
+        self.assertTrue(result['prices_confirmed'])
         self.assertEqual(reader.call_count,8)
         self.assertEqual(next(part for part in result['parts'] if part['type']=='cooler')['price'],1752)
 

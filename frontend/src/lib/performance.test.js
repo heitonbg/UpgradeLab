@@ -23,3 +23,5 @@ test('upgrade targets use the central prediction even when a range crosses the g
   assert.match(upgradeTargetText(550,550),/Цель достигнута/)
   assert.match(upgradeTargetText(600,550),/600 FPS/)
 })
+test('unknown FPS never renders null or fabricated missing performance',()=>{assert.equal(fpsText(null,null),'Нет данных');assert.equal(fpsText(undefined),'Нет данных');assert.equal(upgradeTargetText(null,60),'Недостаточно данных для FPS');assert.equal(targetText(null,60),'Диапазон не подтверждён')})
+test('uncalibrated full-build estimate never confirms the FPS goal',()=>assert.match(targetText({minimum:200,maximum:300},60,null),/не подтверждена замерами/))

@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from typing import Literal
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, SecretStr
 from urllib.parse import urlsplit
 import json
 import os
@@ -18,6 +18,24 @@ class Settings(BaseSettings):
                          else "sqlite:///" + (BACKEND_DIR / "pc_upgrade.db").as_posix())
     cookie_secure: bool = Field(default_factory=lambda: os.getenv("AMVERA") == "1")
     frontend_url: str = "http://localhost:5173"
+    builder_max_cpu_candidates: int = Field(default=48, ge=1, le=100)
+    builder_max_gpu_candidates: int = Field(default=48, ge=1, le=100)
+    builder_seconds_per_profile: float = Field(default=3.0, ge=0.1, le=10)
+    openrouter_api_key: SecretStr = Field(default=SecretStr(''),exclude=True,repr=False)
+    openrouter_primary_model: str = ''
+    openrouter_fallback_model: str = ''
+    openrouter_search_enabled: bool = False
+    openrouter_allow_paid_web: bool = False
+    openrouter_daily_requests: int = Field(default=20,ge=0,le=1000)
+    openrouter_daily_tokens: int = Field(default=100000,ge=0,le=10000000)
+    openrouter_daily_web_microusd: int = Field(default=0,ge=0,le=10000000)
+    openrouter_max_output_tokens: int = Field(default=1200,ge=100,le=4000)
+    openrouter_timeout_seconds: int = Field(default=20,ge=3,le=30)
+    catalog_preliminary_hours: int = Field(default=72, ge=24, le=168)
+    regard_download_enabled: bool = False
+    regard_catalog_admin_token: SecretStr = Field(default=SecretStr(''),exclude=True,repr=False)
+    regard_price_url: str = ''
+    regard_source_utc_offset_minutes: int = Field(default=180,ge=-720,le=840)
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
@@ -27,6 +45,7 @@ class Settings(BaseSettings):
     offers_feed_file: str = ""
     offers_feed_urls: str = "{}"
     offers_feed_tokens: str = "{}"
+    source_permissions: str = "{}"
     offers_live_search: bool = True
     offers_http_workers: int = Field(default=2, ge=1, le=5)
     offers_browser_enabled: bool = False

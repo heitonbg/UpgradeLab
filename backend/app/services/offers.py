@@ -12,7 +12,7 @@ from datetime import timedelta
 from app.core.price_time import as_utc, db_now, iso_utc, is_fresh, current_verification, OFFER_TTL, SEARCH_TTL, OBSERVATION_SKEW
 from pathlib import Path
 from functools import lru_cache
-from sqlalchemy import select
+from sqlalchemy import select, or_, and_
 from app.core.config import settings, BACKEND_DIR
 from app.db.models import Hardware, StoreOffer, OfferSearch
 from app.schemas.offers import OfferInput, LABELS
@@ -164,19 +164,43 @@ def load_offer_file(db, filename=None):
     return upsert(db, rows, "feed")
 
 
+def offer_evidence(row):
+    from app.services.offer_geography import geo_details
+    from app.services.catalog_freshness import catalog_price_state
+    catalog = catalog_price_state(row.observed_at) if row.origin == 'catalog_import' else {}
+    return {**catalog, 'seller_type':'private' if row.source=='upgradelab' else 'store',
+        'offer_type':'seller' if row.source=='upgradelab' else 'catalog' if row.origin=='catalog_import' else 'store',
+        'price_trust':'seller_declared' if row.source=='upgradelab' else 'catalog_import' if row.origin=='catalog_import' else 'verified' if current_verification(json.loads(row.attributes).get('price_verification',{})) and fresh(row) else 'unconfirmed',
+        'geography':geo_details(row),'technical_assessment':json.loads(row.attributes).get('technical_assessment'),
+        'optimizer_eligible':json.loads(row.attributes).get('optimizer_eligible',True),'listing_fingerprint':json.loads(row.attributes).get('listing_fingerprint')}
+
+
 def public_offer(row):
     verification = json.loads(row.attributes).get('price_verification', {})
-    checked = current_verification(verification) if fresh(row) else None
-    return {"id": row.id, "source": row.source, "source_label": LABELS[row.source], "name": row.name,
-            "category": row.category, "price_rub": row.price_rub, "url": row.url, "condition": row.condition,
+    checked = current_verification(verification) if fresh(row) and row.source!='upgradelab' else None
+    return {"id": row.id, "catalog_product_id": json.loads(row.attributes).get("catalog_import",{}).get("product_key"), "source": row.source, "source_label": "Справочная оценка" if row.source=="reference" else LABELS[row.source], "name": row.name,
+            "category": row.category, "price_rub": json.loads(row.attributes).get("_costed_goods_price",row.price_rub),
+            "total_known_cost_rub":row.price_rub, **offer_evidence(row), "url": row.url, "condition": row.condition,
             "observed_at": as_utc(row.observed_at), "origin": row.origin,
             "hardware_id": row.hardware_id, "attributes": json.loads(row.attributes),
-            "price_verified_at": checked}
+            "availability": json.loads(row.attributes).get("catalog_import", {}).get("availability", "unknown") if row.origin == "catalog_import" else "unknown",
+            "availability_warning": json.loads(row.attributes).get("catalog_import", {}).get("availability_warning") if row.origin == "catalog_import" else None,
+            "price_verified_at": checked,
+            "price_status": "seller_declared" if row.source=="upgradelab" else "catalog_import" if row.origin == "catalog_import" else None,
+            "price_note": "Цена по прайс-листу; актуальность страницы не подтверждена" if row.origin == "catalog_import" else None}
 
 
-def available_offers(db, sources=None, category=None, include_unavailable=False):
+def available_offers(db, sources=None, category=None, include_unavailable=False,include_ineligible=False):
+    from app.services.planning_prices import scoped_inventory
+    inventory=scoped_inventory()
+    if inventory is not None:
+        return [r for r in inventory if (category is None or r.category==category) and (r.source=='reference' or sources is None or r.source in sources)]
+    from app.services.internal_offers import sync_internal
+    sync_internal(db)
     now = db_now()
-    query = select(StoreOffer).where(StoreOffer.observed_at >= now - OFFER_TTL,
+    query = select(StoreOffer).where(or_(StoreOffer.observed_at >= now - OFFER_TTL,
+                                         and_(StoreOffer.origin == "catalog_import", StoreOffer.source == "regard",
+                                              StoreOffer.observed_at >= now - timedelta(hours=settings.catalog_preliminary_hours))),
                                      StoreOffer.observed_at <= now + OBSERVATION_SKEW)
     if category:
         query = query.where(StoreOffer.category == category)
@@ -190,17 +214,33 @@ def available_offers(db, sources=None, category=None, include_unavailable=False)
     else:
         rows = [row for row in rows if not re.search(r'не соответствует выбранной|модель.*не соответствует|outofstock|soldout|нет в наличии',
                 str(json.loads(row.attributes).get('price_verification', {}).get('message','')),re.I)]
-    return [row for row in rows if sources is None or row.source in sources]
+    from app.services.catalog_access import filter_catalog
+    from app.services.offer_geography import filter_geography,costed
+    from app.services.internal_offers import live_internal
+    selected=filter_catalog(db,[row for row in rows if (sources is None or row.source in sources) and live_internal(db,row)])
+    if not include_ineligible:selected=[row for row in selected if json.loads(row.attributes).get('optimizer_eligible',True)]
+    return sorted((costed(row) for row in filter_geography(selected)),key=lambda row:(row.price_rub,row.id))
 
 
 def search_key(payload):
     return hashlib.sha256(json.dumps(['public-v3', payload.query.lower(), payload.category,
-        sorted(payload.sources), payload.method, settings.offers_browser_search_engine]).encode()).hexdigest()
+        sorted(payload.sources), payload.method, settings.offers_browser_search_engine,payload.city_id,payload.geo_mode,payload.max_price,payload.limit]).encode()).hexdigest()
 
 
 @diagnose_source
 def collect_source(source, payload, deadline, feeds, tokens):
     """Network work only; worker threads must never share a database session."""
+    if source=='upgradelab':
+        return source, [], 'internal', 'Объявления биржи получены из локальной базы', {'attempted':False,'outcome':'not_tested'}
+    if source=='avito':
+        return source, [], 'disabled', 'Автоматический сбор Avito отключён после отказа в доступе', {
+            'attempted':False,'outcome':'access_not_permitted'}
+    from app.services.source_permissions import network_allowed
+    if not network_allowed(source):
+        return source, [], 'disabled', 'Сетевой доступ к источнику не разрешён владельцем проекта', {'attempted':False,'outcome':'access_not_permitted'}
+    if payload._catalog_only or source in payload._catalog_sources:
+        return source, [], 'catalog_import', 'Используются цены по импортированному прайс-листу; онлайн-сверка не выполнялась', {
+            'attempted':False,'outcome':'not_tested'}
     if time.monotonic() >= deadline:
         return source, [], 'timeout', 'Источник не проверен: общий лимит времени поиска исчерпан', {'attempted': False}
     try:
@@ -240,7 +280,7 @@ def collect_source(source, payload, deadline, feeds, tokens):
     except (requests.ConnectionError, OSError):
         return source, [], 'unavailable', 'Не удалось установить соединение с источником', {'outcome':'network_error'}
     except NetworkPolicyError as error:
-        return source, [], 'unavailable', str(error)[:300], {'outcome':'network_error'}
+        return source, [], 'unavailable', str(error)[:300], {'outcome':getattr(error,'outcome','network_error')}
     except RuntimeError as error:
         return source, [], 'unavailable', public_runtime_message(error), {}
     except Exception:
@@ -274,11 +314,28 @@ def persist_search(db, payload, responses, commit=True):
     return previous, statuses
 
 
+def internal_outcomes(db,payload,statuses):
+    if not any(item['source']=='upgradelab' for item in statuses):return statuses
+    from app.services.offer_geography import offer_scope
+    with offer_scope(payload):rows=available_offers(db,['upgradelab'],payload.category)
+    if payload.hardware_id:rows=[r for r in rows if r.hardware_id==payload.hardware_id]
+    else:
+        sig=signature(payload.query,payload.category) if payload.category in ('CPU','GPU') else None
+        if sig:rows=[r for r in rows if signature(r.name,payload.category)==sig]
+        else:rows=[r for r in rows if all(w in r.name.casefold() for w in re.findall(r'[a-zа-я0-9]+',payload.query.casefold()))]
+    for item in statuses:
+        if item['source']=='upgradelab':item.update(result_count=len(rows),attempted=False,outcome='success' if rows else 'no_results')
+    return statuses
+
+
 def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
     """Cover missing PC categories concurrently; persist all results serially."""
     feeds, tokens = json.loads(settings.offers_feed_urls), json.loads(settings.offers_feed_tokens)
+    from app.services.catalog_access import restricted_catalog_sources
+    restricted = restricted_catalog_sources(db)
     pending, results, jobs = {}, [], []
     for payload in payloads:
+        payload._catalog_sources = restricted
         if payload.method != 'http':
             raise ValueError('Пакетный поиск поддерживает только публичные HTTP-страницы')
         key = search_key(payload)
@@ -286,8 +343,9 @@ def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
             continue
         previous = db.get(OfferSearch, key)
         if previous and is_fresh(previous.checked_at, SEARCH_TTL, inclusive=True):
-            results.append({'category': payload.category, 'query': payload.query, 'sources': json.loads(previous.statuses),
-                            'source_outcomes':[public_outcome(item,cached=True) for item in json.loads(previous.statuses)]})
+            cached_statuses=internal_outcomes(db,payload,json.loads(previous.statuses))
+            results.append({'category': payload.category, 'query': payload.query, 'sources': cached_statuses,
+                            'source_outcomes':[public_outcome(item,cached=True) for item in cached_statuses]})
             continue
         pending[key] = (payload, [])
         jobs.extend((key, source, payload) for source in dict.fromkeys(payload.sources))
@@ -305,6 +363,7 @@ def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
             pending[key][1].append(response)
     for payload, responses in pending.values():
         _, statuses = persist_search(db, payload, responses, commit=False)
+        statuses=internal_outcomes(db,payload,statuses)
         results.append({'category': payload.category, 'query': payload.query, 'sources': statuses,
                         'source_outcomes':[public_outcome(item) for item in statuses]})
     if pending:
@@ -313,6 +372,15 @@ def batch_search_offers(db, payloads, source_first=False, priority_queries=()):
 
 
 def search_offers(db, payload):
+    from app.services.offer_geography import offer_scope
+    from app.services.internal_offers import sync_internal
+    if sync_internal(db):db.commit()
+    with offer_scope(payload):return _search_offers(db,payload)
+
+
+def _search_offers(db, payload):
+    from app.services.catalog_access import restricted_catalog_sources
+    payload._catalog_sources = restricted_catalog_sources(db)
     deadline = payload._deadline or time.monotonic() + 45
     feeds, tokens = json.loads(settings.offers_feed_urls), json.loads(settings.offers_feed_tokens)
     previous = db.get(OfferSearch, search_key(payload))
@@ -323,7 +391,7 @@ def search_offers(db, payload):
             responses = list(pool.map(lambda source: collect_source(source, payload, deadline, feeds, tokens),
                                       dict.fromkeys(payload.sources)))
         previous, statuses = persist_search(db, payload, responses)
-    rows = available_offers(db, payload.sources, payload.category)
+    rows = available_offers(db, payload.sources, payload.category,include_ineligible=True)
     if payload.category in ("CPU", "GPU"):
         rows = [row for row in rows if component_listing(row.name)]
     if payload.hardware_id:
@@ -332,13 +400,20 @@ def search_offers(db, payload):
         query_signature = signature(payload.query, payload.category) if payload.category in ("CPU", "GPU") else None
         if query_signature:
             rows = [row for row in rows if signature(row.name, payload.category) == query_signature]
+            memory=re.search(r'\b(\d+)\s*(?:gb|гб)\b',payload.query,re.I)
+            if memory and payload.category=='GPU':
+                rows=[row for row in rows if re.search(r'\b'+memory[1]+r'\s*(?:gb|гб)\b',row.name,re.I)]
         else:
             words = re.findall(r"[a-zа-я0-9]+", payload.query.lower())
             rows = [r for r in rows if all(word in r.name.lower() for word in words)]
+    for status in statuses:
+        if status['source']=='upgradelab':
+            count=sum(r.source=='upgradelab' for r in rows)
+            status.update(result_count=count,outcome='success' if count else 'no_results',attempted=False)
     candidates = [{"source": status["source"], "source_label": status["label"], "name": payload.query, "url": url}
                   for status in statuses for url in status.get("discovered_urls", [])]
     unavailable = [item['source'] for item in statuses if item['status'] in ('unavailable', 'timeout', 'disabled')]
-    return {"offers": [public_offer(r) for r in rows[:100]], "sources": statuses, "candidates": candidates,
+    return {"offers": [public_offer(r) for r in rows[:payload.limit]], "sources": statuses, "candidates": candidates,
             "source_outcomes": [public_outcome(item,cached=search_cached) for item in statuses],
             "search_cached": search_cached, "unavailable_sources": unavailable,
             "partial_result": bool(rows and unavailable),

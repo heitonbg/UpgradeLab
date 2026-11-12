@@ -1,0 +1,153 @@
+{
+  "checked_at": "2026-11-10",
+  "sources": [
+    {
+      "name": "Open GPU Benchmarks",
+      "url": "https://opengpubenchmarks.com/",
+      "license": "CC-BY-4.0",
+      "license_url": "https://opengpubenchmarks.com/license/",
+      "robots": "Allow /; ai-train=yes",
+      "decision": "imported",
+      "normalized_observations": 73,
+      "notes": "Per-GPU API records used, not dashboard game_summaries; repeats remain in the same series and are collapsed for evaluation."
+    },
+    {
+      "name": "TechFuelHQ",
+      "url": "https://techfuelhq.com/data/gpu/rog-astral-rtx-5080-oc-2026-06-09/",
+      "license": "CC-BY-4.0",
+      "license_url": "https://techfuelhq.com/data/gpu/rog-astral-rtx-5080-oc-2026-06-09/LICENSE.txt",
+      "robots": "Allow /; dataset terms explicitly permit reuse/training with attribution",
+      "decision": "imported",
+      "normalized_observations": 8,
+      "notes": "First-party assertion; nine chart points, one repeated PT point merged. Manual OC, missing game builds/OS; not calibration-ready stock Windows data."
+    },
+    {
+      "name": "OpenBenchmarking",
+      "url": "https://openbenchmarking.org/",
+      "license": null,
+      "robots": "search=yes, ai-train=no, use=reference; training crawlers disallowed",
+      "decision": "not_imported",
+      "notes": "Training not permitted by checked Content-Signal; data license not established. Code GPL does not license submitted results. Legal page returned 403; no results fetched."
+    },
+    {
+      "name": "FPSHQ",
+      "url": "https://fpshq.com/data/",
+      "license": "CC-BY-4.0 stated by data documentation",
+      "robots": "Disallow /api/; exceptions are limited to named landing/og-test paths, not general REST",
+      "decision": "not_imported",
+      "notes": "Data page web access 403. No alternate hostname/proxy or forbidden API attempted. Median export combines review-derived rescaling and observations; not equivalent to raw measured pairs."
+    },
+    {
+      "name": "BenchPress Data",
+      "url": "https://github.com/sturimcode/benchpress-data",
+      "license": "CC-BY-4.0 data; MIT code",
+      "robots": "GitHub public API/raw; raw robots 404",
+      "decision": "not_imported",
+      "notes": "Checked tree unchanged: reports/.gitkeep only. Baselines estimated, no measured reports."
+    },
+    {
+      "name": "TechPowerup32 FPS dataset",
+      "url": "https://github.com/TechPowerup32/fps-benchmark-dataset",
+      "license": "MIT",
+      "robots": "GitHub public raw",
+      "decision": "not_imported",
+      "notes": "188 CSV rows inspected for provenance. No publisher URL, capture date, test-series ID, game build, RT/FG/OS metadata. Measurement status unverified; not labelled synthetic without evidence. CPU_Score units not documented."
+    },
+    {
+      "name": "SteamFPS",
+      "url": "https://github.com/xpressmike/steamos-playability-dataset",
+      "license": "CC-BY-4.0 compilation; upstream rights explicitly retained by NOTICE",
+      "robots": "GitHub documentation only",
+      "decision": "not_imported",
+      "notes": "241 claimed Deck measurements are upstream community fields. Upstream terms and distinction between target FPS and measured average unresolved; handheld domain cannot calibrate desktop Windows. No verdict-to-FPS conversion."
+    },
+    {
+      "name": "DeckSettings reports",
+      "url": "https://github.com/DeckSettings/game-reports-steamos",
+      "license": "GPL-3.0 repository; issue submission data grant not established",
+      "robots": "GitHub metadata/README only",
+      "decision": "candidate",
+      "notes": "Report template requests target framerate, not necessarily measured average. No import or license inference from website source code."
+    },
+    {
+      "name": "Kaggle FPS Benchmark",
+      "url": "https://www.kaggle.com/datasets/ulrikthygepedersen/fps-benchmark",
+      "license": null,
+      "robots": "No bulk download attempted",
+      "decision": "candidate",
+      "notes": "Dataset page not readable in web tool. Notebook Apache-2.0 license is not a dataset grant. No authenticated or challenge-bypass access."
+    },
+    {
+      "name": "Hugging Face PCGameBenchmarks",
+      "url": "https://huggingface.co/datasets/pcgamebenchmarks/pc-game-system-requirements-fps",
+      "license": "CC-BY-4.0",
+      "robots": "Public dataset card research only",
+      "decision": "not_imported",
+      "notes": "Estimated FPS already identified in previous iteration; not measurements. Gameplay video datasets with fixed encoded 30 FPS are not hardware FPS benchmarks."
+    },
+    {
+      "name": "TechSpot / Hardware Unboxed",
+      "url": "https://www.techspot.com/review/3109-amd-ryzen-5500x3d/",
+      "license": null,
+      "robots": "Direct robots request failed TLS certificate verification",
+      "decision": "candidate",
+      "notes": "Priority 5500X3D comparison candidate; no chart values imported. Same review syndicated to Hardware Unboxed is one source family, not independent evidence. TLS verification not bypassed."
+    },
+    {
+      "name": "Gamers Nexus",
+      "url": "https://gamersnexus.net/cpus/am4-lives-amd-ryzen-5-5500x3d-cpu-review-benchmarks",
+      "license": null,
+      "robots": "robots 200; no data reuse permission established",
+      "decision": "candidate",
+      "notes": "Priority CPU-dependent X3D comparative publication; no charts/OCR or FPS values imported. Terms candidate URL 404."
+    },
+    {
+      "name": "iXBT",
+      "url": "https://www.ixbt.com/platform/amd-ryzen-5-5500x3d-review.html",
+      "license": null,
+      "robots": "robots 200; media paths have restrictions",
+      "decision": "candidate",
+      "notes": "Comparative 5500X3D/5600X candidate. No structured dataset grant established; no values imported."
+    },
+    {
+      "name": "ComputerBase",
+      "url": "https://www.computerbase.de/",
+      "license": null,
+      "robots": "robots 200; /api/ disallowed",
+      "decision": "candidate",
+      "notes": "CPU/X3D/game review candidates; no additional measurements imported without reuse permission. Legacy constants remain legacy, not licensed new training evidence."
+    }
+  ],
+  "x3d_candidates": [
+    {
+      "pair": "5500X3D / 5600X",
+      "url": "https://www.techspot.com/review/3109-amd-ryzen-5500x3d/",
+      "imported": false,
+      "reason": "Reuse grant and permitted acquisition needed; TechSpot/Hardware Unboxed syndication counts as one publisher family."
+    },
+    {
+      "pair": "5500X3D / AM4 CPUs; simulation workloads",
+      "url": "https://gamersnexus.net/cpus/am4-lives-amd-ryzen-5-5500x3d-cpu-review-benchmarks",
+      "imported": false,
+      "reason": "No dataset reuse license established; simulation-time metrics must not be converted to FPS."
+    },
+    {
+      "pair": "5700X3D / 5700X",
+      "url": "https://www.techspot.com/review/2801-amd-ryzen-5700x3d/",
+      "imported": false,
+      "reason": "Candidate comparison publication; no values imported without data rights."
+    },
+    {
+      "pair": "5700X3D / 5800X3D and AM4 controls",
+      "url": "https://gamersnexus.net/cpus/new-amd-ryzen-7-5700x3d-cpu-review-benchmarks-vs-5800x3d-more",
+      "imported": false,
+      "reason": "Independent publisher candidate; no data grant established."
+    },
+    {
+      "pair": "5800X3D / 5800X",
+      "url": "https://www.computerbase.de/artikel/prozessoren/ryzen-7-5800x3d-gaming-benchmark.80191/",
+      "imported": false,
+      "reason": "Candidate controlled review; permission and explicit raw settings required."
+    }
+  ]
+}

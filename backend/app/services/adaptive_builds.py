@@ -29,7 +29,7 @@ def solve_profiles(payload, db, allowed_offer_ids, preferred_source=None, observ
     all_candidates=[]
     def rank(result):
         return (result.get('preferred_parts_count',0) if preferred_source else 0,
-                result['fps'],-result['total_price'],result['actual_config']['socket']==payload.socket)
+                (-result['total_price'] if payload.objective=='economy' else result.get('selection_score',result['fps'])),-result['total_price'],result['actual_config']['socket']==payload.socket)
     for flexible in (False,True):
         candidates = []
         for profile in profiles:

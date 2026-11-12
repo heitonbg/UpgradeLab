@@ -17,6 +17,8 @@ from app.services.store_providers import parse_html
 
 class QuoteVerificationTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.engine=create_engine('sqlite://')
         Base.metadata.create_all(self.engine)
         self.db=Session(self.engine)
@@ -76,7 +78,7 @@ class QuoteVerificationTests(unittest.TestCase):
             self.assertFalse(verify_build_prices(self.db,self.result))
             fetch.assert_not_called()
 
-    def test_avito_verification_can_use_a_readable_browser_page_after_http_fails(self):
+    def test_avito_verification_remains_disabled_after_access_refusal(self):
         row=self.db.get(StoreOffer,1);row.source='avito'
         row.url='https://www.avito.ru/moskva/tovary_dlya_kompyutera/cooler_123456789'
         self.db.commit()
@@ -84,11 +86,13 @@ class QuoteVerificationTests(unittest.TestCase):
             price_rub=1752,url=row.url,condition='new',observed_at=datetime.utcnow(),
             attributes={'price_verification':{'status':'verified','checked_at':datetime.utcnow().isoformat(),
                                               'method':'browser_product_page'}})
-        with patch('app.services.price_verification.fetch',side_effect=RuntimeError('403')),patch(
+        before=self.db.get(StoreOffer,1).price_rub
+        with patch('app.services.price_verification.fetch',side_effect=RuntimeError('403')) as fetch,patch(
                 'app.services.browser_offers.read_browser_product',return_value=[candidate]) as browser:
             self.assertTrue(verify_build_prices(self.db,self.result,browser_sources={'avito'}))
-        self.assertEqual(browser.call_count,1)
-        self.assertEqual(self.db.get(StoreOffer,1).price_rub,1752)
+        fetch.assert_not_called();browser.assert_not_called()
+        self.assertEqual(self.db.get(StoreOffer,1).price_rub,before)
+        self.assertNotIn('price_verification',json.loads(self.db.get(StoreOffer,1).attributes))
         self.assertEqual(len(available_offers(self.db,['avito'],'cooler')),1)
 
 

@@ -32,7 +32,7 @@ def safe_offers(rows, hardware):
             from app.services.gaming_selection import is_case_offer
             if not is_case_offer(row):
                 continue
-        if getattr(row, 'source', None) != 'avito' and getattr(row, 'condition', None) == 'new' and re.search(
+        if getattr(row, 'source', None) not in ('avito','upgradelab') and getattr(row, 'condition', None) == 'new' and re.search(
                 r'\bб\s*/\s*у\b|бывш\w*\s+в\s+употреб|\brefurbished\b', row.name, re.I):
             continue  # A discounted used retail item must not masquerade as new.
         description = json.loads(getattr(row, 'attributes', '{}')).get('description', '')

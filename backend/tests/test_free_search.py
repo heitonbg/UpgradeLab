@@ -18,6 +18,8 @@ from app.services.search_links import web_search_links
 
 class FreeBatchSearchTests(unittest.TestCase):
     def setUp(self):
+        from tests.source_grants import grant_network
+        grant_network(self)
         self.engine = create_engine('sqlite://')
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
