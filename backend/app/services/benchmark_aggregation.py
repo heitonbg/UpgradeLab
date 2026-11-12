@@ -50,8 +50,8 @@ def aggregate(rows):
         result.append({
             'settings': dict(zip(COHORT_FIELDS, key)),
             'mean_fps': mean(independent_values), 'median_fps': center,
-            'p10_between_publishers_fps': percentile(independent_values, .10),
-            'p90_between_publishers_fps': percentile(independent_values, .90),
+            'p10_between_publishers_fps': percentile(independent_values, .10) if len(independent_values) >= 2 else None,
+            'p90_between_publishers_fps': percentile(independent_values, .90) if len(independent_values) >= 2 else None,
             'stddev_between_publishers_fps': pstdev(independent_values),
             'mad_between_publishers_fps': median(abs(value - center) for value in independent_values),
             'observations': sum(map(len, series.values())),

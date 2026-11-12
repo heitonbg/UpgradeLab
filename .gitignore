@@ -27,3 +27,9 @@ Thumbs.db
 
 # Local owner-supplied price lists, schemas, permissions and reports
 .catalog-imports/
+
+# Local SQLite data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
