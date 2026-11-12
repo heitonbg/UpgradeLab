@@ -91,5 +91,18 @@ class PublicCatalogApiTests(unittest.TestCase):
         self.assertEqual(body['items'], [])
 
 
+    def test_readiness_requires_a_real_usable_offer(self):
+        body = self.client.get('/api/catalog/readiness').json()
+        self.assertTrue(body['ready'])
+        self.assertEqual(body['usable_offers'], 1)
+        from sqlalchemy import delete
+        with Session(self.engine) as db:
+            db.execute(delete(StoreOffer).where(StoreOffer.url == 'https://www.regard.ru/product/1000'))
+            db.commit()
+        body = self.client.get('/api/catalog/readiness').json()
+        self.assertFalse(body['ready'])
+        self.assertEqual(body['products'], 2)
+        self.assertEqual(body['usable_offers'], 0)
+
 if __name__ == '__main__':
     unittest.main()

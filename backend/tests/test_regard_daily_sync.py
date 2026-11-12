@@ -49,6 +49,16 @@ class DailySyncTests(unittest.TestCase):
   self.assertTrue(all(not path.exists() for path in directories))
   with Session(f.engine) as db:self.assertEqual(db.scalar(select(func.count()).select_from(CatalogDailyPrice)),1)
 
+ def test_zero_public_candidates_rejected_before_apply(self):
+  self.sync()
+  f=self.fixture
+  f.file.write_bytes(xlsx(BASE[:-1]+[(25,{'A':'123','F':'AMD Ryzen 5 5600 OEM','G':'5100'})]))
+  with patch('app.services.regard_sync.prepare_import',return_value={'report':{'publishable':0,'preliminary_candidates':0}}),patch('app.services.regard_sync.apply_import') as apply:
+   with self.assertRaisesRegex(CatalogError,'no_public_candidates'):
+    synchronize(f.engine,f.mapping,f.rights,file=f.file,analysis=True,min_products=1,require_public_candidates=True)
+   apply.assert_not_called()
+  with Session(f.engine) as db:
+   self.assertEqual(float(json.loads(db.scalar(select(CatalogProduct)).payload)['price']),5000)
  def test_older_source_date_does_not_replace_last_catalog(self):
   self.sync();f=self.fixture
   old=[(n,dict(values)) for n,values in BASE]

@@ -97,7 +97,7 @@ def fetch_official(directory,transport=None):
     finally:partial.unlink(missing_ok=True)
 
 
-def synchronize(engine,schema_path,rights,*,file=None,audience='development',analysis=False,min_products=1000,transport=None):
+def synchronize(engine,schema_path,rights,*,file=None,audience='development',analysis=False,min_products=1000,transport=None,require_public_candidates=False):
     from app.services.regard_feed import RegardFeedAdapter
     from scripts.regard_feed import peak_memory
     identifier=uuid.uuid4().hex
@@ -134,6 +134,8 @@ def synchronize(engine,schema_path,rights,*,file=None,audience='development',ana
                     with ZipFile(source) as archive:
                         if archive.testzip() is not None:raise CatalogError('corrupt_xlsx')
                     metrics={};plan=prepare_import(engine,source,schema_path,metrics=metrics)
+                    if require_public_candidates and plan["report"]["publishable"] + plan["report"]["preliminary_candidates"] <= 0:
+                        raise CatalogError("no_public_candidates")
                     receipt=apply_import(engine,source,schema_path,plan,rights,audience=audience,analysis=analysis)
                     result={'receipt':receipt,'source_metadata':native.metadata,'metrics':metrics,
                         'elapsed_seconds':time.perf_counter()-started,'peak_working_set_mib':peak_memory(),

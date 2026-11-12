@@ -94,3 +94,32 @@ def products(
             'history_available': True,
         })
     return {'source': source, 'total': total, 'page': page, 'page_size': page_size, 'items': items}
+
+
+@router.get('/readiness')
+def catalog_readiness(db: DBSession, response: Response):
+    """Public catalogue availability, separate from /api/health."""
+    from app.services.catalog_freshness import catalog_price_state
+    response.headers['Cache-Control'] = 'no-store'
+    access = db.get(CatalogAccess, 'regard')
+    rights = validated_rights(access) if access else None
+    if not access or not access.public_enabled or access.fixture or not rights or not rights.public_display:
+        return {'source': 'regard', 'ready': False, 'status': 'not_authorized',
+                'products': 0, 'usable_offers': 0}
+    rows = db.execute(select(CatalogProduct, StoreOffer.id).outerjoin(StoreOffer, CatalogProduct.offer_id == StoreOffer.id).where(CatalogProduct.source == 'regard'))
+    products = usable = 0
+    for row, offer_id in rows:
+        try:
+            payload = json.loads(row.payload)
+        except (ValueError, TypeError):
+            continue
+        if payload.get('missing_from_feed'):
+            continue
+        products += 1
+        if (offer_id and (payload.get('eligible') or payload.get('preliminary_eligible'))
+                and payload.get('availability') != 'out_of_stock'
+                and catalog_price_state(payload.get('source_updated_at'))['optimizer_eligibility']):
+            usable += 1
+    return {'source': 'regard', 'ready': usable > 0,
+            'status': 'ready' if usable else 'empty_or_historical',
+            'products': products, 'usable_offers': usable}

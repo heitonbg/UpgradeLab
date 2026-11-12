@@ -16,4 +16,4 @@ COPY backend/seed_data.json ./seed_data.json
 COPY backend/price_data.json ./price_data.json
 COPY --from=frontend-build /src/frontend/dist ./web-dist
 EXPOSE 80
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["python", "-m", "scripts.startup"]
