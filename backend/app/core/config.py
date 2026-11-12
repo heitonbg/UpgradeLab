@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from typing import Literal
-from pydantic import Field, field_validator, SecretStr
+from pydantic import Field, field_validator, model_validator, SecretStr
 from urllib.parse import urlsplit
 import json
 import os
@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     database_url: str = ("sqlite:////data/pc_upgrade.db" if os.getenv("AMVERA") == "1"
                          else "sqlite:///" + (BACKEND_DIR / "pc_upgrade.db").as_posix())
     cookie_secure: bool = Field(default_factory=lambda: os.getenv("AMVERA") == "1")
-    frontend_url: str = "http://localhost:5173"
+    cookie_samesite: Literal["lax", "none"] = Field(default_factory=lambda: "none" if os.getenv("AMVERA") == "1" else "lax")
+    frontend_url: str = Field(default_factory=lambda: "https://frontendupgradelab-iwrawww.waw0.amvera.tech" if os.getenv("AMVERA") == "1" else "http://localhost:5173")
+    backend_url: str = Field(default_factory=lambda: "https://backendupgradelab-iwrawww.waw0.amvera.tech" if os.getenv("AMVERA") == "1" else "")
     builder_max_cpu_candidates: int = Field(default=48, ge=1, le=100)
     builder_max_gpu_candidates: int = Field(default=48, ge=1, le=100)
     builder_seconds_per_profile: float = Field(default=3.0, ge=0.1, le=10)
@@ -54,7 +56,7 @@ class Settings(BaseSettings):
     offers_browser_timeout_ms: int = Field(default=12000, ge=2000, le=30000)
     offers_browser_product_limit: int = Field(default=3, ge=1, le=5)
     offers_browser_search_engine: Literal["bing", "google", "yandex"] = "bing"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+    cors_origins: str = Field(default_factory=lambda: "https://frontendupgradelab-iwrawww.waw0.amvera.tech" if os.getenv("AMVERA") == "1" else "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173")
 
 
     # Authentication quotas: shared through SQLite, charged before password work.
@@ -108,6 +110,13 @@ class Settings(BaseSettings):
                 raise ValueError("CDP разрешён только для локального браузера по HTTP")
         return value
 
+    @model_validator(mode="after")
+    def secure_cross_site_cookie(self):
+        if self.cookie_samesite == "none" and not self.cookie_secure:
+            raise ValueError("SameSite=None requires COOKIE_SECURE=true")
+        if os.getenv("AMVERA") == "1" and (self.cors_origins_list != [self.frontend_url.rstrip("/")] or not self.frontend_url.startswith("https://")):
+            raise ValueError("CORS_ORIGINS must be exactly the HTTPS FRONTEND_URL in production")
+        return self
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

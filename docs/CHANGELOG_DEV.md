@@ -231,3 +231,7 @@ FPS перестал быть objective-score и условием target attainm
 Docker entrypoint теперь вызывает scripts.startup. При REGARD_BOOTSTRAP_ON_START=true он проверяет локальный официальный XLSX, схему и права, делает online backup, запускает существующий synchronize и записывает подтверждённые входные hashes в SQLite-журнал. Повторный запуск сверяет журнал, import receipt и состояние каталога. Общий /api/health отделён от /api/catalog/readiness. При ошибке импорт не уничтожает прежний каталог; лог содержит безопасный код ошибки. Автозагрузка из сети не включена.
 Исправлена production Vite-конфигурация: вместо старого внешнего backend адреса браузер использует относительный /api текущего origin. Собранный bundle проверен на отсутствие старого адреса.
 Новый прайс с нулём пригодных публичных кандидатов отклоняется до apply_import, поэтому не скрывает прежний каталог. Добавлен тест отказа до транзакционного применения.
+
+## 2026-11-12 — два проекта Amvera
+
+Релиз разделён на frontend Node.JS Browser и backend Docker. Frontend build получает публичный backend URL через build.additionalCommands; runtime-переменные Amvera на этапе Vite build недоступны. Backend Docker запускает существующий Regard bootstrap до Uvicorn, хранит SQLite только в /data. Для cookie-сессий между origin применены Secure, SameSite=None, credentials:include, точный CORS и Origin guard. Раздельные ZIP не содержат .env, SQLite, XLSX и секреты. Подробности и проверка: AMVERA_PRODUCTION_RELEASE.md.

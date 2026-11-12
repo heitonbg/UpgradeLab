@@ -53,11 +53,22 @@ def password_hash(password, salt):
     return hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=16384, r=8, p=1).hex()
 
 
+def require_write_origin(request: Request):
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    origin = request.headers.get("origin")
+    if not origin and settings.cookie_samesite == "none":
+        raise HTTPException(403, "Укажите источник запроса")
+    allowed = set(settings.cors_origins_list)
+    allowed.add(str(request.base_url).rstrip("/"))
+    if settings.backend_url:
+        allowed.add(settings.backend_url.rstrip("/"))
+    if origin and origin not in allowed:
+        raise HTTPException(403, "Недопустимый источник запроса")
+
+
 def current_user(db: DBSession, request: Request, upgrade_session: str | None = Cookie(default=None)):
-    if request.method not in ("GET", "HEAD"):
-        origin = request.headers.get("origin")
-        if origin and origin not in settings.cors_origins_list and origin != str(request.base_url).rstrip("/"):
-            raise HTTPException(403, "Недопустимый источник запроса")
+    require_write_origin(request)
     token = hashlib.sha256((upgrade_session or "").encode()).hexdigest()
     session = db.get(LoginSession, token)
     if not session or session.expires_at <= datetime.utcnow():
@@ -81,7 +92,7 @@ def sign_in(db, user, response, remember=True):
     db.add(LoginSession(token_hash=hashlib.sha256(token.encode()).hexdigest(), user_id=user.id,
                         expires_at=datetime.utcnow() + timedelta(days=30 if remember else 1)))
     db.commit()
-    response.set_cookie("upgrade_session", token, httponly=True, samesite="lax",
+    response.set_cookie("upgrade_session", token, httponly=True, samesite=settings.cookie_samesite,
                         secure=settings.cookie_secure, max_age=2592000 if remember else None, path="/")
     response.headers["Cache-Control"] = "no-store"
     return public_user(user)
@@ -89,6 +100,7 @@ def sign_in(db, user, response, remember=True):
 
 @router.post("/auth/register", status_code=201)
 def register(payload: Registration, db: DBSession, response: Response, request: Request):
+    require_write_origin(request)
     auth_limits.enforce(db,[
         ('register-ip:'+auth_limits.client_ip(request),settings.auth_register_ip_limit,settings.auth_register_window_seconds),
         ('register-account:'+payload.email,settings.auth_register_account_limit,settings.auth_register_window_seconds)])
@@ -105,6 +117,7 @@ def register(payload: Registration, db: DBSession, response: Response, request: 
 
 @router.post("/auth/login")
 def login(payload: Credentials, db: DBSession, response: Response, request: Request):
+    require_write_origin(request)
     auth_limits.login_attempt(db,request,payload.email,payload.challenge_token,payload.challenge_nonce)
     user = db.scalar(select(User).where(User.email == payload.email))
     salt, expected = user.password_hash.split(":") if user else ("00" * 16, "00" * 64)
@@ -159,7 +172,7 @@ def logout(db: DBSession, user: AuthUser, response: Response, upgrade_session: s
     if session:
         db.delete(session)
         db.commit()
-    response.delete_cookie("upgrade_session", path="/")
+    response.delete_cookie("upgrade_session", path="/", secure=settings.cookie_secure, samesite=settings.cookie_samesite)
 
 
 @router.get("/builds")

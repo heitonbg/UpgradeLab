@@ -88,5 +88,5 @@ def reset_password(payload: ResetPassword, db: DBSession, request: Request, resp
     db.execute(delete(PasswordReset).where(PasswordReset.user_id == user_id))
     db.execute(delete(LoginSession).where(LoginSession.user_id == user_id))
     db.commit()
-    response.delete_cookie("upgrade_session", path="/")
+    response.delete_cookie("upgrade_session", path="/", secure=settings.cookie_secure, samesite=settings.cookie_samesite)
     return {"message": "Пароль изменён. Войдите с новым паролем."}

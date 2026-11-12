@@ -1,0 +1,12 @@
+meta:
+  environment: node
+  toolchain:
+    name: browser
+    version: 20
+
+build:
+  # Amvera project variables are unavailable during build; this public URL
+  # is passed to Vite only for the frontend bundle.
+  additionalCommands: VITE_API_BASE_URL=https://backendupgradelab-iwrawww.waw0.amvera.tech npm run build
+  artifacts:
+    "dist/*": /

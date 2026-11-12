@@ -1,100 +1,59 @@
-# UpgradeLab — ручная загрузка и одноразовый импорт на Amvera
+# UpgradeLab: два проекта Amvera — frontend и backend
 
-Статус: проверено локально на изолированной SQLite; настоящий контейнер Amvera и публичный HTTPS пока не проверены. Приложение разворачивается **одним Docker-проектом**, а не отдельными backend/frontend проектами. Корневой Dockerfile собирает React и запускает один Uvicorn worker через scripts.startup на порту 80. amvera.yml монтирует постоянный Data в /data. [Официальная документация Amvera](https://docs.amvera.ru/applications/configuration/docker.html).
+Дата подготовки: 2026-11-12. Публикация в Amvera не выполнена. Владелец подтвердил адреса:
 
-## 1. Что загрузить в Code
+- Frontend: https://frontendupgradelab-iwrawww.waw0.amvera.tech
+- Backend: https://backendupgradelab-iwrawww.waw0.amvera.tech
 
-Распакуйте актуальный UpgradeLab-Amvera ZIP и загрузите **содержимое его корня** в Code существующего проекта Amvera. В корне Code должны лежать:
+Существующий корневой Dockerfile/amvera.yml относится к прежнему объединённому варианту и **не загружается ни в один из этих двух проектов**. Используйте два отдельных ZIP из текущего релиза, каждый распакуйте непосредственно в корень Code своего существующего проекта. Не загружайте ZIP как один файл без подтверждённой функции распаковки.
 
-- Dockerfile
-- amvera.yml
-- .dockerignore
-- frontend/
-- backend/
+## Frontend: отдельный проект
 
-Это один проект. Не загружайте ZIP как отдельный файл без распаковки, если интерфейс не подтверждает распаковку. Не загружайте frontend/dist, frontend/node_modules, backend/.venv, backend/.env, SQLite, XLSX, .artifacts, фотографии пользователей или .git.
+Среда: Node.JS Browser. В корне Code frontend должны лежать `amvera.yml`, `package.json`, `package-lock.json`, `index.html`, `vite.config.js`, `postcss.config.js`, `tailwind.config.js`, папки `src/`, `public/` и `scripts/` (если есть). Dockerfile не нужен. `node_modules/` и `dist/` не загружать.
 
-### Backend: точный состав, который Dockerfile копирует в контейнер
+`frontend/amvera.yml` задаёт `build.additionalCommands: VITE_API_BASE_URL=https://backendupgradelab-iwrawww.waw0.amvera.tech npm run build` и `build.artifacts: "dist/*": /`. Это публичный URL, не секрет. Amvera не передаёт переменные из вкладки «Переменные» на этап сборки, поэтому установка только runtime-переменной `VITE_API_BASE_URL` не настроит уже собранный Vite bundle. При смене backend адреса измените `build.additionalCommands` и пересоберите frontend. `.env` и `.env.production` в пакет не включены. Frontend API client отправляет `credentials: 'include'`.
 
-- backend/requirements.txt
-- backend/requirements-browser.txt
-- backend/app/ — **все вложенные файлы и папки** приложения
-- backend/scripts/ — **все вложенные файлы и папки**, в том числе startup.py, regard_sync.py, init_db.py
-- backend/seed_data.json
-- backend/price_data.json
+## Backend: отдельный проект
 
-backend/tests/ и локальные базы для запуска контейнера не нужны; .dockerignore исключает tests и *.db. В ZIP тесты могут присутствовать как исходники, но Docker их не копирует.
+Среда: Docker. Dockerfile нужен для текущих Python-зависимостей и браузерного образа Playwright; frontend в этом образе не собирается. В корне Code backend должны лежать `amvera.yml`, `Dockerfile`, `.dockerignore`, `requirements.txt`, `requirements-browser.txt`, `seed_data.json`, `price_data.json`, папки `app/` и `scripts/`. `backend/amvera.yml` задаёт порт 80 и `persistenceMount: /data`. `backend/Dockerfile` запускает `python -m scripts.startup`, который вызывает опциональный импорт **до** одного Uvicorn worker.
 
-### Frontend: точный состав для сборки
+В переменных backend-проекта установите:
 
-- frontend/package.json
-- frontend/package-lock.json
-- frontend/index.html
-- frontend/vite.config.js
-- frontend/postcss.config.js
-- frontend/tailwind.config.js
-- frontend/scripts/ — все вложенные файлы, если каталог присутствует
-- frontend/src/ — **все вложенные файлы и папки**
-- frontend/public/ — **все вложенные файлы и папки**, если она присутствует
+```text
+DATABASE_URL=sqlite:////data/pc_upgrade.db
+FRONTEND_URL=https://frontendupgradelab-iwrawww.waw0.amvera.tech
+BACKEND_URL=https://backendupgradelab-iwrawww.waw0.amvera.tech
+CORS_ORIGINS=https://frontendupgradelab-iwrawww.waw0.amvera.tech
+COOKIE_SECURE=true
+COOKIE_SAMESITE=none
+REGARD_BOOTSTRAP_ON_START=false
+REGARD_DOWNLOAD_ENABLED=false
+OPENROUTER_SEARCH_ENABLED=false
+OPENROUTER_ALLOW_PAID_WEB=false
+```
 
-Dockerfile копирует frontend/ целиком и выполняет npm ci, затем npm run build. Готовый dist генерируется при сборке. Отдельный адрес или сервер для frontend не нужен.
+Dockerfile задаёт `AMVERA=1`; код при этом использует указанные HTTPS-адреса как безопасные значения по умолчанию, а неверный список CORS origins вызывает ошибку конфигурации. Указывайте **только один** frontend origin в CORS, без завершающего слэша и `*`. Cookie `upgrade_session` имеет `HttpOnly; Secure; SameSite=None; Path=/`; `credentials: include` уже настроен на frontend. Для авторизованных записей и входа/регистрации в production требуется корректный `Origin`, чужой или отсутствующий отклоняется. Некоторые политики браузера могут блокировать сторонние cookie даже при этих атрибутах; это нужно проверить на настоящих HTTPS-адресах после публикации.
 
-## 2. Первый запуск
+SQLite, аккаунты, объявления, сборки, каталог, журнал импорта и backup находятся **только в backend Data (/data)**. Нельзя заменять открытую SQLite копированием. Секреты SMTP, admin token и платных служб задаются только через защищённую конфигурацию среды при необходимости; в ZIP их нет.
 
-Используйте существующий Docker-проект и не создавайте новый платный экземпляр. Переменные среды:
+## Одноразовый импорт без терминала
 
-- AMVERA=1
-- DATABASE_URL=sqlite:////data/pc_upgrade.db
-- REGARD_BOOTSTRAP_ON_START=false
-- COOKIE_SECURE=true
-- FRONTEND_URL=https://<фактический-домен>
-- CORS_ORIGINS=https://<фактический-домен>
-- REGARD_DOWNLOAD_ENABLED=false
-- OPENROUTER_SEARCH_ENABLED=false
-- OPENROUTER_ALLOW_PAID_WEB=false
+1. Сначала разверните backend с `REGARD_BOOTSTRAP_ON_START=false`. После первого успешного развёртывания Amvera создаст Data.
+2. Загрузите в **Data backend-проекта** три файла:
+   - `/data/price.xlsx` — официальный свежий XLSX Регарда;
+   - `/data/regard-schema.json` — схема штатного importer;
+   - `/data/regard-rights.json` — подтверждённые права на публичный некоммерческий показ.
+3. В backend включите `REGARD_BOOTSTRAP_ON_START=true` и перезапустите **backend**. Frontend перезапускать не требуется.
+4. Ищите в логах `regard_bootstrap status=succeeded`, положительный `published`, SHA-256, исходную дату и имя backup. `status=unchanged` означает пропуск уже обработанного файла; `status=failed code=...` — импорт не выполнен.
+5. Проверьте `https://backendupgradelab-iwrawww.waw0.amvera.tech/api/health` и отдельно `/api/catalog/readiness`: `ready: true`, положительные `products` и `usable_offers`. Затем `/api/catalog/products?page_size=1`, обычный frontend-каталог и сборку на 80 000/120 000 ₽. Проверяйте с обычным пользователем без admin token.
+6. После завершения настройки рекомендуем вернуть `REGARD_BOOTSTRAP_ON_START=false`. Для обновления замените официальный `price.xlsx` в backend Data, включите флаг и перезапустите backend.
 
-Не задавайте VITE_API_BASE_URL на старый внешний backend: запросы уже идут на относительный /api того же origin. Секреты SMTP/других служб добавляются только через защищённую конфигурацию среды, если они требуются. Не копируйте backend/.env. После первого успешного развёртывания в интерфейсе появится постоянная папка Data; официальная документация Amvera указывает, что Data доступна после первого запуска.
+Существующий `regard_sync` выполняет разбор и транзакционный импорт. Startup проверяет файл, схему и права, создаёт проверенный SQLite online backup перед изменением, затем вызывает штатный importer. SHA-256, импортный журнал и состояние каталога в SQLite определяют идемпотентность; внешний marker не используется. Источником даты цены остаётся XLSX. Прайс с нулём пригодных публичных кандидатов отклоняется до изменения старого каталога. Сохраняется политика preliminary до 72 часов; после её истечения каталог может стать историческим и `ready` перейдёт в false без потери истории. Автоматическое скачивание выключено.
 
-## 3. Три файла в Data
+Для локальной проверки использовались **не включённые в ZIP** файлы `.artifacts/product-readiness-20261111/latest-download/price.xlsx`, `.artifacts/regard-real-iteration12-final/schema.json`, `.artifacts/product-readiness-20261111/regard-public-demo-rights.json`. Дата проверенного XLSX — `2026-11-11T14:30:00Z`; перед демонстрацией проверьте, что он ещё в окне свежести и что право использования распространяется на загружаемый файл.
 
-В постоянную папку Data загрузите:
+## Проверки и ограничения
 
-- /data/price.xlsx — официальный XLSX Регарда, не тестовую фикстуру.
-- /data/regard-schema.json — операторскую схему существующего native Regard importer.
-- /data/regard-rights.json — операторское подтверждение public-noncommercial права именно для этого источника; commercial и automatic_download не включать без отдельного разрешения.
+Изолированный локальный bootstrap: 3 006 StoreOffer, 5 968 публичных карточек, повторный запуск `unchanged`, подбор на 120 000 ₽ вернул восемь деталей на 115 740 ₽ со статусом draft. Раздельные HTTPS origin, CORS, Secure/SameSite cookie и сессия проверены детерминированным TestClient без настоящей сети. Frontend bundle локально содержит точный backend URL, старый единый-origin вариант больше не используется для этих двух пакетов. Docker CLI отсутствует; сборка Docker и работа реальных Amvera адресов из текущей среды не подтверждены. После ручной загрузки нужны реальные browser E2E, проверка Data после рестарта и логи обоих проектов.
 
-Эти файлы не входят в ZIP исходников и не должны попадать в Code/Git. Исходная дата берётся из XLSX, время загрузки файла её не заменяет. Публичная витрина и предварительный подбор подчиняются прежнему окну свежести до 72 часов.
-
-## 4. Включить импорт без терминала
-
-В настройках среды измените REGARD_BOOTSTRAP_ON_START=true и перезапустите приложение в Amvera. Контейнер до запуска Uvicorn проверит файлы, права, структуру XLSX и исходную дату; сделает проверенный online backup существующей SQLite в /data/backups; вызовет существующий scripts.regard_sync с audience public-noncommercial. При ошибке старый каталог остаётся доступным, HTTP запускается, а /api/catalog/readiness сообщает об отсутствии готового каталога. Ни один публичный HTTP endpoint импорт не запускает.
-
-В логах ищите `regard_bootstrap status=succeeded sha256=... published=... backup=... source_date=...`. `status=unchanged` означает, что тот же вход и состояние SQLite уже подтверждены журналом импорта; повторного изменения каталога нет. `status=failed code=...` означает, что импорт не состоялся; код ошибки не содержит секретов.
-
-## 5. Проверить результат
-
-Откройте `https://<домен>/api/health` — это только доступность HTTP. Отдельно откройте `https://<домен>/api/catalog/readiness`: ожидаются `ready: true`, положительные `products` и `usable_offers`. Откройте `/api/catalog/products?page_size=1` и обычную страницу каталога без admin token. Проверьте подбор ПК на 80 000 и 120 000 ₽ с разрешённым источником Regard и биржей UpgradeLab. После перезапуска проверьте, что счётчики и пользовательские данные сохранились.
-
-Когда первоначальная настройка завершена, рекомендуется вернуть REGARD_BOOTSTRAP_ON_START=false. Для обновления перед демонстрацией загрузите новый официальный price.xlsx в Data, снова выставьте true и перезапустите приложение. Если SHA-256 совпадает с уже импортированным файлом и состояние SQLite не изменилось, импорт будет пропущен. Новая дата прайса остаётся исходной датой из файла.
-
-## 6. Backup и rollback
-
-Перед изменением существующей БД bootstrap создаёт SQLite online backup и проверяет PRAGMA integrity_check. Запуск рассчитан на один production контейнер; блокировка на /data предотвращает одновременные bootstrap попытки, существующая блокировка защищает сам importer. При откате приложения сохраняйте /data. Для восстановления БД сначала остановите писателей SQLite и используйте проверенную резервную копию; не копируйте .db поверх работающего процесса. Не удаляйте старую историю цен вручную.
-
-## 7. Что ещё не подтверждено
-
-Docker CLI локально отсутствует, поэтому сборка и рестарт именно в Amvera, публичный HTTPS, ресурсы тарифа и сохранение /data после облачного рестарта должны быть проверены по фактическому URL и логам. Локальная проверка нового bootstrap: официальный XLSX из изолированной тестовой папки, 3 006 опубликованных предложений, 5 968 карточек, повторный запуск пропущен, /api/catalog/readiness вернул ready=true. Это не свидетельство об успешном облачном импорте.
-
-### Проверенные локальные файлы для Data
-
-В этой рабочей копии локальный тест использовал следующие **не включённые в ZIP** файлы:
-
-- `.artifacts/product-readiness-20261111/latest-download/price.xlsx` → переименовать при загрузке в `/data/price.xlsx`.
-- `.artifacts/regard-real-iteration12-final/schema.json` → `/data/regard-schema.json`.
-- `.artifacts/product-readiness-20261111/regard-public-demo-rights.json` → `/data/regard-rights.json`.
-
-Исходная дата проверенного XLSX: `2026-11-11T14:30:00Z`. К моменту вашей загрузки она может выйти за окно 72 часов; тогда получите новый официальный XLSX и проверьте разрешение на его использование. Локальный файл прав не подменяет вашу проверку разрешения на публичный показ.
-
-Production Vite теперь использует относительный /api на том же HTTPS origin. Ранее отслеживаемый frontend/.env.production содержал адрес старого отдельного backend; он удалён из сборочной конфигурации. Проверка production bundle: старый адрес отсутствует.
-
-Перед применением нового файла bootstrap требует хотя бы одного пригодного публичного кандидата в подготовленном плане. Прайс с нулём таких кандидатов отклоняется до изменения прежнего каталога; `/api/catalog/readiness` проверяет наличие реальных StoreOffer и действующую свежесть. Эти проверки не продлевают TTL старого прайса.
+Официальная документация: [Node.JS Browser](https://docs.amvera.ru/applications/environments/nodejs-browser.html), [Docker](https://docs.amvera.ru/applications/configuration/docker.html), [переменные и секреты](https://docs.amvera.ru/applications/configuration/variables.html), [Code и Data](https://docs.amvera.ru/applications/storage.html).
