@@ -9,13 +9,13 @@
 
 ## Frontend: отдельный проект
 
-Среда: Node.JS Browser. В корне Code frontend должны лежать `amvera.yml`, `package.json`, `package-lock.json`, `index.html`, `vite.config.js`, `postcss.config.js`, `tailwind.config.js`, папки `src/`, `public/` и `scripts/` (если есть). Dockerfile не нужен. `node_modules/` и `dist/` не загружать.
+Среда: Node.JS Browser. В корне Code frontend должны лежать `amvera.yml`, `package.json`, `package-lock.json`, `index.html`, `vite.config.js`, `postcss.config.js`, `tailwind.config.js`, папки `src/`, `public/images/` и `scripts/` (если есть); служебный `public/scripts/run.bat` не нужен. Dockerfile не нужен. `node_modules/` и `dist/` не загружать.
 
 `frontend/amvera.yml` задаёт `build.additionalCommands: VITE_API_BASE_URL=https://backendupgradelab-iwrawww.waw0.amvera.tech npm run build` и `build.artifacts: "dist/*": /`. Это публичный URL, не секрет. Amvera не передаёт переменные из вкладки «Переменные» на этап сборки, поэтому установка только runtime-переменной `VITE_API_BASE_URL` не настроит уже собранный Vite bundle. При смене backend адреса измените `build.additionalCommands` и пересоберите frontend. `.env` и `.env.production` в пакет не включены. Frontend API client отправляет `credentials: 'include'`.
 
 ## Backend: отдельный проект
 
-Среда: Docker. Dockerfile нужен для текущих Python-зависимостей и браузерного образа Playwright; frontend в этом образе не собирается. В корне Code backend должны лежать `amvera.yml`, `Dockerfile`, `.dockerignore`, `requirements.txt`, `requirements-browser.txt`, `seed_data.json`, `price_data.json`, папки `app/` и `scripts/`. `backend/amvera.yml` задаёт порт 80 и `persistenceMount: /data`. `backend/Dockerfile` запускает `python -m scripts.startup`, который вызывает опциональный импорт **до** одного Uvicorn worker.
+Среда: Docker. Dockerfile нужен для текущих Python-зависимостей и браузерного образа Playwright; frontend в этом образе не собирается. В корне Code backend должны лежать `amvera.yml`, `Dockerfile`, `.dockerignore`, `requirements.txt`, `requirements-browser.txt`, `seed_data.json`, `price_data.json`, папку `app/` и Python-модули из `scripts/` без локальных диагностических `scripts/price_data/`. `backend/amvera.yml` задаёт порт 80 и `persistenceMount: /data`. `backend/Dockerfile` запускает `python -m scripts.startup`, который вызывает опциональный импорт **до** одного Uvicorn worker.
 
 В переменных backend-проекта установите:
 
