@@ -31,6 +31,9 @@ backend/tests/ и локальные базы для запуска контей
 - frontend/package-lock.json
 - frontend/index.html
 - frontend/vite.config.js
+- frontend/postcss.config.js
+- frontend/tailwind.config.js
+- frontend/scripts/ — все вложенные файлы, если каталог присутствует
 - frontend/src/ — **все вложенные файлы и папки**
 - frontend/public/ — **все вложенные файлы и папки**, если она присутствует
 
