@@ -6,7 +6,7 @@ from types import SimpleNamespace as Obj
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.services.builds import build_options
-from app.services.automatic_builds import storage_shortlist, cpu_gaming_percentile
+from app.services.automatic_builds import storage_shortlist, cpu_gaming_percentile, ordered_hardware_pairs
 
 
 class OptimizerV2OracleTests(unittest.TestCase):
@@ -75,6 +75,16 @@ class OptimizerV2OracleTests(unittest.TestCase):
         result=build_options([gpu_heavy,balanced],60,objective='balanced',
             hardware_score=lambda item:item[4],hardware_rank=lambda item:(item[5],item[4],-item[2]))
         self.assertEqual(result[0][3],balanced)
+
+    def test_gpu_bound_search_visits_strong_gpu_with_affordable_cpu_first(self):
+        cpus=[Obj(id=1,raw_score=45000),Obj(id=2,raw_score=12000)]
+        gpus=[Obj(id=3,raw_score=10000),Obj(id=4,raw_score=40000)]
+        prices={1:Obj(price_rub=70000),2:Obj(price_rub=18000),
+                3:Obj(price_rub=15000),4:Obj(price_rub=65000)}
+        pairs=ordered_hardware_pairs(cpus,gpus,prices,prioritize_gpu=True)
+        self.assertEqual((pairs[0][0].id,pairs[0][1].id),(2,4))
+        self.assertEqual((pairs[1][0].id,pairs[1][1].id),(1,4))
+        self.assertEqual((pairs[2][0].id,pairs[2][1].id),(2,3))
 
 
 if __name__ == '__main__':

@@ -70,13 +70,18 @@ def public_price(quote):
         return {"avg_price": None, "price_source": None, "price_date": None, "price_market": None, "price_url": None}
     from app.services.catalog_freshness import catalog_price_state
     catalog = catalog_price_state(quote.observed_at) if getattr(quote,'origin',None)=='catalog_import' else {}
+    passmark_reference = quote.source == 'passmark' or getattr(quote,'origin',None) == 'passmark_reference'
     return {**catalog, "avg_price": quote.price_rub, "goods_price_rub":getattr(quote,'goods_price_rub',quote.price_rub),
-            "geography":getattr(quote,'geography',{}),"price_trust":"seller_declared" if quote.source=='upgradelab' else getattr(quote,'origin','unknown'), "price_source": SOURCE_LABELS.get(quote.source, quote.source),
+            "geography":getattr(quote,'geography',{}),"price_trust":"historical_reference" if passmark_reference else "seller_declared" if quote.source=='upgradelab' else getattr(quote,'origin','unknown'), "price_source": SOURCE_LABELS.get(quote.source, quote.source),
             "sample_count": getattr(quote, 'sample_count', 1), "average_method": getattr(quote, 'average_method', None),
             "price_window_days": getattr(quote, 'observation_days', None),
+            "min_price_rub": getattr(quote, 'min_price_rub', None),
+            "max_price_rub": getattr(quote, 'max_price_rub', None),
             "offer_id": getattr(quote, "offer_id", None), "price_offer_name": getattr(quote, "offer_name", None), "price_origin": getattr(quote, "origin", "snapshot"),
             "price_verified_at": (current_verification({'status': 'verified', 'checked_at': getattr(quote, 'verified_at', None)})
-                                  if is_fresh(quote.observed_at, OFFER_TTL, inclusive=True, future_tolerance=OBSERVATION_SKEW) else None),
+                                  if not passmark_reference and is_fresh(quote.observed_at, OFFER_TTL, inclusive=True, future_tolerance=OBSERVATION_SKEW) else None),
+            "is_purchase_quote": not passmark_reference,
+            "reference_warning": "Цена PassMark из зарубежной розницы, пересчитанная в рубли на дату наблюдения; не является текущим предложением магазина и не подтверждает бюджет." if passmark_reference else None,
             "price_date": as_utc(quote.observed_at), "price_market": quote.market, "price_url": quote.source_url}
 
 

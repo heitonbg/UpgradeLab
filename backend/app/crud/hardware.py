@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, not_
 from sqlalchemy.orm import Session
 from app.db.models import Hardware
 
@@ -6,10 +6,14 @@ from app.db.models import Hardware
 def list_all(db: Session) -> list[Hardware]:
     stmt = (
         select(Hardware)
-        .order_by(Hardware.type.asc(), Hardware.normalized_score.desc())
+        .where(not_((Hardware.type == 'CPU') & Hardware.name.ilike('Apple M%')))
+        .order_by(Hardware.type.asc(), Hardware.raw_score.desc(), Hardware.name.asc())
     )
     return list(db.scalars(stmt))
 
 
 def get_by_id(db: Session, hw_id: int) -> Hardware | None:
-    return db.get(Hardware, hw_id)
+    row = db.get(Hardware, hw_id)
+    if row and row.type == 'CPU' and row.name.casefold().startswith('apple m'):
+        return None
+    return row

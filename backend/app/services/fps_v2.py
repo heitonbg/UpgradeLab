@@ -3,19 +3,27 @@
 Unknown features and unsupported settings produce no invented v2 FPS.
 """
 from app.schemas.calculate import GameName,CalcMode
-from app.services.performance import estimate_fps,fps_outlook,cpu_capacity,gpu_capacity,ram_performance_factor,cs2_cpu_basis
+from app.services.performance import estimate_fps,fps_outlook,cpu_capacity,gpu_capacity,cs2_cpu_basis
 from app.core.constants import GAME_PROFILES
+from app.services.benchmark_model_v2 import predict_pair
 
 def predict(cpu,gpu,game,resolution='1080p',preset='high',ram_type=None,ram_channels=None,ram_capacity_gb=None,rt=False,upscaling='off',frame_generation=False):
     unavailable={'status':'insufficient_data','average_fps':None,'one_percent_low':None,'interval':None,
-        'method':'unavailable','confidence':'insufficient','note':'Недостаточно подтверждённых данных для этой игры, оборудования или настроек.'}
+        'method':'unavailable','confidence':'insufficient','note':'Недостаточно подтверждённых данных для этой игры, оборудования или настроек.',
+        'model_version':'fps-engine-v2-candidate-0.1','production_baseline':'legacy'}
+    empirical = predict_pair(cpu.name, gpu.name, str(game), resolution,
+        preset=preset, ram_type=ram_type, ram_channels=ram_channels,
+        ram_capacity_gb=ram_capacity_gb, rt=rt, upscaling=upscaling,
+        frame_generation=frame_generation)
+    unavailable['candidate_v2'] = empirical
     try:game=GameName(game);mode=CalcMode(resolution+'_'+preset.lower())
     except ValueError:return unavailable
     if rt or upscaling!='off' or frame_generation or cpu.raw_score<=0 or gpu.raw_score<=0:return unavailable
-    factor=ram_performance_factor(game,cpu.name,ram_type,ram_channels)
-    value=estimate_fps(cpu.raw_score,gpu.raw_score,gpu.name,game,mode,factor,cpu.name)
+    # RAM remains test context only; it is not an FPS-model coefficient.
+    value=estimate_fps(cpu.raw_score,gpu.raw_score,gpu.name,game,mode,1.0,cpu.name)
     scale=GAME_PROFILES[game][mode]['overhead']
-    cc=cpu_capacity(cpu.raw_score,cpu.name,game,mode,factor)*scale
+    # RAM is context only: keep the legacy calculation independent of memory.
+    cc=cpu_capacity(cpu.raw_score,cpu.name,game,mode,1.0)*scale
     gc=gpu_capacity(gpu.raw_score,gpu.name,game,mode)*scale
     outlook=fps_outlook(value,gpu.name,game,mode)
     warnings=['Модель v2 не прошла независимую валидацию; сохранён прежний расчёт.']
@@ -25,6 +33,9 @@ def predict(cpu,gpu,game,resolution='1080p',preset='high',ram_type=None,ram_chan
     if ram_capacity_gb is None:warnings.append('Объём RAM неизвестен.')
     else:warnings.append('Влияние объёма RAM не откалибровано; оценка не гарантирует отсутствие подгрузок и просадок.')
     return {'status':'legacy_estimate','average_fps':value,'one_percent_low':None,
+        'model_version':'fps-engine-v2-candidate-0.1',
+        'production_baseline':'legacy',
+        'candidate_v2':empirical,
         'interval':{'minimum':outlook['minimum'],'maximum':outlook['maximum'],'calibrated':False},
         'method':outlook['method'],'confidence':'heuristic','cpu_ceiling':cc,'gpu_ceiling':gc,
         'limiting_component':'CPU' if cc<gc else 'GPU','cpu_basis':'game_reference_or_legacy_curve',

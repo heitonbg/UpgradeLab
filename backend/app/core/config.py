@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     openrouter_primary_model: str = ''
     openrouter_fallback_model: str = ''
     openrouter_search_enabled: bool = False
+    steam_requirements_enabled: bool = True
+    steam_worker_enabled: bool = Field(default_factory=lambda: os.getenv("AMVERA") == "1")
+    steam_request_interval_seconds: float = Field(default=4, ge=3, le=60)
+    steam_request_timeout_seconds: float = Field(default=10, ge=3, le=15)
+    steam_worker_idle_seconds: float = Field(default=10, ge=2, le=60)
+    steam_cache_days: int = Field(default=30, ge=1, le=180)
+    steam_negative_cache_days: int = Field(default=7, ge=1, le=30)
+    steam_max_attempts: int = Field(default=3, ge=1, le=5)
+    steam_max_pending: int = Field(default=500, ge=1, le=5000)
+
     openrouter_allow_paid_web: bool = False
     openrouter_daily_requests: int = Field(default=20,ge=0,le=1000)
     openrouter_daily_tokens: int = Field(default=100000,ge=0,le=10000000)
@@ -34,7 +44,11 @@ class Settings(BaseSettings):
     openrouter_max_output_tokens: int = Field(default=1200,ge=100,le=4000)
     openrouter_timeout_seconds: int = Field(default=20,ge=3,le=30)
     catalog_preliminary_hours: int = Field(default=72, ge=24, le=168)
+    benchmark_reviewer_emails: str = ''
+    benchmark_import_on_start: bool = False
     regard_download_enabled: bool = False
+    regard_daily_sync_enabled: bool = Field(default_factory=lambda: os.getenv("AMVERA") == "1")
+    regard_daily_sync_interval_seconds: int = Field(default=86400, ge=3600, le=604800)
     regard_catalog_admin_token: SecretStr = Field(default=SecretStr(''),exclude=True,repr=False)
     regard_price_url: str = ''
     regard_source_utc_offset_minutes: int = Field(default=180,ge=-720,le=840)

@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace as Row
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.services.partial_budget import partial_budget_plan, CATEGORIES
+from app.services.partial_budget import partial_budget_plan, planning_reserves, CATEGORIES
 
 
 class PartialBudgetTests(unittest.TestCase):
@@ -22,10 +22,10 @@ class PartialBudgetTests(unittest.TestCase):
 
     def test_cheaper_gpu_is_selected_and_missing_parts_keep_a_reserve(self):
         pool = self.pool(CPU=[10000], GPU=[41000, 18000], storage=[5000], case=[3000])
-        rows, plan = partial_budget_plan(pool, 50000)
+        rows, plan = partial_budget_plan(pool, 62000)
         self.assertEqual(next(row for row in rows if row.category == 'GPU').price_rub, 18000)
         self.assertGreater(plan['reserved_for_missing'], 0)
-        self.assertLessEqual(sum(row.price_rub for row in rows) + plan['reserved_for_missing'], 50000)
+        self.assertLessEqual(sum(row.price_rub for row in rows) + plan['reserved_for_missing'], 62000)
 
     def test_preferred_source_cannot_break_the_whole_pc_budget(self):
         pool = self.pool(CPU=[10000], GPU=[18000])
@@ -45,6 +45,13 @@ class PartialBudgetTests(unittest.TestCase):
         pool=self.pool(CPU=[7000],motherboard=list(range(1000,2400,100)))
         rows,_=partial_budget_plan(pool,50000,compatible=lambda rows,row:row.category!='motherboard' or row.price_rub==2300)
         self.assertTrue(any(row.category=='motherboard' for row in rows))
+
+    def test_memory_reserve_uses_realistic_ddr4_and_ddr5_kit_floors(self):
+        pool=self.pool(memory=[6000])
+        self.assertEqual(planning_reserves(pool,120000,['DDR4'],16)['memory'],13000)
+        self.assertEqual(planning_reserves(pool,120000,['DDR5'],16)['memory'],28000)
+        self.assertEqual(planning_reserves(pool,120000,['DDR5'],32)['memory'],47000)
+        self.assertEqual(planning_reserves(pool,120000,['DDR4'],16)['psu'],9600)
 
 
 if __name__ == '__main__':

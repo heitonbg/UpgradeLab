@@ -1,0 +1,40 @@
+{
+  "dataset": "PC Game System Requirements & Estimated FPS by GPU",
+  "repository": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+  "publisher": "PCGameBenchmarks",
+  "attribution": "PCGameBenchmarks — https://pcgamebenchmarks.com",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "git_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+  "snapshot_date": "2026-11-01",
+  "retrieved_at": "2026-11-15",
+  "files_sha256": {
+    "games.csv": "6ab3227c0535d281c665da82d62ae2f42765dd5918b7ba1117d47259a79098d4",
+    "gpus.csv": "41c2a1a4fe21e2426fca94581328f2979b6cb762873b570d98c20e635ee32918",
+    "LICENSE": "d07988f4be47912f75a73b44da8a9c0b602bf6c8ced69de858b848f379ecd973",
+    "README.md": "8d6abc21cb97dc3e895b8de722e7a39375c072d601365cb162ff038946eb830a",
+    "CITATION.cff": "41022a686f2af60ac1d695ec38cfe7067b7b685d497a5d0565ed894445a4f3c2"
+  },
+  "source_game_rows": 16623,
+  "source_gpu_rows": 1381,
+  "fps_reference_gpu_count": 12,
+  "fps_settings": {
+    "resolution": "1080p",
+    "preset": "High",
+    "ray_tracing": false,
+    "upscaling": "off",
+    "frame_generation": false
+  },
+  "data_type": "external_model_estimate",
+  "source_method_summary": "PCGameBenchmarks estimates GPU FPS from Steam requirements and reference GPU G3D scores; its README reports calibration against measured GameGPU/Notebookcheck results. These CSV values are not measurements.",
+  "verified_steam_appid_crosswalk": {
+    "Baldur's Gate 3": {
+      "steam_app_id": "1086940",
+      "evidence_url": "https://store.steampowered.com/app/1086940/Baldurs_Gate_3/"
+    },
+    "Overwatch 2": {
+      "steam_app_id": "2357570",
+      "evidence_url": "https://store.steampowered.com/app/2357570/Overwatch_2/"
+    }
+  }
+}

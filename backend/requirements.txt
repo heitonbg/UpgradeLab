@@ -8,3 +8,7 @@ python-dotenv==1.0.1
 # Marketplace pages/feeds and scripts/parser.py
 requests==2.32.3
 beautifulsoup4==4.12.3
+
+# Steam enrichment: async pooled HTTP, with a pinned network backend.
+httpx==0.28.1
+httpcore==1.0.9

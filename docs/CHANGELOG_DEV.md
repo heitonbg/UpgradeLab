@@ -1,5 +1,34 @@
 # История разработки
 
+## 2026-11-13 — правки по визуальному аудиту
+
+- Фильтр измеренных FPS и обеих FPSHQ-сводок принимает стандартные размеры (например, 1920×1080) и сопоставляет их с метками датасета (1080p). Добавлен регрессионный сценарий эквивалентности.
+- Сокращён лишний разрыв в шаге проверки сборки; скрыты повторные legacy-вкладки конфигуратора; выровнены сортировка биржи и кнопки редактора объявления; убран общий фон переключателя источников.
+- Таблица FPS подстраивается под широкую страницу без пустой полосы переполнения; уменьшен отступ перед фильтрами каталога Регарда.
+- В незаполненной категории сумма обозначена как резерв на поиск, а не цена товара. Резерв по-прежнему не выдаётся за предложение или наблюдаемую рыночную цену.
+- В шагах проверки сборки и апгрейда убраны повторяющиеся подсказки под сводкой; действие запуска расчёта осталось доступным.
+- Убрана дублирующая визуализация одинакового сравнения текущего и целевого FPS; пояснение ограничителя сохранено в результате.
+- Кнопки выбора вариантов апгрейда получили единый стиль. Поиск предложения из конфигуратора наследует выбранные источники и город/георежим.
+- Упрощён выбор географии: город плюс переключатель доставки; удалён лимит цены отдельной детали. Поиск модели на бирже растягивается на ширину фильтра.
+- Расширенные настройки сборки раскрываются при первом переходе к шагу и управляются пользователем; неоднозначный сброс ограничений убран. Резерв категории больше не отображается как цена незаполненного товара.
+- Продажу текущего компонента предлагают учитывать только после определения bottleneck. Показывается медиана и диапазон по минимум трём свежим объявлениям точной модели на Бирже UpgradeLab; иначе доступен ручной ввод. Универсальный дисконт к новой цене не применяется.
+- Удалена подпись поверх изображения главной страницы и лишняя кнопка поиска из конфигуратора.
+
+## 2026-11-13 — поиск, раскрытие настроек и ценовые ориентиры
+
+- Поиск объявлений использует обычное текстовое поле на всю ширину; щелчок по свободной части обёртки переводит фокус в поле. Убран браузерный `type=search`, который показывал вложенную узкую область ввода.
+- Расширенные настройки сборщика открыты при первом появлении шага и могут быть свёрнуты пользователем.
+- Обновлены модельные ориентиры новых цен и объявлений Avito для популярных CPU/GPU по текущим страницам ThingPrice с данными магазинов, включая DNS. Ориентиры подписаны как цены объявлений и не попадают в сумму сборки.
+- При одинаковом FPS CPU вариантов интерфейс объясняет, когда результат ограничивает GPU или нет достаточно данных для ранжирования; RAM не включается в игровой FPS расчёт апгрейда.
+- Повторный запуск завершённого поиска отключён, пока конфигурация не изменится; частичный результат с отсутствующими ценами остаётся незавершённой покупкой и позволяет повторить поиск или изменить параметры.
+
+## 2026-11-12 — FPS покрытие, community submissions и подбор 1440p
+
+- Добавлен атрибутированный FPSHQ game medians snapshot: 195 справочных сводок по 29 играм, отдельно от точных измеренных когорт. Добавлен валидируемый ручной updater для опубликованных CC BY 4.0 JSON снапшотов.
+- Добавлена форма загрузки пользовательского прогона с лимитом 5/сутки, согласием на публикацию, очередью `pending`, проверяющими через `BENCHMARK_REVIEWER_EMAILS` и отдельной выдачей одобренных community runs. Непроверенные записи не влияют на публичные сводки.
+- Исправлено ранжирование `performance`: GPU proxy идёт первым в GPU-зависимых игровых режимах; CS2/1080p Low остаётся CPU-first. FPS для полной конфигурации по-прежнему маркируется как оценка, пока нет точного измерения.
+- Изменены FPS API, модели SQLite, frontend explorer/форма отправки и документы FPS/архитектуры/TODO. Данные SQLite и аккаунты не трогались.
+
 ## 2026-11-09 — аудит
 
 - Изучены backend, frontend, адаптеры цен, модель FPS, очередь, аккаунты/биржа и конфигурация Amvera.
@@ -235,3 +264,215 @@ Docker entrypoint теперь вызывает scripts.startup. При REGARD_B
 ## 2026-11-12 — два проекта Amvera
 
 Релиз разделён на frontend Node.JS Browser и backend Docker. Frontend build получает публичный backend URL через build.additionalCommands; runtime-переменные Amvera на этапе Vite build недоступны. Backend Docker запускает существующий Regard bootstrap до Uvicorn, хранит SQLite только в /data. Для cookie-сессий между origin применены Secure, SameSite=None, credentials:include, точный CORS и Origin guard. Раздельные ZIP не содержат .env, SQLite, XLSX и секреты. Подробности и проверка: AMVERA_PRODUCTION_RELEASE.md.
+## Ускорение подбора и оценка продажи — 2026-11-12
+
+- Черновой подбор повторно сканировал каталог внутри `solve_profiles`. На одном и том же снимке доступных предложений используется `inventory_scope`; локальный профиль сборки за 80 000 ₽ сократился с 6,85 до 3,68 с, результат остался черновым и содержал те же восемь деталей.
+- Аппаратный справочник `/api/hardware` (около 895 КБ на тестовом каталоге) загружается только при открытии конфигуратора или профиля, а не при каждом посещении главной страницы. Каталог товаров по 24 карточки отвечал примерно за 0,05 с на локальной копии; задержка на Amvera пока не измерена.
+- Публичная `GET /api/catalog/readiness` теперь показывает `latest_source_price_at`, чтобы дату исходного прайса нельзя было спутать с датой импорта. На работающем Amvera 12 ноября прочитаны `ready=true`, 5968 товаров и 3006 предложений, но карточки содержали `source_price_at=2026-11-11T14:30:00Z` при `imported_at=2026-11-12T12:35:33Z`: импорт 12 ноября не означает прайс за 12 ноября. Локальный Data ZIP содержит проверенный XLSX с датой источника `2026-11-12T10:30:00Z`; на сервер его необходимо загрузить отдельно.
+- Оценка продажи в расчёте апгрейда больше не использует Avito. При отсутствии вручную заданной цены берётся медиана не менее трёх активных б/у объявлений той же аппаратной модели от разных владельцев за последние 30 дней на бирже UpgradeLab. Значения дальше половины или удвоенного первоначального медианного уровня исключаются; если после фильтрации остаётся менее трёх объявлений, выручка остаётся неизвестной. Это цена предложения продавца, а не подтверждённая сумма сделки.
+- Проверен официальный JSON Open GPU Benchmarks: 93 записи, все их ID уже присутствуют в исходных снимках. Community JSON содержит только синтетический OpenBenchmarker. Из лицензированной выгрузки FPSHQ импортированы только 6 строк с явной меткой `measured` из 2400; CPU и исходные прогоны у них не опубликованы, поэтому они не участвуют в калибровке. Итого 87 наблюдений и 78 групп, без повышения новой модели в production.
+# UI, hardware ranking and delivery follow-up — 2026-11-13
+
+- Browser history now tracks app sections/scenarios; the configurator has a working exit action and Escape moves back one wizard step when focus is outside an editable field/dialog.
+- Local hardware selectors order CPU/GPU suggestions by stored raw benchmark score; Apple M CPUs are hidden from lists and calculated rankings.
+- Benchmark explorer separates measured/community game FPS from CPU Mark and G3D Mark reference tabs. The latter link to official PassMark pages instead of copying their tables, because PassMark excludes public comparison/ranking/recommendation sites from its data licensing; see [data subscription terms](https://www.passmark.com/services/market-analysis.php).
+- The city directory now contains 95 records, including Novokuznetsk, and unfiltered API reads return the full directory. It is still not a complete official city register.
+- Regard delivery can be discovered for a selected city in delivery mode, but delivery price remains unknown and the offer cannot be treated as purchase-ready from that evidence alone.
+- CSS text declarations below 12px were raised to 12px. Keyboard focus remains visibly indicated; decorative form outlines were reduced. Added the site SVG favicon.
+- RAM prices were not manually overridden: a current Regard listing is a time-sensitive source and its visible 16GB DDR4 offers were 15,990–23,990 RUB. Keep actual observed offers, source/date, and delivery separate rather than replacing them with a fixed 2,500 RUB estimate.
+
+## 2026-11-13 — единый конфигуратор, таблица измерений и мобильная навигация
+
+- Навигация объединяет подбор ПК и апгрейд в раздел «Конфигуратор»; режим самостоятельной сборки также находится внутри переключателя. Режим восстанавливается из URL.
+- Экран игровых измерений стал таблицей с точной фильтрацией по разрешению, сортировкой до пагинации и сравнением до трёх строк. Основные когорты, одобренные пользовательские результаты, FPSHQ-сводки и PassMark-разделы остаются разными типами данных.
+- Поиск предложений уже выполняется одной формой с источником Regard, биржей UpgradeLab или обоими сразу. Название раздела навигации приведено к «Комплектующие».
+- Селекторы оборудования кешируются в памяти браузера на пять минут; крупный список объявлений запрашивается только при открытии биржи. На телефонах навигация прокручивается в одну строку, фильтры и карточки перестраиваются в одну колонку, кнопкам заданы удобные минимальные размеры.
+- Карточки автоматических и сохранённых сборок компактно показывают CPU, GPU, RAM, SSD, цену и FPS; причины и подтверждения остаются раскрываемыми/видимыми в деталях.
+# 2026-11-13 — Corrected configurator feedback
+
+- Made the advanced build controls initially expanded, while keeping them collapsible.
+- Fixed the marketplace search control so the complete input surface receives clicks and typing; removed the nested search-field appearance.
+- Prevented an identical assembly search from running again until the user changes the configuration.
+- Added source-linked CPU/GPU asking-price context from a dated Avito aggregator and DNS references. Advisory values never enter totals or count as confirmed offers.
+- Added the calculated FPS limiter to upgrade cards. Equal FPS on different CPUs is now explained when the current GPU caps the estimate.
+- Removed RAM capacity/channel inputs from the gaming upgrade estimator because the current engine has no validated RAM-to-FPS calibration; hardware report import still identifies RAM as context.
+
+
+## 2026-11-13 — ежедневная синхронизация Регарда
+
+Добавлен single-instance фоновый планировщик на Amvera с интервалом 24 часа и конфигурируемыми переменными. Он вызывает существующий потоковый download/import; проверки SSRF, rights, MIME/XLSX, SHA-256, резервирования и журнал импорта сохранены. Совпадающий прайс не импортируется повторно. Если официальный endpoint не предоставляет подтверждённый validator, скачивание для сравнения хеша остаётся необходимым. PassMark оставлен отдельным обновлением каталога/оценок и не смешан с ценами или импортом Регарда.
+
+
+2026-11-13: сравнение FPS показывает абсолютный/относительный прирост, выбор игры различает каталог названий и модель. Обновлены лицензированные FPSHQ-снимки и воспроизведены отчёты качества/оценки; число measured-наблюдений осталось 87, улучшение production модели не заявлено. См. FPS_BENCHMARK_DATA.md.
+
+
+2026-11-13: мобильная навигация использует четыре настоящие подписи вместо CSS nth-child подмены и сетку 2×2. Действия апгрейда адаптивны; блок UpgradeSearchStatus исключён из результата, учебный опрос свёрнут и перенесён ниже. Объяснение CPU/GPU вычисляет изменение для выбранного компонента по той же модели, что основной прогноз; условный сценарий +25% удалён. Это изменение представления прогноза, а не доказанное повышение его точности. Текст small имеет минимум 12 px.
+
+
+## 2026-11-13 — обучение ограничению CPU/GPU
+
+BottleneckLesson остаётся добровольным и свёрнутым после результата. Теперь сначала объясняет подготовку кадра CPU, отрисовку GPU и ограничение пропускной способности; показывает игру/настройки/компоненты и пересчёт 1000/FPS с явным отличием от измеренного frametime. Четыре вопроса проверяют понимание ограничения, выбора компонента, изменения настроек и проверки гипотезы; каждый неверный вариант получает свой разбор. Итог считает первые ответы и перечисляет темы для повторения, без автоматического заявления, что пользователь освоил материал. Повтор и разбор доступны; сворачивание сохраняет прогресс, смена существенного контекста сбрасывает его. Неизвестный bottleneck не превращается в GPU-урок. Модель FPS и API не изменены.
+
+Проверки: 114 frontend-тестов и production build прошли. Изолированный браузерный сценарий на Edge/Playwright: обучение → один неверный ответ → итог 3/4 → полный разбор → сворачивание/продолжение → повтор → смена CPU/GPU. На 360 px нет горизонтального переполнения, видимый текст урока >=12 px. Реальный backend для этого сценария не запускался, API замокан.
+
+
+2026-11-13: исправлена блокировка повторного расчёта в форме апгрейда; системный Share заменён копированием URL. Добавлены серверные публичные снимки, список владельца и отзыв ссылок. Реализованы предварительный анализ загрузки CapFrameX/PresentMon, расчёт метрик, лимиты и дедупликация, сохранение нормализованных frametime и pending-модерация. Игровой интерфейс использует selection_policy=target_fps: цена всего ПК, целевой модельный FPS, сохранение DDR5 и отдельный вариант выше бюджета. Устранён резерв 70к на единственную отсутствующую плату. Архитектура и ограничения описаны в ARCHITECTURE.md.
+
+
+## 2026-11-13 — авто-платформы, FPSHQ и 4K
+
+- Автоподбор игр сравнивает целые платформенные сборки, включая Intel-плату/память при альтернативе с другого сокета. Форма начинает с автоматического выбора платформы и поколения RAM; при ручном выборе DDR4/DDR5 фильтр сокетов остаётся совместимым.
+- Добавлен 4K High как отдельный ориентировочный режим.
+- Таблица FPSHQ показывает происхождение данных для 50 игр; убраны вкладки PassMark из страницы игровых бенчмарков. Добавлена кнопка показа шаблона захвата FPS.
+- RTX 5090 D теперь получает отдельный GPU-only ориентир FPSHQ для RTX 5090 с широким разбросом; общий FPS остаётся ограниченным CPU и не называется тестом системы.
+- Ссылки из справочных цен ведут в поиск DNS/Avito; внешний экран ThingPrice больше не открывается из UpgradeLab.
+
+## 2026-11-13 — FPS Engine v2 evidence candidate и benchmark storage
+
+- Добавлены SQLite таблицы benchmark_sources/benchmark_measurements, хеши лицензий и snapshots, полные measurement payloads, нормализованные CPU/GPU keys и идемпотентный импорт 87 source-backed записей. Импорт включается переменной BENCHMARK_IMPORT_ON_START; по умолчанию локально выключен.
+- Добавлены GET /api/benchmarks/dataset-info и GET /api/benchmarks/measurements; user submissions остаются в отдельной закрытой очереди.
+- FPS v2 ищет точную measured CPU/GPU-конфигурацию и интерполирует frame time только между разрешениями той же пары. Вне измерений возвращается insufficient_data; никакие PassMark FPS коэффициенты в v2 не добавлены.
+- POST /api/fps/predict возвращает candidate_v2 рядом с legacy baseline. Калькулятор показывает источник, тип, средний FPS/1% Low и ограничения кандидата.
+- Реальный leave-one-resolution-out одной серии: candidate MAE 28.97 FPS на 1 точке, legacy MAE 56.13 FPS на той же точке. Это не независимая validation; production остаётся legacy, ML не обучался.
+- Добавлены 9 профильных тестов реального pair, leave-one-resolution-out, отказа от extrapolation, storage idempotency с `autoflush=False` и API-интеграции. Backend: 691 тест, 689 успешно, 2 пропущены; frontend: 116/116; production build успешен; git diff --check без ошибок форматирования. Все backend-тесты выполнялись с временной SQLite.
+
+## 2026-11-14 — FPS v3 legacy-anchored integration
+
+PassMark coverage was checked read-only: CPU 1434/1434 and GPU 785/785 have positive raw and normalized scores. CPU/GPU score scales remain separate. Added a shared `legacy_anchored` adapter for `/api/fps/predict` and `/api/calculate`; it invokes the existing game model with RAM inputs omitted and labels the result as uncalibrated legacy-derived, never as a measured or independent hardware prediction. Upgrader returns before/after estimates and gain only when a replacement and both estimates are available. Its UI displays the method and caveat. No new verified hardware specifications were imported. Independent workload calibration and Builder integration remain outstanding.
+
+Checks: backend 697 tests (695 passed, 2 skipped); frontend 116/116; production build passed; focused FPS v3/v2/migration tests 15/15. The measured-pair comparison still contains one test series; no general accuracy improvement is claimed.
+
+## 2026-11-14 — FPS Engine v4 universal selection and evidence
+
+- Added `fps_engine_v4.resolve_fps_v4`: exact licensed pair measurements first, a labeled legacy profile second, otherwise explicit abstention. RAM is not accepted by the v4 prediction interface.
+- Added separate CPU/GPU PassMark percentile outputs; scores are not converted into FPS.
+- Made all 16,447 local catalog entries selectable. Extended FPS API, calculation schema, Builder, and Upgrader so unsupported titles return a no-FPS state rather than a validation error or a synthetic number. Builder can still produce a compatible parts plan using hardware proxy ranking when FPS workload data is missing.
+- Added `/api/games/coverage` metadata and native-benchmark inventory. Current snapshot: 19 legacy profiles; 4 native observations; one measured game/CPU/GPU pair; zero Steam IDs or system requirements.
+- No database migration or production-data mutation was needed. No new benchmarks were imported. Steam enrichment remains pending because IDs are absent and the current documented app-list method requires a Web API key; the older endpoint is deprecated.
+- Regression tests cover measured/legacy/abstain paths, API coverage, arbitrary game input, no-RAM model input, separate PassMark percentiles, and Builder/Upgrader abstention.
+- v4 evidence now shows source test settings, including memory and channel count, so excluding RAM from the formula does not hide a different measured configuration.
+- v4 remains evidence routing, not a validated universal FPS model. No held-out MAE/MdAPE exists to justify replacing the current production baseline.
+
+## FPS Engine v4 Universal — завершение данных и верификации (2026-11-15)
+
+- Уточнён разбор CPU requirement alternatives, generation ranges, суффиксов X3D/APU и дублированных точных SKU; индекс CPU Adequacy сохраняет диапазон неопределённости и явно не переводится в FPS.
+- Ужесточена GPU-классификация/crosswalk: mobile, workstation, неизвестный тип, конфликт и score вне ограниченного диапазона не получают число; точный источник может разрешить неизвестный класс только при явном согласованном типе.
+- Общий FPS v4 evidence остаётся подключён к FPS API, сборщику и апгрейдеру; UI различает system FPS и GPU-only estimate. PassMark CPU Mark и RAM не становятся FPS-коэффициентами.
+- Фактическое CS2 GPU-покрытие после аудита: 196/785 против 328 по старому небезопасному классификатору; 16 441 внешняя игровая кривая проверена пакетно (RTX 3060: numeric GPU-only estimate на всех 16 441, 0,324 с).
+- Проверено 100 реальных read-only API-запросов, реальный exact-pair ответ и GPU/CPU upgrader ответы. SQLite не менялась.
+- Backend: 728 passed, 2 skipped; frontend: 118 passed; Vite production build и compileall успешны; `git diff --check` без whitespace ошибок.
+- Ограничение: независимых игровых series holdout и CPU/GPU variation нет; системная FPS accuracy и v3 CPU frame-time calibration не заявляются.
+
+
+## 2026-11-15 — FPS Engine v4 final validation pass
+
+- Fixed canonical resolution matching for exact 4K pair rows and Unicode `×` aliases; the read-only API now returns the source-backed Cyberpunk 2077 4K High reference (91.48 average FPS / 76.80 1% low).
+- Tightened GPU naming coverage for older mobile GeForce MX/`M` devices, Radeon APU names, and spaced RTX Ada virtual GPU profiles. Regression cases pass.
+- Added a measurement-row override for evaluation only, then called the real v4 resolver with the held-out resolution removed. Production defaults still use the immutable checked-in dataset.
+- Added a machine-readable comparison for legacy/v2/v3/v4 and external GPU-only outputs. On the single common held-out 1440p point, v2/v4 pair interpolation has MAE 28.97 FPS and legacy has 56.13 FPS; this one within-series point is not independent validation. v3 abstains, and external GPU-only estimates are not scored against full-system FPS.
+- Final CS2 GPU catalog audit: 193/785 numeric GPU-only estimates; earlier 196/785 coverage text is superseded. The final reasons and device classes are recorded in `FPS_BENCHMARK_DATA.md` and `fps_v4_coverage.json`.
+- The local read-only API smoke passed 100/100 FPS requests. Builder and Upgrader evidence envelopes returned successfully; the smoke stubs Builder assembly selection and does not claim optimizer-quality validation.
+- No benchmark data were fetched, no SQLite was modified, and no commit, push, or deployment was performed.
+- Final full-suite results: backend 737 passed / 2 skipped; frontend 118/118; production build and compileall passed; `git diff --check` returned 0.
+
+## 2026-11-15 — Unified adaptive FPS result
+
+- Added a single `fps_result` contract for `/api/fps/predict`, PC Builder and PC Upgrader with measured-system, estimated-system, GPU-only and unavailable result kinds.
+- Preserved the distinction between direct evidence and forecasts; withheld modeled 1% Low, unsupported CPU gain and uncalibrated bottleneck claims.
+- Kept RAM as provenance/matching context only and added regression checks that RAM does not alter FPS estimates.
+- Fixed missing imports in the calculator API and limited builder candidate replacement to actual pair evidence or valid same-pair interpolation.
+- Final verification: backend 745 passed / 2 skipped on isolated temporary SQLite; frontend 122/122; Vite production build, Python compileall and `git diff --check` passed.
+
+## 2026-11-15 — FPS fallback для игр и GPU без точной пары
+
+- FPS API, Builder и Upgrader получают `best_available_fps` и явно обозначенный уровень источника. Для 16 447 игровых названий доступна числовая GPU-опора при наличии валидного GPU score: точная игровая кривая, ближайший source GPU anchor или широкий межигровой каталоговый ориентир.
+- Добавлены FPSHQ GPU-опоры 1080p/1440p/4K High для 50 игр с исходными настройками, лицензией и типом данных; при прямых системных результатах они остаются отдельной GPU-ссылкой.
+- Экспериментальный CPU/GPU scenario использует точное сопоставление рекомендованных или минимальных требований. Не меняет `average_fps`, целевой статус, 1% Low или bottleneck.
+- Сравнение апгрейда GPU может показать отдельную GPU-only дельту по одинаковому источнику/игре/настройкам. Прирост всей системы остаётся независимым.
+- Добавлены регрессии для RTX 5090 Cyberpunk 1440p/4K, неизвестных игр, out-of-range GPU и source-setting mismatch.
+- Проверки этой итерации: backend: 766 тестов, 764 пройдены и 2 пропущены; frontend 125/125; production build, compileall FPS-модулей и git diff --check прошли.
+
+
+## 2026-11-16 — catalog FPS fallback and Regard recovery
+
+The game picker now shows titles without evidence-tier subtitles. The adaptive FPS entrypoint retains measured pair results first and uses the existing requirements scenario or CPU population prior with the existing GPU game curve as an explicitly estimated fallback. Resolution transfer uses inverse pixel workload from source settings (1080p to 1440p/4K); it is unvalidated and may underestimate high-resolution FPS or overestimate CPU limits. No 1% low is fabricated. Missing game-specific curves fall back to the catalog population reference, so those estimates are not game-specific measurements. RAM remains outside the model.
+
+The builder's existing adaptive presentation and the universal upgrader use numerical system estimates. Universal CPU upgrade candidates retain the current socket; known quotes above the cash budget are excluded. Unknown prices do not become confirmed budget matches.
+
+Regard network refresh no longer requires a successful local price import. An expired or missing initial XLSX may be replaced after validated operator rights from regard-rights.json and SOURCE_PERMISSIONS authorize the fixed endpoint. The existing transaction, backup, validation, atomic replacement and SHA-256 idempotency are retained. Schema and rights files remain required in backend /data; no access permission is synthesized from HTTP input.
+
+
+## 2026-11-16 — compact results, budget correctness and builder latency
+
+A regression reproduced unlimited upgrade budget becoming a sale-only cap after entering resale proceeds. The limit now depends solely on an explicitly supplied cash budget. The UI retains "unlimited" instead of displaying the proceeds as the entire budget.
+
+FPS display no longer requires a non-null bottleneck. Universal alternatives use the same current/after comparison shape as retained game profiles. Professional Radeon Pro/Quadro/Tesla/RTX A/Pro cards are excluded from gaming candidates; unknown prices are not marked confirmed.
+
+Repeated technical checks have isolated, bounded per-selection caches. Source population GPU references and catalog game lookups are memoized. The target-cost path skips optional drive preference scanning and examines cheapest-cost RAM ties without changing physical-fit checks. The UI requests include_stretch=false so the basic result does not wait for a separate +50% budget search; the existing API supports include_stretch=true.
+
+On the same isolated real catalog snapshot, the profiled hybrid scenario improved from 31.546 s to 23.685 s with 8 parts, 106624 RUB, 58 estimated FPS unchanged. The actual UI-style offers-only request with include_stretch=false completed in 2.234 s with 8 parts at 107230 RUB (draft). These are local measurements, not Amvera latency promises. Card details/history are collapsed; browser checks at 1440px and 390px found no horizontal overflow. Desktop offer cards were equal height (459.6px). FPS estimates were not raised merely to match an expected World of Tanks result; title-specific calibration still needs comparable measured data.
+
+
+### Upgrade offer links (2026-11-16)
+
+Upgrade results and universal alternatives now retain public_price metadata and render an external offer link only for a purchase quote with an HTTP(S) URL. Reference-only PassMark quotes do not produce a purchase button. The previously available marketplace action remains available. An unavailable retailer offer does not result in a fabricated product URL.
+
+
+## Steam requirements — 16.11.2026
+
+Реализованы SQLite-кеш, durable очередь, отдельный HTTPX worker и интеграция с FPS Engine без LLM/Chromium. На Amvera включается STEAM_WORKER_ENABLED=true (автоматически при AMVERA=1). Проверки и ограничения: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md). Остаётся проверка Linux lifecycle и точности прогнозов на независимых измерениях; deployment не выполнялся.
+
+
+### Steam lifecycle hardening, 16.11.2026
+
+Один Uvicorn --workers 1, supervised дочерний worker, общий явный DATABASE_URL /data, restart check 15 s, idle queue 10 s. Новые SQLite используют DELETE/FULL вместо принудительного WAL. Реальные browser E2E и Windows crash/restart пройдены. Linux/container и фактический storage Amvera не проверены из-за отсутствия Docker/WSL; подготовлен scripts.steam_linux_smoke. Подробности, RAM и команды: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md), steam_amvera_validation.json.
+
+
+## Компактный результат апгрейда — 16.11.2026
+
+Исправлено отсутствие отображения upgrade_price/avg_price в основном результате (включая budget=null): теперь показаны выбранная деталь, цена и происхождение/дата. Неизвестная цена остаётся неизвестной; бюджет не влияет на её видимость. Основные действия сокращены до предложения магазина, сравнения и сохранения; поделиться/поиск/объявление находятся в «Другие действия», форма продажи закрыта по умолчанию.
+
+Если источники FPS различаются, арифметическая разница и процент отображаются как «Разница оценок» с оговоркой; gain_type API не повышается до сопоставимого измерения. 48→123: +75 FPS, +156.3%. При нулевой базе процент отсутствует. FPS-формулы и backend не изменялись.
+
+Добавлены upgradeResult.js/.test.js; изменены CalculatorResult, FpsComparison, опциональный hideLink в PriceEvidence, navigation-overhaul.css и frontend test script. Проверено 133 frontend-теста, production build, браузерный рендер с локальной fixture результата (не реальная цена магазина), три основных действия и мобильные 390 px без overflow. Скриншоты .artifacts/upgrade-result-ui. Production/commit/push не выполнялись.
+
+
+## Отдельная страница отправки игрового замера — 16.11.2026
+
+Форма BenchmarkUpload перенесена из таблицы BenchmarkExplorer в маршрут ?tab=benchmark-submit существующего App; в таблице остаётся CTA. Поддержаны прямая ссылка, history/back и возврат к бенчмаркам. Пояснения формата сокращены, кнопки шаблона/отправок разделены gap 12px, инструкции оформлены отдельной панелью; обработка файлов/авторизация/модерация не изменены. Проверки: frontend 133 успешно, production build, browser desktop/390px (API mocked), прямой URL/reload/back и отсутствие overflow/JS ошибок. Скриншоты .artifacts/benchmark-submit-ui. GPU-only note PCGameBenchmarks в FPS означает источник/тип оценки, а не ошибку Steam; backend/FPS-математика не менялись.
+
+
+## Мобильная компоновка всех основных разделов — 16.11.2026
+
+Добавлен последний CSS-слой mobile.css, без изменений backend или математических моделей. Нестатичная высокая навигация заменена компактной шапкой 64px и раскрываемым меню; при выборе раздела меню закрывается. На мобильном бенчмарки показываются карточками с подписями вместо широкой таблицы; desktop-таблица сохранена. Основные фильтры сворачиваются и скрываются после применения. Дополнительная таблица FPSHQ монтируется и запрашивается только после раскрытия. Исправлены мобильные формы, 16px поля против iOS auto-zoom, модальные размеры, кнопки/действия, шаги, карточки, график FPS, источники и главная. Второстепенный декоративный блок на главной скрыт на телефоне, изображение ограничено 170px.
+
+Проверки Playwright/Edge с mock API: 9 маршрутов × 4 ширины (320/390/768/1280), гость и авторизованный с длинным именем, заполненные бенчмарк и объявление; переполнение/видимый текст меньше 12px/JS ошибки не обнаружены. Отдельно проверены меню/переходы, применение фильтров, lazy загрузка FPSHQ и доступность её фильтров, desktop fallback, результат апгрейда 390px. Это не испытание на физическом iPhone/Safari и не проверка production API. Профиль, поиск и формы проверены в указанных fixture-состояниях; не утверждается исчерпывающая проверка любых пользовательских данных.
+
+Frontend: 133 теста и production build успешно. Воспроизведение: tools/mobile_layout_audit.py (AUDIT_AUTH=1 для аккаунта), tools/mobile_layout_interactions.py при локальном Vite 127.0.0.1:5174. Скриншоты и JSON: .artifacts/mobile-audit. Дизайн desktop и все функции сохранены. Коммит/deployment не выполнялись.
+
+
+## Завершение mobile acceptance и верхняя кнопка бенчмарка — 16.11.2026
+
+Кнопка «Отправить свой бенчмарк» поднята в заголовок, нижний дубль удалён. Safe areas и вложенные отступы исправлены; найден и устранён конфликт min-height:100dvh в модальном редакторе объявления. 99 responsive-снимков + form/nav E2E, 133 frontend tests, build и diff-check успешно. Полный отчёт: [MOBILE_ADAPTATION.md](MOBILE_ADAPTATION.md).
+# Мобильная полировка страниц — 16.11.2026
+
+- Исправлены внутренние боковые отступы кнопок «Выйти из подбора» и «Продолжить» в мастере апгрейда: действия больше не прижаты к краям формы.
+- Убрана пустая минимальная высота шага на телефонах. На коротких шагах мастера не остаётся большой пустой карточки.
+- Пересобраны мобильные карточки сценариев на главной: уменьшены изображения, освобождено место под текст и действия.
+- Повторно проверены девять страниц на 11 ширинах 320–1920 px и сценарии шагов, модальных окон, меню и фильтров. Результат: 99 проверок без горизонтального переполнения, текста меньше 12 px и ошибок браузера.
+- Интерфейсная правка находится в `frontend/src/mobile.css`; документация обновлена. API, бизнес-логика и desktop-компоновка не менялись.
+
+
+## Продажа комплекта и смена платформы
+
+После результата добавлен ввод expected_platform_sale_price за старые CPU + плату + RAM. Выручка применяется только к полному комплекту замены; budget=null остаётся без ограничения. Универсальная ветка API теперь предлагает и повторно проверяет совместимые CPU/плату/два модуля RAM/кулер с сохранением GPU; FPS рассчитан тем же adaptive predictor. Пакеты собираются только с известными ценами и проверками совместимости. При наличии комплекта он не теряется за тремя одиночными альтернативами. Недостающие цены не выдумываются, выручка вводится пользователем и не считается завершённой продажей. 16 профильных тестов платформы, 2 универсального fallback, 1 unlimited resale; frontend 133 passed, production build passed. Полная backend-регрессия в этой итерации не запускалась.
+
+
+## Расширение выбора БП DeepCool
+
+Добавлены PK750D (750 Вт, Bronze) и PN750M (750 Вт, Gold) по спецификациям производителя в профили допуска и поисковые подсказки. PK550D/PK650D, Corsair, Seasonic и MSI сохранены. Автоподбор выбирает минимальную цену среди подходящих по мощности/совместимости предложений без приоритета бренда. ID-COOLING SE-214-XT остаётся в кулерах.
+
+
+## Остаток бюджета на CPU в игровом подборе
+
+При objective=performance и selection_policy=target_fps после поиска целевой сборки сравниваются полные совместимые варианты с той же GPU: допускается более сильный CPU по CPU Mark при отсутствии снижения модельного FPS и соблюдении бюджета. Уточнение сохраняется после объединения платформ. Экономичный/обычный выбор минимальной суммы не изменён. CPU Mark здесь служит дополнительным аппаратным признаком, не измерением игрового прироста. Тест CS2 4K/90000 с CPU 5500/5600 использует изолированную SQLite и фиксированный FPS для проверки ранжирования, не для проверки точности модели. 12 target-builder и 15 adaptive-builder тестов пройдены. Production каталог хостинга не менялся и не проверялся.

@@ -1,0 +1,64 @@
+/* One entry point for all build workflows; the mode switch lives inside it. */
+
+
+
+
+
+.main-nav button{white-space:nowrap}
+.configurator-modebar{display:flex;gap:8px;overflow:auto;margin:0 0 16px;padding:4px 0;scrollbar-width:thin}
+.configurator-modebar button{flex:1 0 auto;min-height:44px;padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-secondary);font-size:13px;font-weight:650}
+.configurator-modebar button.active{background:var(--surface-selected);border-color:var(--accent);color:var(--text-primary)}
+.content:has(.configurator-modebar [data-mode="custom"][aria-pressed="true"]) .configurator-stack{display:none!important}
+.configurator-stack .scenario-switch{display:none}
+.custom-configurator{max-width:100%;min-width:0}
+.build-choice-grid{gap:12px;margin-block:16px}
+.build-choice-card{padding:16px!important;gap:10px}
+.choice-main-parts{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0;min-height:0}
+.choice-main-parts>div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface)}
+.choice-main-parts strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.choice-summary{margin:8px 0;font-size:12px;line-height:1.45}
+.saved-build-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.saved-build-chips small{display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 7px;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:12px}
+.saved-account-build>summary>b{display:block;margin-top:8px;font-size:16px}
+/* Keep the shared source picker separated from the adjacent form row. */
+.store-offers>.configuration-form>fieldset.source-picker{display:flow-root;margin:22px 0 18px;padding:0}
+.store-offers>.configuration-form>fieldset.source-picker>legend{display:block;margin:0 0 10px;padding:0}
+.store-offers>.configuration-form>fieldset.source-picker>.source-segments{margin:0}
+.store-offers>.configuration-form>fieldset.source-picker>.field-hint{margin:10px 0 0}
+.builder-form .flow-panel .builder-step>fieldset.source-picker{display:flow-root;margin:22px 0 0;padding:0}
+.builder-form .flow-panel .builder-step>fieldset.source-picker>legend{display:block;margin:0 0 10px;padding:0}
+.builder-form .flow-panel .builder-step>fieldset.source-picker>.source-segments{margin:0}
+.builder-form .flow-panel .builder-step>fieldset.source-picker>.field-hint{margin:10px 0 0}
+@media(max-width:760px){
+ .site-header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:10px 12px}
+ .brand{grid-column:1;grid-row:1}
+ .header-account{grid-column:2;grid-row:1}
+ .main-nav{grid-column:1/-1;grid-row:2;display:flex;flex-wrap:nowrap;justify-content:flex-start;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:none;padding:3px 0 7px}
+ .main-nav::-webkit-scrollbar{display:none}
+ .main-nav button{flex:0 0 auto;min-height:40px;padding:8px 11px!important;font-size:12px}
+
+ .header-account .register-link{display:none}
+ .configurator-modebar{position:sticky;top:0;z-index:5;background:var(--background);padding:8px 0}
+ .configurator-modebar button{min-width:118px;padding-inline:12px}
+ .custom-config-form{grid-template-columns:1fr}
+ .custom-config-wide{grid-column:auto}
+ .custom-config-part{grid-template-columns:48px minmax(0,1fr) auto;gap:9px}
+ .custom-config-part img{width:48px;height:48px}
+ .custom-config-part>button{grid-column:2/-1;justify-self:start;min-height:42px}
+ .content{padding-inline:12px}
+ .primary-btn,.secondary-btn,.result-actions button{min-height:44px}
+ .market-grid{grid-template-columns:minmax(0,1fr)!important}
+ .build-choice-grid{grid-template-columns:1fr}
+ .saved-build-chips small{max-width:100%}
+}
+
+
+/* Compact upgrade result: the selected part and price stay visible without a budget. */
+.upgrade-purchase-summary { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:16px; padding:16px; margin:16px 0; border:1px solid var(--border, #303640); border-radius:12px; }
+.upgrade-purchase-summary > div { display:grid; gap:6px; min-width:0; }
+.upgrade-purchase-summary strong { overflow-wrap:anywhere; }
+.upgrade-purchase-price > strong { font-size:20px; }
+.upgrade-more-actions, .upgrade-resale-details { margin:16px 0; }
+.upgrade-more-actions > summary, .upgrade-resale-details > summary { cursor:pointer; font-size:14px; padding:10px 0; }
+.upgrade-more-actions .result-actions { margin-top:12px; }
+@media (max-width:600px) { .upgrade-purchase-summary > div { width:100%; } .upgrade-result > .result-actions { display:grid; grid-template-columns:1fr; } }

@@ -246,3 +246,17 @@ class UnifiedGeoTests(unittest.TestCase):
   self.assertEqual(review_prices(self.db,data)['current_total'],19000)
   attrs=json.loads(row.attributes);attrs['geography']=geography(MOS);row.attributes=json.dumps(attrs);self.db.commit()
   self.assertIsNone(review_prices(self.db,data)['current_total']);self.assertEqual(review_prices(self.db,data)['historical_total'],19000)
+
+ def test_regard_delivery_is_discoverable_but_cost_and_availability_stay_unknown(self):
+  from app.services.offer_geography import filter_geography
+  from app.schemas.geography import GeoQuery
+  row=StoreOffer(source='regard',url='https://www.regard.ru/catalog/1010/example',name='DDR4 memory',category='RAM',price_rub=15990,hardware_id=None,observed_at=NOW.replace(tzinfo=None),origin='catalog_import',condition='new',attributes='{}')
+  payload=GeoQuery(city_id=KEM,geo_mode='delivery')
+  details=geo_details(row,payload)
+  self.assertTrue(details['delivery_match'])
+  self.assertEqual(details['delivery_status'],'store_delivery_cost_unconfirmed')
+  self.assertIsNone(details['delivery_cost_rub'])
+  self.assertTrue(details['delivery_cost_unknown'])
+  self.assertEqual(filter_geography([row],payload),[row])
+  other=StoreOffer(source='oldi',url='https://www.oldi.ru/example',name='DDR4 memory',category='RAM',price_rub=15990,hardware_id=None,observed_at=NOW.replace(tzinfo=None),origin='public_page',condition='new',attributes='{}')
+  self.assertFalse(geo_details(other,payload)['delivery_match'])

@@ -24,6 +24,10 @@ class ContactsCitiesTests(unittest.TestCase):
         self.assertEqual(len(search_cities('Советск')),3)
         self.assertEqual(len({c['city_id'] for c in CITIES}),len(CITIES))
 
+    def test_novokuznetsk_is_searchable_and_city_list_is_not_truncated(self):
+        self.assertEqual(search_cities('Новокузнецк')[0]['city_id'], 'ru:novokuznetsk')
+        self.assertGreaterEqual(len(search_cities()), 90)
+
     def test_legacy_short_contact_is_not_made_into_invalid_telegram_link(self):
         self.assertEqual(normalize_contact('@test'),('@test',None))
         with self.assertRaises(ValueError):normalize_contact('@test','telegram')

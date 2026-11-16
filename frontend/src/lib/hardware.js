@@ -14,7 +14,9 @@ export function searchHardware(items, query) {
   return items.filter(item => searchKey(item.name).includes(key))
     .sort((a, b) => {
       const aKey = searchKey(a.name), bKey = searchKey(b.name)
-      return (aKey === key ? -1 : bKey === key ? 1 : aKey.length - bKey.length)
+      if (aKey === key && bKey !== key) return -1
+      if (bKey === key && aKey !== key) return 1
+      return (Number(b.raw_score) || 0) - (Number(a.raw_score) || 0) || a.name.localeCompare(b.name)
     })
 }
 

@@ -21,6 +21,10 @@ test('GPU matching preserves Ti and rejects unknown models',()=>{
   assert.equal(matchHardware(items,'NVIDIA GeForce RTX 3060 Super'),null)
   assert.equal(matchHardware(items,''),null)
 })
+test('matching model suggestions are ranked by stored performance score',()=>{
+  const ranked=[{id:1,name:'GeForce RTX 5060',raw_score:30000},{id:2,name:'GeForce RTX 5060 Ti',raw_score:40000}]
+  assert.deepEqual(searchHardware(ranked,'5060').map(item=>item.id),[2,1])
+})
 test('report preserves physical RAM type and does not invent dual channel',()=>{
   const report=parseSystemReport(JSON.stringify({cpus:[{name:'AMD FX-6100'}],gpus:[],memory:{capacity_gb:8,type:'DDR3',channels:null,module_count:2}}))
   assert.equal(report.memory.type,'DDR3')

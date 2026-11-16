@@ -1,3 +1,4 @@
+import { shareLink, sharedBuildUrl } from '../../lib/share'
 import { useEffect, useRef, useState } from 'react'
 import { request } from '../../api/client'
 import { fpsText } from '../../lib/performance'
@@ -6,7 +7,7 @@ import { currentItemPrice, currentSavedTotal, savedItemState, money, reviewTime 
 const date = value => value && Number.isFinite(Date.parse(value))
   ? new Date(value).toLocaleString('ru-RU') : 'Дата неизвестна'
 
-function SavedEntry({ build, onRemove, onRecalculate, now }) {
+function SavedEntry({ build, onRemove, onRecalculate, onUpgrade, now }) {
   const [review, setReview] = useState(build.price_review)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -15,6 +16,7 @@ function SavedEntry({ build, onRemove, onRecalculate, now }) {
   const result = build.result || {}
   const config = build.config || {}
   const assembly = config.scenario === 'build'
+  const compactParts=(result.parts||[]).filter(part=>['CPU','GPU','memory','storage'].includes(part.type))
   const historical = review?.historical_total ?? result.total_price ?? result.avg_price
   const received = useRef({review, at: performance.now()})
   if (received.current.review !== review) received.current = {review, at: performance.now()}
@@ -31,9 +33,7 @@ function SavedEntry({ build, onRemove, onRecalculate, now }) {
     finally { setBusy(false) }
   }
   return <details className="saved-account-build">
-    <summary>{assembly ? 'Сборка с нуля' : 'Апгрейд'} · {config.game} · {assembly
-      ? fpsText(result.fps,result.fps_outlook)
-      : `~${result.current_fps} → ~${result.upgraded_fps}`} FPS на момент расчёта</summary>
+    <summary><span>{assembly ? 'Сборка' : 'Апгрейд'} · {config.game||'Расчёт'} · {assembly?fpsText(result.fps,result.fps_outlook):`~${result.current_fps} → ~${result.upgraded_fps}`} FPS</span><span className="saved-build-chips">{compactParts.map(part=><small key={part.type}>{part.type==='CPU'?'CPU':part.type==='GPU'?'GPU':part.type==='memory'?'RAM':'SSD'}: {part.name}</small>)}</span><b>{money(historical)}</b></summary>
     <p className="field-hint">Сохранено {date(build.created_at)} · {config.mode}</p>
     <div className="saved-price-ledger"><div><span>При сохранении</span><strong>{money(historical)}</strong><small>Историческая стоимость</small></div><div><span>Последнее наблюдение</span><strong>{money(latest)}</strong><small>Не подтверждает текущую цену</small></div><div><span>Подтверждено сейчас</span><strong>{money(current)}</strong><small>По действующим правилам свежести</small></div></div>
     <p className="field-hint">Статус сохранённого расчёта: {result.status || 'не указан'}. Он относится к моменту расчёта и не подтверждает сегодняшние цены. Доставка и персональные скидки не учтены.</p>
@@ -53,6 +53,7 @@ function SavedEntry({ build, onRemove, onRecalculate, now }) {
     {result.compatibility_notes?.length > 0 && <details><summary>Примечания сохранённого расчёта</summary><ul className="field-hint">{result.compatibility_notes.map((note,index)=><li key={index}>{note}</li>)}</ul></details>}
     <p className="field-hint">Проверено по серверным данным: {date(review?.evaluated_at)}. Эта проверка не обращается к магазинам. Ссылку можно проверить вручную; ручная проверка не меняет статус на сервере.</p>
     {error && <p className="error" role="alert">{error}</p>}
+    <button className="secondary-btn" type="button" onClick={()=>window.dispatchEvent(new Event('upgradelab:open-upgrade'))}>Перейти к апгрейду</button>
     <div className="result-actions">{onRecalculate&&build.config&&<button className="primary-btn" disabled={redoing} onClick={redo}>{redoing?'Рассчитываем…':'Создать новый расчёт'}</button>}
       <button className="secondary-btn" disabled={busy} onClick={check}>{busy ? 'Проверяем…' : 'Проверить по серверным предложениям'}</button>
       <button className="secondary-btn" onClick={()=>onRemove(build.id)}>Удалить сохранённый результат</button>
@@ -60,13 +61,18 @@ function SavedEntry({ build, onRemove, onRecalculate, now }) {
   </details>
 }
 
-export function AccountBuilds({ builds, onRemove, onRecalculate }) {
+export function AccountBuilds({ builds, onRemove, onRecalculate, onUpgrade }) {
+  const [shared,setShared]=useState([]),[shareNotice,setShareNotice]=useState('')
+  useEffect(()=>{let alive=true;const load=()=>request('/api/shared-builds/mine').then(data=>{if(alive)setShared(data.items)}).catch(error=>{if(alive)setShareNotice(error.message)});load();window.addEventListener('upgradelab:shared-saved',load);return()=>{alive=false;window.removeEventListener('upgradelab:shared-saved',load)}},[])
+  async function copyShared(id){try{await shareLink(sharedBuildUrl(id));setShareNotice('Ссылка скопирована.')}catch(error){setShareNotice(error.message)}}
+  async function revokeShared(id){try{await request('/api/shared-builds/'+id,{method:'DELETE'});setShared(rows=>rows.filter(row=>row.id!==id));setShareNotice('Ссылка отозвана.')}catch(error){setShareNotice(error.message)}}
   const [now,setNow] = useState(Date.now)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()),1000)
     return () => clearInterval(timer)
   },[])
   return <section className="panel"><h2>Сохранённые сборки и расчёты</h2>
+    {shared.length>0&&<div><h3>Снимки, которыми вы поделились</h3>{shared.map(row=><div className="account-item" key={row.id}><span>{row.snapshot.parts.length} компонентов · {date(row.created_at)}</span><button type="button" className="secondary-btn" onClick={()=>copyShared(row.id)}>Копировать ссылку</button><button type="button" className="text-btn" onClick={()=>revokeShared(row.id)}>Отозвать ссылку</button></div>)}</div>}{shareNotice&&<p role="status">{shareNotice}</p>}
     {builds.length ? builds.map(build=><SavedEntry key={build.id} build={build} onRemove={onRemove} onRecalculate={onRecalculate} now={now}/>)
       : <p className="empty-copy">Сохраните результат расчёта — он будет доступен в аккаунте с другого устройства.</p>}
   </section>

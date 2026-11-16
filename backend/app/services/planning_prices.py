@@ -61,13 +61,14 @@ def planning_build(payload,db):
     from app.services.adaptive_builds import solve_profiles
     reference=reference_inventory(db)
     real=available_offers(db,payload.price_sources) if payload.pricing_mode=='hybrid' else []
-    from app.services.automatic_builds import board_matches,memory_matches
+    from app.services.automatic_builds import board_matches,memory_matches,memory_candidates
     from app.services.component_quality import quality_check
     from app.services.adaptive_builds import platform_candidates
     profiles=platform_candidates(payload)
     def technically_eligible(row):
         if row.category=='motherboard':return any(board_matches(row,p) for p in profiles)
-        if row.category=='memory':return any(memory_matches(row,p) for p in profiles)
+        if row.category=='memory':return any(memory_matches(candidate,p) for p in profiles
+                                             for candidate in memory_candidates([row]))
         if row.category in ('psu','cooler','storage'):return quality_check(row,payload.socket)[0] is not None
         return True
     real=[r for r in real if technically_eligible(r)]
@@ -92,7 +93,10 @@ def planning_build(payload,db):
                 if error.status_code!=400:raise
             else:
                 candidates=[comparison,*comparison.get('alternatives',[])]
-                score=lambda v:v.get('selection_score',v.get('fps',0))
+                if payload.workload=='gaming' and payload.selection_policy=='target_fps':
+                    from app.services.target_selection import target_result_rank
+                    score=lambda v:target_result_rank(v,payload.target_fps)
+                else:score=lambda v:v.get('selection_score',v.get('fps',0))
                 best=max(candidates,key=lambda v:(score(v),-v['total_price']))
                 identity=lambda v:tuple((p.get('type'),p.get('id'),p.get('offer_id')) for p in v.get('parts',[]))
                 if (score(best)>score(result) or

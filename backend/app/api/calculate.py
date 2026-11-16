@@ -1,3 +1,4 @@
+from app.services.steam_storage import with_requirements
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from app.api.deps import DBSession
@@ -5,15 +6,16 @@ from app.crud import hardware as hw_crud
 from app.db.models import Hardware
 from app.schemas.calculate import CalculateRequest, CalculateResponse
 from app.services import calculator
-from app.services.prices import public_price
 from app.services.performance import fps_outlook, CS2_CPU_SOURCE
-from app.services.upgrade_prices import upgrade_price_map, avito_price_estimates, refresh_upgrade_prices, upgrade_search_summary
+from app.services.fps_engine_v4 import comparable_pair_measurements
+from app.services.prices import public_price
+from app.services.upgrade_prices import upgrade_price_map, internal_resale_estimates, refresh_upgrade_prices, upgrade_search_summary
 from app.services.upgrade_platforms import platform_choices
 from dataclasses import replace
 
 router = APIRouter(prefix="/api", tags=["calculator"])
 
-from app.services.builds import BuildRequest, assemble
+from app.services.builds import BuildRequest, assemble, desktop_gpu
 
 
 @router.post("/assemble")
@@ -30,6 +32,7 @@ def post_calculate(payload: CalculateRequest, db: DBSession):
         return _post_calculate(payload,db)
 
 
+@with_requirements
 def _post_calculate(payload: CalculateRequest, db: DBSession):
     if payload.selected_upgrade_id and payload.selected_platform:
         raise HTTPException(422, 'Выберите один вариант: замену детали или смену платформы.')
@@ -44,29 +47,194 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
     if cpu.raw_score<=0 or gpu.raw_score<=0:
         raise HTTPException(400,'Недостаточно достоверных аппаратных показателей для оценки FPS.')
 
-    # Получаем все CPU и GPU для поиска апгрейда в рамках бюджета
-    all_hw = [h for h in db.scalars(select(Hardware)) if h.type not in ("CPU","GPU") or h.raw_score>0]
     ram_type, ram_channels = None, None
+    ram_capacity_gb = None
     if payload.ram_id:
         ram = db.get(Hardware, payload.ram_id)
         if not ram or ram.type != 'RAM':
             raise HTTPException(status.HTTP_400_BAD_REQUEST, 'RAM не найдена')
         ram_type, ram_channels = ram.ram_type, ram.ram_channels
+        ram_capacity_gb = ram.ram_capacity_gb
     elif payload.ram_manual:
         ram_type, ram_channels = payload.ram_manual.type, payload.ram_manual.channels
+        ram_capacity_gb = payload.ram_manual.capacity_gb
+
+    # The current optimizer has calibrated recommendation logic only for its
+    # legacy profiles. Let every catalog game reach the API, but abstain from
+    # upgrades when that title has no defensible workload model.
+    from app.core.constants import GAME_PROFILES
+    from app.services.adaptive_fps import predict_adaptive_fps, compare_adaptive_results
+    if payload.game not in GAME_PROFILES:
+        resolution, preset = payload.mode.value.rsplit('_', 1)
+        if resolution == '4k':
+            resolution = '4K'
+        cpu_catalog = list(db.scalars(select(Hardware).where(Hardware.type == "CPU", Hardware.raw_score > 0)))
+        gpu_catalog = list(db.scalars(select(Hardware).where(Hardware.type == "GPU", Hardware.raw_score > 0)))
+        adaptive_settings = {"resolution": resolution, "preset": preset,
+                             "ram_type": ram_type, "ram_channels": ram_channels,
+                             "ram_capacity_gb": ram_capacity_gb}
+        current_adaptive = predict_adaptive_fps(cpu, gpu, payload.game, adaptive_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+        evidence = current_adaptive["technical_details"]
+        after_adaptive = None
+        after_evidence = None
+        candidate = None
+        if payload.selected_upgrade_id:
+            candidate = db.get(Hardware, payload.selected_upgrade_id)
+            if candidate is None or candidate.type not in {"CPU", "GPU"}:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Вариант апгрейда не найден")
+            if candidate.type == 'CPU' and (not cpu.socket or candidate.socket != cpu.socket):
+                raise HTTPException(400, 'Для другого сокета выберите полный комплект смены платформы.')
+            next_cpu = candidate if candidate.type == "CPU" else cpu
+            next_gpu = candidate if candidate.type == "GPU" else gpu
+            after_adaptive = predict_adaptive_fps(next_cpu, next_gpu, payload.game,
+                                                  adaptive_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+            after_evidence = after_adaptive["technical_details"]
+        universal_options = []
+        quotes = upgrade_price_map(db, payload.price_sources)
+        if candidate is None and current_adaptive.get("average_fps") is not None:
+            # CPU replacement stays on the current platform; unknown sockets cannot be assumed compatible.
+            eligible = [h for h in [*cpu_catalog, *gpu_catalog]
+                        if h.id not in (cpu.id, gpu.id) and (
+                            h.type == "GPU" and desktop_gpu(h.name) and h.raw_score > gpu.raw_score or
+                            h.type == "CPU" and cpu.socket and h.socket == cpu.socket
+                            and h.raw_score > cpu.raw_score)]
+            eligible = sorted(eligible, key=lambda h: (
+                0 if h.id in quotes else 1, h.raw_score, h.id))[:40]
+            scored = []
+            for h in eligible:
+                quote = quotes.get(h.id)
+                if quote and payload.budget is not None and quote.price_rub > payload.budget:
+                    continue
+                predicted = predict_adaptive_fps(h if h.type == "CPU" else cpu,
+                    h if h.type == "GPU" else gpu, payload.game, adaptive_settings,
+                    cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+                value = predicted.get("average_fps")
+                if value is None or not calculator.meaningful_upgrade(current_adaptive["average_fps"], value):
+                    continue
+                scored.append((h, predicted, quote))
+            scored.sort(key=lambda item: (item[1]["average_fps"] >= payload.target_fps,
+                item[2] is not None, item[1]["average_fps"]), reverse=True)
+            for h, predicted, quote in scored[:3]:
+                universal_options.append({"id": h.id, "name": h.name, "type": h.type,
+                    "fps": round(predicted["average_fps"]),
+                    "gain_fps": round(predicted["average_fps"] - current_adaptive["average_fps"], 2),
+                    "avg_price": quote.price_rub if quote else None,
+                    "within_budget": bool(quote and (payload.budget is None or quote.price_rub <= payload.budget)),
+                    "upgrade_price": public_price(quote), "component": h.type, "fps_result": {"current": current_adaptive, "after": predicted,
+                        **compare_adaptive_results(current_adaptive, predicted)}})
+            if scored:
+                candidate, after_adaptive, selected_quote = scored[0]
+                after_evidence = after_adaptive["technical_details"]
+        # Platform proceeds are available only when selling the old CPU/board/RAM,
+        # never to a single-component replacement which still needs those parts.
+        platform_sale = payload.expected_platform_sale_price or 0
+        platform_budget = (payload.budget or 0) + platform_sale
+        platforms = []
+        chosen_platform = None
+        if current_adaptive.get("average_fps") is not None:
+            platforms = platform_choices(payload, db, cpu_catalog + gpu_catalog, quotes, cpu, gpu,
+                current_adaptive["average_fps"], platform_budget,
+                predictor=lambda new_cpu: predict_adaptive_fps(new_cpu, gpu, payload.game,
+                    adaptive_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog))
+            for option in platforms:
+                option["fps_result"] = {"current": current_adaptive, "after": option["prediction"],
+                    **compare_adaptive_results(current_adaptive, option["prediction"])}
+            universal_options.extend(platforms)
+            if platforms and len(universal_options) > 3:
+                universal_options = universal_options[:2] + [platforms[0]]
+            if platforms and len(universal_options) > 3:
+                universal_options = universal_options[:2] + [platforms[0]]
+            if payload.selected_platform:
+                chosen_platform = next((item for item in platforms if item["selection_allowed"]), None)
+                if chosen_platform is None:
+                    raise HTTPException(400, "Комплект платформы недоступен, несовместим или превышает бюджет. Повторите расчёт.")
+                candidate = db.get(Hardware, chosen_platform["id"])
+                after_adaptive = chosen_platform["fps_result"]["after"]
+                after_evidence = after_adaptive["technical_details"]
+        comparison = compare_adaptive_results(current_adaptive, after_adaptive)
+        fps_value = current_adaptive.get('average_fps')
+        after_fps_value = (after_adaptive or {}).get('average_fps')
+        comparable_system = comparison.get('gain_type') is not None
+        system_gain = comparison.get('gain_fps')
+        gpu_oriented_fps = current_adaptive.get('gpu_oriented_fps')
+        gpu_oriented_gain = comparison.get('gpu_oriented_gain_fps')
+        def requirement_index(item):
+            adequacy = item.get('cpu_adequacy') or {}
+            comparison = adequacy.get('recommended') or adequacy.get('minimum') or {}
+            return comparison.get('index_vs_reference_percent')
+        cpu_adequacy_change = None
+        if after_evidence and payload.selected_upgrade_id and candidate.type == "CPU":
+            before_index = requirement_index(evidence)
+            after_index = requirement_index(after_evidence)
+            if before_index is not None and after_index is not None:
+                cpu_adequacy_change = {"before_index": before_index, "after_index": after_index,
+                                       "change_points": round(after_index - before_index, 1)}
+        if gpu_oriented_fps is not None and fps_value is None:
+            recommendation = ('Есть только приблизительная оценка видеокарты для 1080p High. Это не FPS всей системы; '
+                              'CPU может ограничить результат. Подбор апгрейда и прирост не рассчитаны.')
+            compatibility_note = ('Внешний GPU-ориентир: около %s FPS для 1080p High; полный FPS и CPU-ограничение неизвестны.'
+                                  % gpu_oriented_fps)
+        elif fps_value is not None:
+            recommendation = 'Для этой игры найдена опора FPS, но алгоритм апгрейда не калиброван для неё; автоматическую замену не предлагаю.'
+            compatibility_note = 'Доступна опора FPS; автоматический подбор апгрейда для этой игры не калиброван.'
+        else:
+            recommendation = 'Для этой игры пока нет игровой опоры. FPS всей системы и узкое место не рассчитаны; каталог PassMark сам по себе игровой FPS не определяет.'
+            compatibility_note = 'Для выбранной игры и настроек пока нет численной FPS-опоры; каталог PassMark сам по себе игровой FPS не определяет.'
+        if fps_value is not None:
+            recommendation = ("Расчёт выполнен. Сравните FPS текущей системы и выбранного апгрейда."
+                              if candidate else "Расчёт выполнен. Подходящая замена с приростом FPS не найдена.")
+            compatibility_note = ("Для замены CPU сохранён сокет текущей платформы; поддержку BIOS проверьте отдельно."
+                                  if candidate and candidate.type == "CPU" else
+                                  "Для замены видеокарты проверьте питание и размеры корпуса.")
+        return CalculateResponse(
+            bottleneck=current_adaptive.get("limiting_component"),
+            upgrade_id=candidate.id if candidate else None,
+            upgrade_name=candidate.name if candidate else None,
+            current_fps=round(fps_value) if fps_value is not None else None,
+            upgraded_fps=round(after_fps_value) if comparable_system and after_fps_value is not None else None,
+            recommendation=recommendation,
+            upgrade_price={"avg_price":chosen_platform["price"],"price_origin":"platform_total","price_source":"Сумма комплектующих"} if chosen_platform else public_price(quotes.get(candidate.id)) if candidate else None,
+            avg_price=chosen_platform["price"] if chosen_platform else quotes[candidate.id].price_rub if candidate and candidate.id in quotes else 0,
+            upgrade_kind="platform" if chosen_platform else "single" if candidate else None,
+            upgrade_parts=chosen_platform["parts"] if chosen_platform else [],
+            platform_upgrade_note="Комплект CPU, платы, RAM и кулера; видеокарта сохраняется. Выручка от комплекта учитывается только для смены платформы.",
+            cash_budget=payload.budget or 0,
+            total_budget=platform_budget if chosen_platform else (payload.budget or 0),
+            current_component_price=platform_sale if chosen_platform else 0,
+            mode=payload.sell_mode,
+            within_budget=bool(chosen_platform and chosen_platform['selection_allowed']) or bool(candidate and not chosen_platform and candidate.id in quotes
+                               and public_price(quotes[candidate.id]).get("is_purchase_quote")
+                               and (payload.budget is None or quotes[candidate.id].price_rub <= payload.budget)),
+            is_maxed_out=False,
+            target_fps=payload.target_fps,
+            target_reached=(after_fps_value >= payload.target_fps) if comparable_system and after_fps_value is not None else None,
+            fps_result={'current': current_adaptive, 'after': after_adaptive, **comparison},
+            fps_v4_evidence={'current': evidence, 'after': after_evidence, 'gain_fps': system_gain,
+                             'gpu_oriented_gain_fps': gpu_oriented_gain,
+                             'cpu_adequacy_change': cpu_adequacy_change,
+                             'note': 'Апгрейд не ранжируется без калиброванной нагрузки. GPU-ориентированная разница не является FPS всей системы; CPU Adequacy — ориентир требований, не прогноз игрового прироста.'},
+            compatibility_notes=[compatibility_note],
+            alternatives=universal_options,
+        )
+
+    # Получаем все CPU и GPU для поиска апгрейда в рамках бюджета
+    all_hw = [h for h in db.scalars(select(Hardware)) if h.type not in ("CPU","GPU") or h.raw_score>0]
+    cpu_catalog = [h for h in all_hw if h.type == "CPU" and h.raw_score > 0]
+    gpu_catalog = [h for h in all_hw if h.type == "GPU" and h.raw_score > 0]
     from app.core.price_time import db_now
     search_started = db_now()
     statuses = []
     if payload.refresh_avito_prices:
         import time
         from app.services.offers import search_offers
-        single_offer_fallback = payload.sell_mode == 'budget_plus_sell' and payload.expected_sale_price is None
+        single_offer_fallback = False
         statuses = refresh_upgrade_prices(
             db, all_hw, cpu, gpu, time.monotonic() + 45, search_offers,
             payload.price_sources, payload.game, payload.mode, resale_fallback=single_offer_fallback,
             target_fps=payload.target_fps, ram_type=ram_type, ram_channels=ram_channels, focus_id=payload.price_lookup_id)
     prices = upgrade_price_map(db, payload.price_sources)
-    resale_quotes = avito_price_estimates(db) if payload.sell_mode == 'budget_plus_sell' else {}
+    market_resale_quotes = internal_resale_estimates(db)
+    resale_quotes = market_resale_quotes if payload.sell_mode == 'budget_plus_sell' else {}
     def sale_value(hardware_id):
         if payload.sell_mode != 'budget_plus_sell':
             return 0
@@ -74,11 +242,13 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
             return payload.expected_sale_price
         return resale_quotes[hardware_id].price_rub if hardware_id in resale_quotes else 0
     all_cpus = [
-        {"id": h.id, "name": h.name, "raw_score": h.raw_score, "avg_price": prices[h.id].price_rub if h.id in prices else None, "socket": h.socket}
-        for h in all_hw if h.type == "CPU" and h.raw_score>0
+        {"id": h.id, "name": h.name, "raw_score": h.raw_score, "avg_price": prices[h.id].price_rub if h.id in prices else None,
+         "price_is_reference": h.id in prices and getattr(prices[h.id], 'reference_only', False), "socket": h.socket}
+        for h in all_hw if h.type == "CPU" and h.raw_score>0 and not h.name.casefold().startswith('apple m')
     ]
     all_gpus = [
-        {"id": h.id, "name": h.name, "raw_score": h.raw_score, "avg_price": prices[h.id].price_rub if h.id in prices else None, "vram": h.vram}
+        {"id": h.id, "name": h.name, "raw_score": h.raw_score, "avg_price": prices[h.id].price_rub if h.id in prices else None,
+         "price_is_reference": h.id in prices and getattr(prices[h.id], 'reference_only', False), "vram": h.vram}
         for h in all_hw if h.type == "GPU" and h.raw_score>0
     ]
     all_rams = [
@@ -119,16 +289,17 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
                      'estimated' if resale_hardware.id in resale_quotes else 'unavailable')
     resale_notice = None
     if resale_status == 'unavailable':
-        resale_notice = (f'Автоматическая цена продажи {resale_hardware.name} на Avito не получена. '
-                         f'{payload.budget or 0:,} ₽ — только ваши деньги; общая сумма после продажи пока неизвестна. '
-                         'Повторите автоматический поиск или укажите ожидаемую цену продажи в форме.')
+        resale_notice = (f'Для {resale_hardware.name} пока нет трёх свежих объявлений той же модели на бирже UpgradeLab. '
+                         f'{payload.budget or 0:,} ₽ — ваши деньги; выручка от продажи пока неизвестна. '
+                         'Укажите свою ожидаемую цену продажи в форме, если хотите учесть её в бюджете.')
         result = replace(result, recommendation=result.recommendation.replace(
             'после учёта продажи доступно', 'без оценки продажи доступно'))
 
     platforms, chosen_platform, platform_note = [], None, None
     legacy = cpu.socket not in ('AM4', 'AM5', 'LGA1200', 'LGA1700')
-    if result.bottleneck.value == 'CPU' and (legacy or not result.upgrade_id or payload.selected_platform):
-        platforms = platform_choices(payload, db, all_hw, prices, cpu, gpu, result.current_fps, result.total_budget)
+    if result.bottleneck.value == 'CPU' or payload.selected_platform:
+        platform_budget = (payload.budget or 0) + (payload.expected_platform_sale_price or 0) if payload.expected_platform_sale_price is not None else result.total_budget
+        platforms = platform_choices(payload, db, all_hw, prices, cpu, gpu, result.current_fps, platform_budget)
         affordable = [item for item in platforms if item['selection_allowed']]
         if payload.selected_platform:
             if not affordable:
@@ -146,7 +317,7 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
         if platforms:
             cheapest = min(platforms, key=lambda item: item['price'])
             platform_note = ('Проверены комплекты смены платформы: CPU, материнская плата, RAM и кулер. '
-                             'Видеокарта остаётся. Автоматическая оценка продажи учитывает только старый CPU.')
+                             'Видеокарта остаётся. Ожидаемую выручку за старые CPU, плату и RAM можно указать отдельно; она действует только для смены платформы.')
             if not affordable:
                 if resale_status == 'unavailable':
                     platform_note += f" Минимальный найденный комплект — {cheapest['price']:,} ₽. Его доступность по бюджету зависит от ещё неизвестной цены продажи старого CPU."
@@ -159,6 +330,9 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
         raise HTTPException(400, 'Смена CPU-платформы не соответствует текущему сценарию ограничения производительности.')
 
     if chosen_platform:
+        if payload.expected_platform_sale_price is not None:
+            result = replace(result, total_budget=platform_budget, current_component_price=payload.expected_platform_sale_price)
+            resale_status = 'manual'
         choice = chosen_platform
         explanation = (f"Рассмотрена смена платформы {cpu.socket} → {choice['socket']}: {choice['name']}, плата, RAM и кулер. "
                        f"Сумма комплекта {choice['price']:,} ₽; прогноз {choice['fps']} FPS вместо {result.current_fps} FPS. ")
@@ -177,6 +351,97 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
             data['note'] += ' Для части CPU используются относительные результаты отдельного теста CS2; похожие и отсутствующие CPU оцениваются моделью. Это не измерение вашей связки.'
         return data
 
+    # Keep the proven legacy estimate as production baseline. The measured-data
+    # candidate is an additional evidence panel and abstains outside its coverage.
+    from app.services.benchmark_model_v2 import predict_pair
+    resolution, preset = payload.mode.value.rsplit('_', 1)
+    if resolution == '4k':
+        resolution = '4K'
+    fps_v2_evidence = predict_pair(cpu.name, gpu.name, payload.game.value,
+        resolution, preset, ram_type=ram_type, ram_channels=ram_channels,
+        ram_capacity_gb=ram_capacity_gb)
+
+    # v3 remains available as an abstaining diagnostic until workload anchors are calibrated.
+    from app.services.adaptive_fps import predict_adaptive_fps, compare_adaptive_results
+    current_v3 = {'average_fps': None, 'cpu_frame_time_ms': None, 'gpu_frame_time_ms': None,
+        'bottleneck': None, 'method': 'abstain', 'model_version': '3.0',
+        'confidence': 'insufficient_data',
+        'missing_data': ['No calibrated per-game CPU/GPU workload anchors.']}
+    adaptive_settings = {"resolution": resolution, "preset": preset,
+                         "ram_type": ram_type, "ram_channels": ram_channels,
+                         "ram_capacity_gb": ram_capacity_gb}
+    current_adaptive = predict_adaptive_fps(cpu, gpu, payload.game.value,
+                                            adaptive_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+    current_v4 = current_adaptive["technical_details"]
+    after_adaptive = None
+    after_v4 = None
+    after_v3 = None
+    delta_percent = gain_per_ruble = None
+    replacement = db.get(Hardware, result.upgrade_id) if result.upgrade_id else None
+    if replacement and chosen_platform:
+        next_cpu, next_gpu = replacement, gpu
+        platform_fps_settings = {**adaptive_settings,
+            "ram_type": chosen_platform.get("ram_type", ram_type),
+            "ram_channels": 2,
+            "ram_capacity_gb": chosen_platform.get("ram_capacity_gb", ram_capacity_gb)}
+        after_adaptive = predict_adaptive_fps(next_cpu, next_gpu, payload.game.value,
+                                              platform_fps_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+        after_v4 = after_adaptive["technical_details"]
+    elif replacement:
+        next_cpu = replacement if result.bottleneck.value == 'CPU' else cpu
+        next_gpu = replacement if result.bottleneck.value == 'GPU' else gpu
+        after_adaptive = predict_adaptive_fps(next_cpu, next_gpu, payload.game.value,
+                                              adaptive_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+        after_v4 = after_adaptive["technical_details"]
+        after_v3 = {'average_fps': None, 'cpu_frame_time_ms': None, 'gpu_frame_time_ms': None,
+            'bottleneck': None, 'method': 'abstain', 'model_version': '3.0',
+            'confidence': 'insufficient_data',
+            'missing_data': ['No calibrated per-game CPU/GPU workload anchors.']}
+    delta_percent = gain_per_ruble = None
+    fps_v3_evidence = {'current': current_v3, 'after': after_v3,
+        'gain_percent': None, 'gain_fps_per_ruble': None,
+        'method': 'abstain', 'confidence': 'insufficient_data',
+        'note': 'FPS Engine v3 has no calibrated game-specific CPU/GPU workload anchors; component frame times and upgrade gain are unavailable.'}
+    adaptive_comparison = compare_adaptive_results(current_adaptive, after_adaptive)
+    gpu_oriented_gain = adaptive_comparison.get('gpu_oriented_gain_fps')
+    adequacy_before = current_v4.get('cpu_adequacy') or {}
+    adequacy_after = (after_v4 or {}).get('cpu_adequacy') or {}
+    def adequacy_index(item):
+        comparison = item.get('recommended') or item.get('minimum') or {}
+        return comparison.get('index_vs_reference_percent')
+    before_index, after_index = adequacy_index(adequacy_before), adequacy_index(adequacy_after)
+    fps_v4_evidence = {'current': current_v4, 'after': after_v4,
+        'gain_fps': (round(after_v4['average_fps'] - current_v4['average_fps'], 2)
+                     if comparable_pair_measurements(current_v4, after_v4)
+                     and current_v4.get('average_fps') is not None and after_v4.get('average_fps') is not None else None),
+        'gpu_oriented_gain_fps': gpu_oriented_gain,
+        'cpu_adequacy_change': ({'before_index': before_index, 'after_index': after_index,
+                                 'change_points': round(after_index - before_index, 1)}
+                                if before_index is not None and after_index is not None
+                                and replacement is not None and replacement.type == 'CPU' else None),
+        'note': 'Единый v4 использует точные измерения, если они есть. GPU-ориентированный прирост не является FPS всей системы; CPU Adequacy — ориентир требований по суммарному PassMark CPU Mark, не FPS.'}
+
+    def attach_adaptive_result(item):
+        candidate_row = db.get(Hardware, item.get('id')) if item.get('id') else None
+        if candidate_row is None or candidate_row.type not in {'CPU', 'GPU'}:
+            return
+        next_cpu = candidate_row if candidate_row.type == 'CPU' else cpu
+        next_gpu = candidate_row if candidate_row.type == 'GPU' else gpu
+        candidate_settings = adaptive_settings
+        if item.get('kind') == 'platform':
+            candidate_settings = {**adaptive_settings,
+                "ram_type": item.get('ram_type', ram_type),
+                "ram_channels": 2,
+                "ram_capacity_gb": item.get('ram_capacity_gb', ram_capacity_gb)}
+        after_result = predict_adaptive_fps(next_cpu, next_gpu, payload.game.value,
+                                            candidate_settings, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+        comparison = compare_adaptive_results(current_adaptive, after_result)
+        item['fps_result'] = {'current': current_adaptive, 'after': after_result, **comparison}
+        if after_result.get('average_fps') is not None:
+            item['fps'] = round(after_result['average_fps'])
+            if comparison.get('gain_fps') is not None:
+                item['gain'] = round(comparison['gain_fps'])
+
     alternatives = []
     for variant in result.alternatives:
         if legacy and not variant.get('price'):
@@ -185,17 +450,23 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
         item.update(kind='single', key=f"single:{item['id']}")
         item['price_quote'] = public_price(prices.get(item['id']))
         item['fps_outlook'] = outlook(item['fps'], item['name'] if item['component'] == 'GPU' else gpu.name)
+        attach_adaptive_result(item)
         alternatives.append(item)
     for item in platforms:
         item['resale_value'] = result.current_component_price
         item['net_cost'] = max(0, item['price']-result.current_component_price)
         item['price_quote'] = {'avg_price': item['price'], 'price_source': 'Сумма комплектующих', 'price_origin': 'platform_total'}
         item['fps_outlook'] = outlook(item['fps'], gpu.name)
+        attach_adaptive_result(item)
     if platforms:
         combined = [*platforms, *alternatives] if chosen_platform or legacy else [*alternatives, *platforms]
         if chosen_platform:
             combined.sort(key=lambda item: item['key'] != chosen_platform['key'])
         alternatives = combined[:3]
+        if not chosen_platform and platforms and not any(item.get('kind') == 'platform' for item in alternatives):
+            alternatives = alternatives[:2] + [platforms[0]]
+        if not chosen_platform and platforms and not any(item.get('kind') == 'platform' for item in alternatives):
+            alternatives = alternatives[:2] + [platforms[0]]
     for item in alternatives:
         item['resale_status'] = resale_status
         if resale_status == 'unavailable':
@@ -212,11 +483,18 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
                             'price_origin': 'manual', 'price_date': None, 'price_url': None}
         else:
             resale_price = public_price(resale_quotes.get(cpu.id if result.bottleneck.value == 'CPU' else gpu.id))
+    else:
+        resale_price = public_price(market_resale_quotes.get(resale_hardware.id))
+        if resale_price.get('avg_price') is None:
+            resale_price = None
     
     return CalculateResponse(
         bottleneck=result.bottleneck,
-        current_fps=result.current_fps,
-        upgraded_fps=result.upgraded_fps,
+        current_fps=(round(current_adaptive['average_fps'])
+                     if current_adaptive.get('average_fps') is not None else None),
+        upgraded_fps=(round(after_adaptive['average_fps'])
+                      if after_adaptive and after_adaptive.get('average_fps') is not None
+                      else None),
         recommendation=result.recommendation,
         avg_price=result.avg_price,
         within_budget=result.within_budget,
@@ -233,7 +511,12 @@ def _post_calculate(payload: CalculateRequest, db: DBSession):
         target_fps=payload.target_fps,
         current_fps_outlook=outlook(result.current_fps, gpu.name),
         upgraded_fps_outlook=outlook(result.upgraded_fps, result.upgrade_name if result.upgrade_id and result.bottleneck.value == 'GPU' else gpu.name),
-        target_reached=result.upgraded_fps >= payload.target_fps,
+        fps_v2_evidence=fps_v2_evidence,
+        fps_v3_evidence=fps_v3_evidence,
+        fps_v4_evidence=fps_v4_evidence,
+        fps_result={'current': current_adaptive, 'after': after_adaptive, **adaptive_comparison},
+        target_reached=(after_adaptive.get('average_fps') >= payload.target_fps
+                        if after_adaptive and after_adaptive.get('average_fps') is not None else None),
         compatibility_notes=chosen_platform['compatibility_notes'] if chosen_platform else (
             ["Совпадение сокета проверено. Поддержку CPU, BIOS, тип RAM и питание проверьте по модели материнской платы."]
             if result.upgrade_id and result.bottleneck.value == "CPU" else

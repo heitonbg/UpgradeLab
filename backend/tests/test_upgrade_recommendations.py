@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from app.db.base import Base
-from app.db.models import Hardware, HardwarePrice, StoreOffer
+from app.db.models import Hardware, HardwarePrice, StoreOffer, Listing, ListingOwner, User
 from app.schemas.calculate import CalculateRequest, CalcMode, GameName
 from app.api.calculate import post_calculate
 from app.services.performance import cpu_capacity, cs2_gpu_reference
@@ -53,6 +53,10 @@ class UpgradeRecommendationsTests(unittest.TestCase):
         result = post_calculate(self.payload, self.db)
         self.assertEqual(result.bottleneck.value, 'CPU')
         self.assertIn('близки', result.limiting_explanation)
+        self.assertNotIn('25%', result.limiting_explanation)
+        if result.upgrade_component:
+            self.assertIn(result.upgrade_name, result.limiting_explanation)
+            self.assertIn(f'{result.upgraded_fps - result.current_fps:+} FPS', result.limiting_explanation)
         self.assertTrue(result.alternatives)
         names = [option['name'] for option in result.alternatives]
         self.assertTrue(any('5800X' in name or '5700X3D' in name for name in names))
@@ -95,6 +99,36 @@ class UpgradeRecommendationsTests(unittest.TestCase):
         self.assertEqual(avito['sample_count'], 1)
         self.assertNotIn(3, upgrade_price_map(self.db, ['dns']))
 
+    def test_passmark_price_is_a_dated_reference_fallback_not_a_purchase_quote(self):
+        self.db.add(HardwarePrice(hardware_id=3,source='passmark',price_rub=27327,
+            market='retail_us_converted',source_url='https://www.cpubenchmark.net/CPU_mega_page.html',
+            sample_count=1,observed_at=self.now-timedelta(days=18)))
+        self.db.add(HardwarePrice(hardware_id=4,source='passmark',price_rub=18387,
+            market='retail_us_converted',source_url='https://www.cpubenchmark.net/CPU_mega_page.html',
+            sample_count=1,observed_at=self.now-timedelta(days=100)))
+        self.db.commit()
+        prices=upgrade_price_map(self.db,['dns'])
+        quote=prices[3]
+        self.assertNotIn(4,prices)
+        self.assertEqual(quote.price_rub,27327)
+        self.assertTrue(quote.reference_only)
+        public=public_price(quote)
+        self.assertEqual(public['price_origin'],'passmark_reference')
+        self.assertFalse(public['is_purchase_quote'])
+        self.assertIsNone(public['price_verified_at'])
+
+    def test_passmark_reference_is_displayed_but_cannot_confirm_upgrade_budget(self):
+        self.db.add(HardwarePrice(hardware_id=3,source='passmark',price_rub=27327,
+            market='retail_us_converted',source_url='https://www.cpubenchmark.net/CPU_mega_page.html',
+            sample_count=1,observed_at=self.now-timedelta(days=18)))
+        self.db.commit()
+        result=post_calculate(self.payload.model_copy(update={'price_sources':['dns']}),self.db)
+        option=next(row for row in result.alternatives if row['id']==3)
+        self.assertEqual(option['price'],27327)
+        self.assertTrue(option['price_is_reference'])
+        self.assertFalse(option['selection_allowed'])
+        self.assertIsNone(option['budget_shortfall'])
+
     def test_invalid_or_unaffordable_selection_is_rejected(self):
         from fastapi import HTTPException
         with self.assertRaises(HTTPException):
@@ -134,11 +168,13 @@ class UpgradeRecommendationsTests(unittest.TestCase):
         non_x3d=next(card for card in result.alternatives if card['id']==4)
         x3d=next(card for card in result.alternatives if card['id'] in (3,6))
         self.assertGreater(x3d['fps'],non_x3d['fps'])
+        self.assertNotEqual(x3d['cpu_model_fps'],non_x3d['cpu_model_fps'])
+        self.assertIn(x3d['fps_limited_by'], ('CPU','GPU'))
         self.assertEqual(result.upgraded_fps_outlook['method'],'benchmark_settings_estimate')
         self.assertIn('Medium',result.upgraded_fps_outlook['sources'][0]['settings'])
         self.assertIsNone(cs2_gpu_reference('GeForce RTX 3050 6GB',10000))
 
-    def test_resale_is_independent_of_purchase_sources_and_can_use_recent_market_history(self):
+    def test_resale_ignores_old_avito_market_history(self):
         self.offer(1,'AMD Ryzen 5 5600X',7000,hardware_id=1,age=48)
         self.db.add(StoreOffer(id=2, source='dns', category='CPU', name='AMD Ryzen 7 5700X3D',
             price_rub=18000, url='https://www.dns-shop.ru/product/test/', condition='new',
@@ -146,13 +182,61 @@ class UpgradeRecommendationsTests(unittest.TestCase):
         self.db.commit()
         result = post_calculate(self.payload.model_copy(update={
             'budget':12000, 'sell_mode':'budget_plus_sell', 'price_sources':['dns']}),self.db)
+        self.assertEqual(result.current_component_price,0)
+        self.assertEqual(result.total_budget,12000)
+        self.assertEqual(result.resale_status,'unavailable')
+
+    def test_resale_uses_median_of_three_recent_exact_local_listings(self):
+        for ident, price in enumerate((6000, 7000, 8000), 1):
+            self.db.add(User(id=ident,email=f'seller{ident}@example.test',name='Seller',password_hash='fixture'))
+            self.db.add(Listing(id=ident,title='AMD Ryzen 5 5600X',condition='Б/У',price=str(price),
+                contact='test',listing_type='sale',publication_status='active',hardware_id=1,
+                created_at=self.now))
+            self.db.add(ListingOwner(listing_id=ident,user_id=ident))
+        self.db.commit()
+        result = post_calculate(self.payload.model_copy(update={
+            'budget':12000,'sell_mode':'budget_plus_sell','price_sources':['dns']}),self.db)
+        self.assertEqual(result.resale_status,'estimated')
         self.assertEqual(result.current_component_price,7000)
         self.assertEqual(result.total_budget,19000)
-        self.assertEqual(result.upgrade_id,3)
-        self.assertEqual(result.net_upgrade_cost,11000)
-        self.assertTrue(result.within_budget)
-        self.assertEqual(result.resale_price['sample_count'],1)
-        self.assertEqual(result.resale_price['price_window_days'],7)
+        self.assertEqual(result.resale_price['average_method'],'median')
+        self.assertEqual(result.resale_price['sample_count'],3)
+        self.assertEqual(result.resale_price['price_window_days'],30)
+
+    def test_resale_estimate_is_shown_after_results_without_increasing_cash_budget(self):
+        for ident, price in enumerate((6000, 7000, 8000), 1):
+            self.db.add(User(id=ident,email=f'postresult{ident}@example.test',name='Seller',password_hash='fixture'))
+            self.db.add(Listing(id=ident,title='AMD Ryzen 5 5600X',condition='Б/У',price=str(price),
+                contact='test',listing_type='sale',publication_status='active',hardware_id=1,
+                created_at=self.now))
+            self.db.add(ListingOwner(listing_id=ident,user_id=ident))
+        self.db.commit()
+        result=post_calculate(self.payload.model_copy(update={'budget':12000,'price_sources':['dns']}),self.db)
+        self.assertEqual(result.mode,'budget_only')
+        self.assertEqual(result.current_component_price,0)
+        self.assertEqual(result.total_budget,12000)
+        self.assertEqual(result.resale_price['price_origin'],'market_median')
+        self.assertEqual(result.resale_price['avg_price'],7000)
+        self.assertEqual(result.resale_price['min_price_rub'],6000)
+        self.assertEqual(result.resale_price['max_price_rub'],8000)
+        self.assertEqual(result.resale_price['sample_count'],3)
+
+    def test_resale_requires_three_sellers_and_ignores_sold_ads(self):
+        self.db.add(User(id=1,email='one@example.test',name='Seller',password_hash='fixture'))
+        for ident, price in enumerate((6000, 7000, 8000), 1):
+            self.db.add(Listing(id=ident,title='AMD Ryzen 5 5600X',condition='Б/У',price=str(price),
+                contact='test',listing_type='sale',publication_status='active',hardware_id=1,
+                created_at=self.now))
+            self.db.add(ListingOwner(listing_id=ident,user_id=1))
+        self.db.commit()
+        payload = self.payload.model_copy(update={'budget':12000,'sell_mode':'budget_plus_sell'})
+        self.assertEqual(post_calculate(payload,self.db).resale_status,'unavailable')
+        for ident in (2,3):
+            self.db.add(User(id=ident,email=f'other{ident}@example.test',name='Seller',password_hash='fixture'))
+            self.db.get(ListingOwner,ident).user_id=ident
+        self.db.get(Listing,3).publication_status='sold'
+        self.db.commit()
+        self.assertEqual(post_calculate(payload,self.db).resale_status,'unavailable')
 
     def test_manual_resale_value_is_counted_once_and_only_when_enabled(self):
         enabled=self.payload.model_copy(update={'budget':12000,'sell_mode':'budget_plus_sell','expected_sale_price':7000})
@@ -207,6 +291,29 @@ class UpgradeRecommendationsTests(unittest.TestCase):
         self.assertEqual(limiting.id,1)
         self.assertTrue({3,6}.issubset({item.id for item in candidates}))
         self.assertNotIn(5,{item.id for item in candidates})
+
+    def test_duplicate_catalog_row_for_current_cpu_is_not_an_upgrade(self):
+        from sqlalchemy import select
+        self.db.add(Hardware(id=7,type='CPU',name='AMD Ryzen 5 5600X',raw_score=24000,
+                             normalized_score=52,socket='AM4'))
+        self.db.commit()
+        hardware=list(self.db.scalars(select(Hardware)))
+        candidates,limiting=upgrade_search_candidates(hardware,hardware[0],hardware[1],
+            GameName.CS2,CalcMode.MODE_1080P_LOW,600,'DDR4',2)
+        self.assertEqual(limiting.id,1)
+        self.assertNotIn(7,{item.id for item in candidates})
+        self.assertEqual(sum(item.name=='AMD Ryzen 5 5600X' for item in candidates),1)
+        result=post_calculate(self.payload,self.db)
+        self.assertFalse(any(option['name']=='AMD Ryzen 5 5600X' for option in result.alternatives))
+
+    def test_ram_context_does_not_change_upgrade_fps_ranking(self):
+        from sqlalchemy import select
+        hardware=list(self.db.scalars(select(Hardware)))
+        ddr4,_=upgrade_search_candidates(hardware,hardware[0],hardware[1],
+            GameName.CS2,CalcMode.MODE_1080P_LOW,550,'DDR4',2)
+        ddr5,_=upgrade_search_candidates(hardware,hardware[0],hardware[1],
+            GameName.CS2,CalcMode.MODE_1080P_LOW,550,'DDR5',1)
+        self.assertEqual([item.id for item in ddr4],[item.id for item in ddr5])
 
     def test_retail_price_does_not_cancel_avito_replacement_search(self):
         from sqlalchemy import select

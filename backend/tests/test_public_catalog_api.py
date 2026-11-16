@@ -95,6 +95,10 @@ class PublicCatalogApiTests(unittest.TestCase):
         body = self.client.get('/api/catalog/readiness').json()
         self.assertTrue(body['ready'])
         self.assertEqual(body['usable_offers'], 1)
+        self.assertEqual(body['latest_source_price_at'], '2026-11-10T00:00:00Z')
+        self.assertEqual(set(body['automatic_download']), {
+            'status', 'bootstrap_enabled', 'network_enabled', 'permission_granted', 'daily_scheduler_enabled'})
+        self.assertFalse(body['automatic_download']['permission_granted'])
         from sqlalchemy import delete
         with Session(self.engine) as db:
             db.execute(delete(StoreOffer).where(StoreOffer.url == 'https://www.regard.ru/product/1000'))
@@ -103,6 +107,14 @@ class PublicCatalogApiTests(unittest.TestCase):
         self.assertFalse(body['ready'])
         self.assertEqual(body['products'], 2)
         self.assertEqual(body['usable_offers'], 0)
+
+    def test_readiness_identifies_missing_import(self):
+        with Session(self.engine) as db:
+            db.delete(db.get(CatalogAccess, 'regard'))
+            db.commit()
+        body = self.client.get('/api/catalog/readiness').json()
+        self.assertFalse(body['ready'])
+        self.assertEqual(body['status'], 'not_imported')
 
 if __name__ == '__main__':
     unittest.main()

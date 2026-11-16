@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 import json
 import re
 from sqlalchemy import select
-from app.db.models import Hardware, HardwarePrice, StoreOffer
+from app.db.models import Hardware, HardwarePrice, StoreOffer, Listing, ListingOwner
 
 from app.services.prices import price_map
 
@@ -87,6 +87,56 @@ def avito_price_estimates(db):
     return quotes
 
 
+def internal_resale_estimates(db):
+    """Median asking price for an exact hardware model in the local used market.
+
+    At least three distinct active ads are required; this is an estimate, never
+    a confirmed sale price or a live store offer.
+    """
+    now = db_now()
+    grouped = defaultdict(list)
+    rows = db.execute(select(Listing, ListingOwner.user_id).join(ListingOwner).where(
+        Listing.hardware_id.is_not(None),
+        Listing.publication_status == 'active',
+        Listing.listing_type == 'sale',
+        Listing.condition.in_(('Б/У', 'used')),
+        Listing.created_at >= now - timedelta(days=30),
+        Listing.created_at <= now,
+    ))
+    for row, owner_id in rows:
+        try:
+            price = int(str(row.price).replace(' ', '').replace('\u00a0', ''))
+        except (ValueError, TypeError):
+            continue
+        if price > 0:
+            grouped[row.hardware_id].append((price, row, owner_id))
+    quotes = {}
+    for hardware_id, samples in grouped.items():
+        latest_by_owner = {}
+        for price, row, owner_id in samples:
+            previous = latest_by_owner.get(owner_id)
+            if previous is None or (row.updated_at or row.created_at, row.id) > (previous[1].updated_at or previous[1].created_at, previous[1].id):
+                latest_by_owner[owner_id] = (price, row)
+        samples = list(latest_by_owner.values())
+        if len(samples) < 3:
+            continue
+        centre = median(price for price, _ in samples)
+        clean = [(price, row) for price, row in samples if centre * .5 <= price <= centre * 2]
+        if len(clean) < 3:
+            continue
+        quotes[hardware_id] = SimpleNamespace(
+            price_rub=round(median(price for price, _ in clean)),
+            min_price_rub=min(price for price, _ in clean),
+            max_price_rub=max(price for price, _ in clean),
+            source='upgradelab', market='used_ru', source_url=None,
+            observed_at=max(row.updated_at or row.created_at for _, row in clean),
+            sample_count=len(clean), origin='market_median', offer_id=None,
+            offer_name=None, verified_at=None, average_method='median',
+            observation_days=30,
+        )
+    return quotes
+
+
 def upgrade_price_map(db, sources=None):
     quotes = price_map(db, sources)
     # Upgrade estimates deliberately accept the documented seven-day observation window.
@@ -118,6 +168,22 @@ def upgrade_price_map(db, sources=None):
             if (previous is None or previous.source in ('avito', 'avito_snapshot') or
                     quote.price_rub <= previous.price_rub):
                 quotes[hardware_id] = quote
+    # PassMark's saved affiliate prices are not current local offers. Keep them
+    # as a visibly dated fallback so a missing store result need not hide every
+    # price, while the calculator can still exclude them from budget decisions.
+    now = as_utc(db_now())
+    for quote in db.scalars(select(HardwarePrice).where(HardwarePrice.source == 'passmark')):
+        age = now - as_utc(quote.observed_at)
+        if (quote.hardware_id in quotes or quote.price_rub <= 0
+                or quote.market != 'retail_us_converted'
+                or age < timedelta(0) or age > timedelta(days=90)):
+            continue
+        quotes[quote.hardware_id] = SimpleNamespace(
+            price_rub=quote.price_rub, source='passmark', market='retail_us_converted',
+            source_url=quote.source_url, observed_at=quote.observed_at,
+            sample_count=quote.sample_count, origin='passmark_reference',
+            offer_id=None, offer_name=None, verified_at=None, reference_only=True,
+        )
     return quotes
 
 
@@ -152,14 +218,16 @@ def upgrade_search_summary(statuses, prices, resale_quotes, sources, started, na
 def upgrade_search_candidates(hardware, cpu, gpu, game=None, mode=None, target_fps=60,
                               ram_type=None, ram_channels=None):
     """Choose replacements by their gaming outcome, not multi-core score proximity."""
-    from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, ram_performance_factor, cs2_cpu_basis
+    from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, cs2_cpu_basis
     from app.services.calculator import meaningful_upgrade
     from app.services.builds import desktop_gpu
     from app.schemas.calculate import GameName
 
     if game is None or mode is None:
         return [cpu, gpu], cpu
-    factor = ram_performance_factor(game, cpu.name, ram_type, ram_channels)
+    # RAM details are retained for compatibility/evidence matching but are not
+    # a calibrated FPS coefficient in the adaptive model.
+    factor = 1.0
     cpu_cap = cpu_capacity(cpu.raw_score, cpu.name, game, mode, factor)
     gpu_cap = gpu_capacity(gpu.raw_score, gpu.name, game, mode)
     current = estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, game, mode, factor, cpu.name)
@@ -168,9 +236,25 @@ def upgrade_search_candidates(hardware, cpu, gpu, game=None, mode=None, target_f
         return (estimate_fps(item.raw_score, gpu.raw_score, gpu.name, game, mode, factor, item.name)
                 if item.type == 'CPU' else
                 estimate_fps(cpu.raw_score, item.raw_score, item.name, game, mode, factor, cpu.name))
+    from app.services.offers import signature
+    current_signature = signature(limiting.name, limiting.type)
     choices = [item for item in hardware if item.id != limiting.id and item.type == limiting.type and (
         bool(cpu.socket) and 'BGA' not in cpu.socket.upper() and item.socket == cpu.socket
         if item.type == 'CPU' else desktop_gpu(item.name)) and meaningful_upgrade(current, after(item))]
+    # Hardware catalogs can contain duplicate rows for one marketed model.
+    # An alternate ID must not make the current CPU/GPU appear as its own upgrade.
+    if current_signature and limiting.type == 'CPU':
+        choices = [item for item in choices
+                   if signature(item.name, item.type) != current_signature]
+    unique_choices = {}
+    for item in choices:
+        model_signature = signature(item.name, item.type)
+        key = ((model_signature, getattr(item, 'vram', None)) if item.type == 'GPU' and model_signature
+               else model_signature or f'{item.name.casefold()}:{item.id}')
+        previous = unique_choices.get(key)
+        if previous is None or (item.raw_score, -item.id) > (previous.raw_score, -previous.id):
+            unique_choices[key] = item
+    choices = list(unique_choices.values())
     if limiting.type == 'CPU' and game == GameName.CS2 and cs2_cpu_basis(cpu.name):
         based = [item for item in choices if cs2_cpu_basis(item.name)]
         choices = based or choices

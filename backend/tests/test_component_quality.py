@@ -14,6 +14,17 @@ def offer(category, name, attributes=None, condition='new'):
 
 
 class ComponentQualityTests(unittest.TestCase):
+    def test_deepcool_750w_supplies_are_allowed_with_correct_specs(self):
+        for model, rating in [('PK750D', 'Bronze'), ('PN750M', 'Gold')]:
+            with self.subTest(model=model):
+                spec, reason = quality_check(offer('psu', f'DeepCool {model} 750W 80 PLUS {rating}'))
+                self.assertIsNone(reason)
+                self.assertEqual(spec['watts'], 750)
+                self.assertEqual(spec['label'], f'80 PLUS {rating}')
+                self.assertIsNone(quality_check(offer('psu', f'DeepCool {model} 650W'))[0])
+                self.assertIsNone(quality_check(offer('psu', f'DeepCool {model} V2 750W'))[0])
+        self.assertIsNone(quality_check(offer('psu', 'ID-COOLING SE-214-XT'))[0])
+
     def test_avito_internal_chinese_ssd_is_allowed_with_condition_warning(self):
         for name in ['Netac NV3000 500GB M.2 2280', 'Netac NV3000-Q 512GB M.2 2280', 'KingSpec NX-512GB M.2 2280']:
             row=offer('storage',name,condition='used')
@@ -92,6 +103,25 @@ class ComponentQualityTests(unittest.TestCase):
         self.assertIsNone(quality_check(offer('psu', 'MSI MAG A650BN 80 PLUS Gold'))[0])
         self.assertIsNone(quality_check(offer('psu', 'MSI MAG A650BN', condition='used'))[0])
         self.assertIsNone(quality_check(offer('psu', 'Кабели для блока питания MSI MAG A650BN'))[0])
+
+    def test_additional_verified_psu_ssd_and_cooler_models(self):
+        for title,watts in [('Corsair RM650e 650W 80 PLUS Gold',650),
+                            ('Corsair RM750e 750W 80 PLUS Gold',750),
+                            ('Seasonic CORE GX-650 650W Gold',650),
+                            ('Seasonic CORE GX-750 750W Gold',750)]:
+            with self.subTest(title=title):
+                evidence,reason=quality_check(offer('psu',title))
+                self.assertIsNone(reason)
+                self.assertEqual(evidence['watts'],watts)
+        self.assertIsNone(quality_check(offer('psu','Seasonic CORE GX-650 750W'))[0])
+        evidence,reason=quality_check(offer('storage','WD_BLACK SN770 1TB M.2 2280'))
+        self.assertIsNone(reason)
+        self.assertEqual(evidence['capacity_gb'],1000)
+        self.assertIn('PCIe 4.0',evidence['claims'][0])
+        self.assertIsNone(quality_check(offer('storage','WD_BLACK SN770 512GB M.2 2280'))[0])
+        for title in ('DeepCool AK400','Thermalright Phantom Spirit 120 SE'):
+            self.assertIsNotNone(quality_check(offer('cooler',title),'AM5')[0])
+            self.assertIsNotNone(quality_check(offer('cooler',title),'LGA1851')[0])
 
     def test_external_ssds_and_adapters_cannot_override_the_title_with_attributes(self):
         for name in ['Внешний SSD Samsung 870 EVO 500GB USB', 'SSD Kingston KC600 512GB USB Type-C',

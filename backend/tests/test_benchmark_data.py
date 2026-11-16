@@ -32,15 +32,15 @@ class OptimizerEvidenceTests(unittest.TestCase):
 
 
 import copy,json,math,tempfile
-from app.services.benchmark_data import build_dataset,Observation,deduplicate,import_open_gpu,import_techfuel,native_cohort,DIRECTORY,ROOT
+from app.services.benchmark_data import build_dataset,Observation,deduplicate,import_open_gpu,import_techfuel,import_fpshq_measured,native_cohort,DIRECTORY,ROOT
 from app.services.benchmark_calibration import compare_models,error_metrics,publisher_folds,solve_frametime,relative_prediction,features
 
 class BenchmarkDataTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):cls.dataset=build_dataset();cls.rows=cls.dataset['rows']
     def test_snapshot_counts_separate_measurements_and_synthetics(self):
-        q=self.dataset['quality'];self.assertEqual(q['observations'],81);self.assertEqual(q['games'],4)
-        self.assertEqual(q['publishers'],2);self.assertEqual(q['series'],4)
+        q=self.dataset['quality'];self.assertEqual(q['observations'],87);self.assertEqual(q['games'],6)
+        self.assertEqual(q['publishers'],3);self.assertEqual(q['series'],5)
         self.assertEqual(len(q['excluded']),20);self.assertEqual(len(q['duplicates_merged']),1)
         self.assertEqual(q['native_windows_stock'],4);self.assertEqual(q['native_linux_stock'],8)
     def test_missing_techfuel_metadata_remains_unknown(self):
@@ -49,6 +49,15 @@ class BenchmarkDataTests(unittest.TestCase):
         wukong=next(r for r in rows if r['game']=='Black Myth: Wukong')
         self.assertIsNone(wukong['render_scale']);self.assertIsNone(wukong['rt']);self.assertIsNone(wukong['frame_generation'])
         self.assertTrue(all(not native_cohort(r) for r in rows))
+    def test_fpshq_model_and_aggregate_rows_are_not_imported_as_measurements(self):
+        archive=json.loads((DIRECTORY/'fpshq_model_top50_raw.json').read_text(encoding='utf-8'))
+        rows=import_fpshq_measured(archive)
+        self.assertEqual(len(archive['rows']),2400)
+        self.assertEqual(len(rows),6)
+        self.assertTrue(all(r['cpu'] is None and r['record_kind']=='summary' for r in rows))
+        self.assertTrue(all(not native_cohort(r) for r in rows))
+        archive['meta']['license']='unknown'
+        with self.assertRaises(ValueError):import_fpshq_measured(archive)
     def test_repeated_pt_observation_merges_low_and_both_sources(self):
         r=next(r for r in self.rows if r['publisher']=='TechFuelHQ' and r['average_fps']==19)
         self.assertEqual(len(r['source_ids']),2);self.assertEqual(r['one_percent_low'],15)
@@ -82,9 +91,9 @@ class BenchmarkDataTests(unittest.TestCase):
         a=compare_models(self.rows);b=compare_models(self.rows)
         self.assertEqual(a,b);self.assertFalse(a['promotion']['allowed'])
         self.assertEqual(a['models']['legacy']['n'],2)
-        self.assertAlmostEqual(a['models']['legacy']['all_configuration_prediction_coverage'],2/72)
-        self.assertAlmostEqual(a['models']['legacy']['all_observation_prediction_coverage'],3/81)
-        self.assertAlmostEqual(a['models']['legacy']['mae'],86.385)
+        self.assertAlmostEqual(a['models']['legacy']['all_configuration_prediction_coverage'],2/78)
+        self.assertAlmostEqual(a['models']['legacy']['all_observation_prediction_coverage'],3/87)
+        self.assertAlmostEqual(a['models']['legacy']['mae'],36.885)
         self.assertEqual(a['models']['relative_transfer']['n'],0)
         self.assertIsNone(a['models']['regression']['mae']);self.assertEqual(a['x3d_comparisons'],[])
     def test_no_cross_cpu_x3d_transfer(self):
@@ -110,12 +119,12 @@ class BenchmarkDataTests(unittest.TestCase):
             with patch('socket.socket.connect',side_effect=AssertionError('No network')),patch('app.db.base.engine.connect',side_effect=AssertionError('No working SQLite')):
                 q,e=prepare(directory)
             saved=json.loads((Path(directory)/'measurements.json').read_text(encoding='utf-8'))
-            self.assertEqual(saved['rows'],self.rows);self.assertEqual(q['observations'],81)
+            self.assertEqual(saved['rows'],self.rows);self.assertEqual(q['observations'],87)
 
     def test_raw_repeat_does_not_increase_independent_configurations(self):
         from app.services.benchmark_calibration import configuration_rows
         grouped=configuration_rows(self.rows)
-        self.assertEqual(len(grouped),72)
+        self.assertEqual(len(grouped),78)
         qhd=next(r for r in grouped if r['os']=='windows' and r['resolution']=='1440p' and r['preset']=='High' and r['upscaling']=='off')
         self.assertEqual(qhd['observation_count'],2)
         self.assertAlmostEqual(qhd['average_fps'],179.13)

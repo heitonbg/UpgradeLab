@@ -4,9 +4,14 @@ import logging
 import os
 import sqlite3
 import sys
+import threading
+import time
+import tempfile
+import shutil
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 from zipfile import ZipFile, BadZipFile
 
 from sqlalchemy import select
@@ -64,7 +69,7 @@ def backup(database: Path, file_sha: str):
     target_dir = database.parent / "backups"
     target_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    target = target_dir / f"regard-before-{stamp}-{file_sha[:12]}.db"
+    target = target_dir / f"regard-before-{stamp}-{file_sha[:12]}-{uuid4().hex[:8]}.db"
     if target.exists():
         raise CatalogError("backup_path_exists")
     try:
@@ -108,8 +113,8 @@ def _bootstrap(directory: Path | None = None):
     database = Path(engine.url.database)
     if engine.url.get_backend_name() != "sqlite" or not database.is_absolute():
         raise CatalogError("absolute_file_sqlite_required")
-    # The container entrypoint runs before Uvicorn. Existing data is backed up
-    # before create_all, seed or any import journal write.
+    # The background importer starts after Uvicorn is ready. Existing data is
+    # backed up before create_all, seed or any import journal write.
     if database.is_file():
         from sqlalchemy import inspect
         if inspect(engine).has_table("catalog_sync_runs") and already_applied(signature, file_sha, paths[1], rights):
@@ -174,18 +179,96 @@ def bootstrap(directory: Path | None = None):
     with bootstrap_lock(database):
         return _bootstrap(directory)
 
-def main():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    if os.getenv("REGARD_BOOTSTRAP_ON_START", "false").lower() in ("1", "true", "yes"):
+
+def network_refresh():
+    """Download into a spool; publish the XLSX only after a successful import."""
+    from app.services.regard_sync import download
+
+    directory = Path(engine.url.database).parent
+    with tempfile.TemporaryDirectory(prefix="regard-network-", dir=directory) as temporary:
+        spool = Path(temporary)
+        for name in FILES[1:]:
+            shutil.copy2(directory / name, spool / name)
+        rights = CatalogRights.model_validate_json(read_local(spool / FILES[2], 65536))
+        downloaded = download(engine, spool, supplied_rights=rights.model_dump())
+        result = bootstrap(spool)
+        os.replace(downloaded, directory / FILES[0])
+        LOG.info("regard_network status=succeeded sha256=%s", digest((directory / FILES[0]).read_bytes()))
+        return result
+
+def _daily_sync_loop():
+    """Single scheduler across workers; imports remain protected and idempotent."""
+    if not settings.regard_daily_sync_enabled:
+        return
+    interval = settings.regard_daily_sync_interval_seconds
+    database = Path(engine.url.database)
+    lock = open(str(database) + ".regard-scheduler.lock", "a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            if Path(lock.name).stat().st_size == 0:
+                lock.write(b"0"); lock.flush(); lock.seek(0)
+            try: msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                LOG.info("regard_scheduler status=skipped code=another_worker"); return
+        else:
+            import fcntl
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                LOG.info("regard_scheduler status=skipped code=another_worker"); return
+        LOG.info("regard_scheduler status=started interval_seconds=%s", interval)
+        delay = interval
+        while True:
+            time.sleep(delay)
+            try:
+                result = network_refresh()
+                LOG.info("regard_scheduler status=%s", result.get("status", "completed"))
+                delay = interval
+            except Exception as exc:
+                code = str(exc) if isinstance(exc, CatalogError) else type(exc).__name__
+                LOG.error("regard_scheduler status=failed code=%s", code)
+                delay = min(3600, interval)
+    finally:
+        lock.close()
+
+
+def run_import():
+    """Run after the HTTP application starts; failed imports never hide health."""
+    enabled = os.getenv("REGARD_BOOTSTRAP_ON_START", "false").strip().lower() in ("1", "true", "yes")
+    if enabled:
+        local_ok = False
         try:
             bootstrap()
+            local_ok = True
         except Exception as exc:
             code = str(exc) if isinstance(exc, CatalogError) else type(exc).__name__
             if code == "bootstrap_already_running":
-                LOG.error("regard_bootstrap status=failed code=bootstrap_already_running")
-                raise SystemExit(1)
+                LOG.warning("regard_bootstrap status=skipped code=bootstrap_already_running")
+                return
             LOG.error("regard_bootstrap status=failed code=%s; check /api/catalog/readiness", code)
-    os.execvp("uvicorn", ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"])
+        if settings.regard_download_enabled:
+            try:
+                network_refresh()
+            except Exception as exc:
+                code = str(exc) if isinstance(exc, CatalogError) else type(exc).__name__
+                LOG.error("regard_network status=failed code=%s; existing catalog preserved", code)
+    elif os.getenv("AMVERA") == "1":
+        directory = Path(engine.url.database).parent
+        present = [name for name in FILES if (directory / name).is_file()]
+        LOG.warning("regard_bootstrap status=skipped code=disabled data_files=%s; set REGARD_BOOTSTRAP_ON_START=true after uploading all three files", ",".join(present) or "none")
+
+    if os.getenv("AMVERA") == "1" and settings.regard_daily_sync_enabled:
+        threading.Thread(target=_daily_sync_loop, name="regard-daily-sync", daemon=True).start()
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    LOG.info("regard_bootstrap status=deferred; starting HTTP before catalog import")
+    if os.getenv("AMVERA") == "1":
+        database = Path(engine.url.database or "")
+        if engine.url.get_backend_name() != "sqlite" or not database.is_absolute() or Path('/data') not in database.parents:
+            raise RuntimeError('Amvera requires an absolute SQLite DATABASE_URL under /data')
+    os.execvp("uvicorn", ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80", "--workers", "1", "--timeout-graceful-shutdown", "30"])
 
 
 if __name__ == "__main__":

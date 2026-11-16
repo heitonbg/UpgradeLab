@@ -48,6 +48,31 @@ class SearchJobsTests(unittest.TestCase):
         self.assertEqual(saved['result']['budget'],50000)
         self.assertEqual(saved['result']['parts'],[])
 
+    def test_polling_many_offers_uses_bounded_queries(self):
+        from app.db.models import Hardware, Listing, ListingOwner, User, StoreOffer
+        from app.services.search_jobs import public_job
+        from datetime import datetime
+        self.db.add(User(id=1,email='seller@example.test',name='Seller',password_hash='fixture'))
+        self.db.add(Hardware(id=1,type='GPU',name='GeForce RTX 5060',raw_score=20000,normalized_score=50,vram=8))
+        parts=[]
+        for index in range(20):
+            listing=Listing(id=index+1,title=f'GeForce RTX 5060 8GB {index}',condition='Б/У',price='18000',
+                contact='test',listing_type='sale',publication_status='active',category='GPU',hardware_id=1,
+                availability_confirmed_at=datetime.utcnow())
+            self.db.add(listing);self.db.flush();self.db.add(ListingOwner(listing_id=listing.id,user_id=1))
+            offer=StoreOffer(source='dns',url=f'https://example.test/{index}',name=listing.title,category='GPU',
+                price_rub=18000,condition='used',hardware_id=1,observed_at=datetime.utcnow(),origin='product_page',attributes='{}')
+            self.db.add(offer);self.db.flush();parts.append({'offer_id':offer.id,'price':18000})
+        job=SearchJob(id='b'*48,request_key='request',kind='assemble',payload='{}',status='completed',
+            progress='done',result=json.dumps({'parts':parts}))
+        self.db.add(job);self.db.commit()
+        statements=[]
+        from sqlalchemy import event
+        event.listen(self.engine,'before_cursor_execute',lambda *args:statements.append(args[2]))
+        response=public_job(job,self.db)
+        self.assertEqual(response['status'],'completed')
+        self.assertLessEqual(len(statements),8)
+
     def test_failure_is_saved_as_a_result_instead_of_closing_http_connection(self):
         job=self.create()
         with patch('app.api.calculate.post_calculate',side_effect=HTTPException(400,'Неподходящий CPU')),patch(

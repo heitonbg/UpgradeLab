@@ -5,6 +5,9 @@ import './tokens.css'
 import './index.css'
 import './redesign.css'
 import './controls.css'
+import './benchmarks.css'
+import './fixes.css'
+import './mobile.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

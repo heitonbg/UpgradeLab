@@ -1,0 +1,287 @@
+{
+  "dataset_observations": 87,
+  "eligible_native_windows": 4,
+  "eligible_games": 1,
+  "eligible_cpus": 1,
+  "eligible_gpus": 1,
+  "eligible_test_series": 1,
+  "candidate_leave_one_resolution_out": {
+    "metrics": {
+      "n": 1,
+      "eligible_holdouts": 3,
+      "prediction_coverage": 0.3333333333333333,
+      "mae_fps": 28.97,
+      "mape_percent": 16.17261206944677,
+      "mdape_percent": 16.17261206944677,
+      "p90_ape_percent": 16.17261206944677,
+      "bias_fps": -28.97
+    },
+    "points": [
+      {
+        "game": "Cyberpunk 2077",
+        "resolution": "1440p",
+        "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+        "gpu": "GeForce RTX 5080 Founders Edition",
+        "measured": 179.13,
+        "predicted": 150.16,
+        "absolute_error": 28.97,
+        "series": "ogb:official:am5_9950x3d_ddr5:cyberpunk_2077_benchmark:2.31:windows",
+        "method": "same_pair_frame_time_interpolation"
+      }
+    ]
+  },
+  "legacy_same_holdout_diagnostic": {
+    "metrics": {
+      "n": 1,
+      "eligible_holdouts": 1,
+      "prediction_coverage": 1.0,
+      "mae_fps": 56.129999999999995,
+      "mape_percent": 31.334784793166975,
+      "mdape_percent": 31.334784793166975,
+      "p90_ape_percent": 31.334784793166975,
+      "bias_fps": -56.129999999999995
+    },
+    "points": [
+      {
+        "game": "Cyberpunk 2077",
+        "resolution": "1440p",
+        "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+        "gpu": "GeForce RTX 5080 Founders Edition",
+        "measured": 179.13,
+        "predicted": 123,
+        "absolute_error": 56.129999999999995,
+        "series": "ogb:official:am5_9950x3d_ddr5:cyberpunk_2077_benchmark:2.31:windows"
+      }
+    ]
+  },
+  "common_support_comparison": {
+    "n": 1,
+    "candidate": {
+      "n": 1,
+      "eligible_holdouts": 1,
+      "prediction_coverage": 1.0,
+      "mae_fps": 28.97,
+      "mape_percent": 16.17261206944677,
+      "mdape_percent": 16.17261206944677,
+      "p90_ape_percent": 16.17261206944677,
+      "bias_fps": -28.97
+    },
+    "legacy": {
+      "n": 1,
+      "eligible_holdouts": 1,
+      "prediction_coverage": 1.0,
+      "mae_fps": 56.129999999999995,
+      "mape_percent": 31.334784793166975,
+      "mdape_percent": 31.334784793166975,
+      "p90_ape_percent": 31.334784793166975,
+      "bias_fps": -56.129999999999995
+    },
+    "paired_points": [
+      {
+        "key": [
+          "Cyberpunk 2077",
+          "ryzen99950x3d",
+          "rtx5080",
+          "1440p",
+          "ogb:official:am5_9950x3d_ddr5:cyberpunk_2077_benchmark:2.31:windows"
+        ],
+        "candidate_fps": 150.16,
+        "legacy_fps": 123,
+        "measured_fps": 179.13
+      }
+    ]
+  },
+  "model_comparison": {
+    "target": "measured full-system average FPS under matching settings",
+    "native_measurements": 4,
+    "independent_test_series": 1,
+    "leakage_safe_common_holdout_points": 1,
+    "legacy": {
+      "scorable_points": 1,
+      "metrics": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 56.129999999999995,
+        "mape_percent": 31.334784793166975,
+        "mdape_percent": 31.334784793166975,
+        "p90_ape_percent": 31.334784793166975,
+        "bias_fps": -56.129999999999995
+      }
+    },
+    "fps_v2": {
+      "scorable_points": 1,
+      "metrics": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      }
+    },
+    "fps_v3": {
+      "scorable_points": 0,
+      "abstentions_on_common_holdout": 1,
+      "reason": "No calibrated CPU/GPU/game workload anchors; the model correctly returns no FPS."
+    },
+    "fps_v4": {
+      "scorable_points": 1,
+      "metrics": {
+        "n": 1,
+        "eligible_holdouts": 3,
+        "prediction_coverage": 0.3333333333333333,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      },
+      "points": [
+        {
+          "game": "Cyberpunk 2077",
+          "resolution": "1440p",
+          "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+          "gpu": "GeForce RTX 5080 Founders Edition",
+          "measured": 179.13,
+          "predicted": 150.16,
+          "absolute_error": 28.97,
+          "series": "ogb:official:am5_9950x3d_ddr5:cyberpunk_2077_benchmark:2.31:windows",
+          "method": "same_pair_frame_time_interpolation",
+          "resolver_status": "estimated_interpolation"
+        }
+      ],
+      "note": "Measured-pair resolver evaluated with held-out resolution removed. Its measured-data path uses the same evidence interpolation as v2; legacy fallback remains separately labeled."
+    },
+    "external_gpu_model": {
+      "scorable_full_system_points": 0,
+      "gpu_only_reference_points": [
+        {
+          "game": "Cyberpunk 2077",
+          "gpu": "GeForce RTX 5080 Founders Edition",
+          "resolution": "1080p",
+          "preset": "high",
+          "external_gpu_oriented_estimate": 201,
+          "measured_full_system_fps": 193.64,
+          "scored_as_accuracy": false,
+          "reason": "The external GPU-only model and native full-system benchmark have different targets and are not a like-for-like validation pair."
+        }
+      ],
+      "reason": "GPU-oriented external estimates are not measured full-system FPS. The available native set lacks a separate same-protocol GPU-only target, so no accuracy error is calculated."
+    },
+    "validation_limit": "All native measurements are one publisher series and one CPU/GPU configuration; this is a within-series diagnostic, not independent generalization evidence."
+  },
+  "grouped_diagnostics": {
+    "by_game": {
+      "Cyberpunk 2077": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      }
+    },
+    "by_cpu": {
+      "AMD Ryzen 9 9950X3D 16-Core Processor": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      }
+    },
+    "by_gpu": {
+      "GeForce RTX 5080 Founders Edition": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      }
+    },
+    "by_resolution": {
+      "1440p": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      }
+    },
+    "x3d_class": {
+      "x3d": {
+        "n": 1,
+        "eligible_holdouts": 1,
+        "prediction_coverage": 1.0,
+        "mae_fps": 28.97,
+        "mape_percent": 16.17261206944677,
+        "mdape_percent": 16.17261206944677,
+        "p90_ape_percent": 16.17261206944677,
+        "bias_fps": -28.97
+      }
+    }
+  },
+  "rejected_resolution_holds": [
+    {
+      "resolution": "1080p",
+      "reason": "Целевое разрешение вне диапазона тех же измеренных настроек; экстраполяция запрещена."
+    },
+    {
+      "resolution": "4K",
+      "reason": "Целевое разрешение вне диапазона тех же измеренных настроек; экстраполяция запрещена."
+    }
+  ],
+  "independent_series_holdout": {
+    "test_points": 0,
+    "reason": "All eligible native observations belong to one publisher test series; series-grouped split correctly has no independent holdout."
+  },
+  "component_curve_coverage": {
+    "cpu_curve_groups_with_variation": 0,
+    "gpu_curve_groups_with_variation": 0,
+    "interaction_observations": 4,
+    "separate_curves_calibrated": false,
+    "cpu_frame_time_calibrated": false
+  },
+  "ml": {
+    "trained": false,
+    "reason": "Too few independent series and no leakage-safe holdout."
+  },
+  "promoted_to_production": false,
+  "reason": "The candidate uses exact pair evidence and frame-time interpolation only. One within-series diagnostic is not enough to promote a general CPU/GPU model.",
+  "source_manifest": [
+    {
+      "publisher": "Open GPU Benchmarks",
+      "file": "ogb_rtx5080_raw.json",
+      "sha256": "c02355a9537d6b4096edcccabee8b97740830b684acb6efb8b056a226d335484"
+    },
+    {
+      "publisher": "Open GPU Benchmarks",
+      "file": "ogb_steam_machine_raw.json",
+      "sha256": "79b00f5530e9c745e4f8cf90aa3f69a429e434ee239b98ad874547c0121db020"
+    },
+    {
+      "publisher": "TechFuelHQ",
+      "file": "techfuel_raw.json",
+      "sha256": "2525f4571528ccecf33c07cc7c399bd953143dc170871cd538883a87c179f273"
+    },
+    {
+      "publisher": "FPSHQ",
+      "file": "fpshq_model_top50_raw.json",
+      "sha256": "49ebaa2fb920b412894379f495f53f147a6f06de537040848d7c8be66536af80"
+    }
+  ]
+}

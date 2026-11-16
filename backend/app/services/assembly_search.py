@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.db.models import Hardware
 from app.schemas.offers import LABELS, SearchOffers
 from app.services.assembly_policy import search_queries, part_limit
-from app.services.automatic_builds import board_matches, memory_matches, part
+from app.services.automatic_builds import board_matches, memory_matches, memory_candidates, part
 from app.services.adaptive_builds import platform_candidates, solve_profiles
 from app.services.component_quality import quality_check
 from app.services.gaming_selection import gaming_cases
@@ -33,21 +33,30 @@ def confirmed(row):
 
 def queries_for(payload):
     profiles = platform_candidates(payload)
-    queries = search_queries(payload.budget, payload.socket)
+    seed_profile = profiles[0] if profiles else payload
+    queries = search_queries(payload.budget, seed_profile.socket)
     boards = {
         'AM4': ['B450M', 'MSI B450M-A PRO MAX', 'ASRock B450M-HDV R4.0', 'MSI B550M PRO-VDH'],
         'AM5': ['MSI PRO B650M-B', 'ASRock A620M'],
-        'LGA1700': [f'Gigabyte H610M K {payload.ram_type}', f'MSI PRO H610M-E {payload.ram_type}'],
     }
+    def board_queries(profile):
+        if profile.socket == 'LGA1700':
+            return [f'Gigabyte H610M K {profile.ram_type}', f'MSI PRO H610M-E {profile.ram_type}',
+                    f'Gigabyte B760M {profile.ram_type}', f'MSI PRO B760M {profile.ram_type}']
+        return boards.get(profile.socket, []) + [f'материнская плата {profile.socket} {profile.ram_type}']
     queries['CPU'] = list(dict.fromkeys([query for index in range(8) for profile in profiles
         for query in search_queries(payload.budget,profile.socket)['CPU'][index:index+1]]))
     queries['motherboard'] = list(dict.fromkeys([query for index in range(4) for profile in profiles
-        for query in (boards.get(profile.socket,[]) + [f'материнская плата {profile.socket} {profile.ram_type}'])[index:index+1]]))
-    # Do not place every other platform before the second compatible board.
-    queries['motherboard'] = list(dict.fromkeys([*boards.get(payload.socket, [])[:2], *queries['motherboard']]))
+        for query in board_queries(profile)[index:index+1]]))
+    preferred = next((profile for profile in profiles if profile.socket == payload.socket
+                      and profile.ram_type == payload.ram_type), None)
+    if preferred:
+        queries['motherboard'] = list(dict.fromkeys([*board_queries(preferred)[:2], *queries['motherboard']]))
     queries['memory'] = list(dict.fromkeys([query for ram in dict.fromkeys(profile.ram_type for profile in profiles)
-        for query in [f'{ram} {payload.ram_capacity_gb} ГБ',f'{ram} 2x{payload.ram_capacity_gb//2}GB',
-                      f'{ram} {payload.ram_capacity_gb}GB KIT']]))
+        for query in [f'{ram} 2x{payload.ram_capacity_gb//2}GB KIT',
+                      f'{ram} 2x{payload.ram_capacity_gb//2}GB',
+                      f'{ram} {payload.ram_capacity_gb}GB KIT',
+                      f'{ram} {payload.ram_capacity_gb//2}GB']]))
     queries['case'] = {'gaming': ['DeepCool CC560', 'Montech X3 Mesh'],
                        'minimal': ['DeepCool CH510', 'Montech AIR 100'],
                        'budget': ['корпус ATX', 'DeepCool CC560']}[payload.case_style]
@@ -75,13 +84,15 @@ def inventory(payload, db, excluded, observed=False):
                 continue
             if row.category == 'motherboard' and not any(board_matches(row, profile) for profile in profiles):
                 continue
-            if row.category == 'memory' and not any(memory_matches(row, profile) for profile in profiles):
+            if row.category == 'memory' and not any(memory_matches(candidate, profile)
+                                                    for profile in profiles for candidate in memory_candidates([row])):
                 continue
             if row.category == 'case' and not gaming_cases([row], payload.budget, payload.case_style, flexible=True):
                 continue
         pool[row.category].append(row)
     from app.services.partial_budget import planning_reserves
-    reserves = planning_reserves(pool, payload.budget)
+    reserves = planning_reserves(pool, payload.budget,
+        {profile.ram_type for profile in profiles}, payload.ram_capacity_gb)
     for category in ('CPU', 'GPU'):
         limit = payload.budget - sum(value for key, value in reserves.items() if key != category)
         pool[category] = [row for row in pool[category] if row.price_rub <= limit]
@@ -404,7 +415,8 @@ def assemble_resilient(payload, db, search):
             eligibility[row.id] = {index for index, profile in enumerate(profiles) if (
                 hardware.get(row.hardware_id) is not None and hardware[row.hardware_id].socket == profile.socket
                 if row.category == 'CPU' else board_matches(row, profile)
-                if row.category == 'motherboard' else memory_matches(row, profile)
+                if row.category == 'motherboard' else any(memory_matches(candidate,profile)
+                    for candidate in memory_candidates([row]))
                 if row.category == 'memory' else True)}
     def partial_compatible(rows, candidate):
         common = set(range(len(profiles)))
@@ -423,7 +435,16 @@ def assemble_resilient(payload, db, search):
             if quality and quality.get('interface') == 'NVMe' and not nvme_board_evidence(combined['motherboard']):
                 return False
         return True
-    selected_rows, budget_plan = partial_budget_plan(budget_pool, payload.budget, preferred, partial_compatible)
+    def partial_rank(rows):
+        pair={row.category:hardware.get(row.hardware_id) for row in rows if row.category in ('CPU','GPU')}
+        if not pair.get('CPU') or not pair.get('GPU'):return (0,)
+        from app.services.performance import estimate_fps
+        cpu,gpu=pair['CPU'],pair['GPU']
+        fps=estimate_fps(cpu.raw_score,gpu.raw_score,gpu.name,payload.game,payload.mode,1.0,cpu.name)
+        return (min(fps,payload.target_fps),)
+    selected_rows, budget_plan = partial_budget_plan(budget_pool, payload.budget, preferred, partial_compatible,
+        ranker=partial_rank if payload.workload=='gaming' and payload.selection_policy=='target_fps' else None,
+        ram_types={profile.ram_type for profile in profiles}, ram_capacity_gb=payload.ram_capacity_gb)
     found = []
     for row in selected_rows:
         quality = quality_check(row, payload.socket)[0] if row.category in ('storage', 'psu', 'cooler') else None
@@ -431,15 +452,15 @@ def assemble_resilient(payload, db, search):
     gaps = [category for category in CATEGORIES if not any(item['type'] == category for item in found)]
     from app.services.partial_budget import planning_reserves
     from app.services.search_links import web_search_links
-    reserves = planning_reserves(budget_pool, payload.budget)
+    reserves = planning_reserves(budget_pool, payload.budget,
+        {profile.ram_type for profile in profiles}, payload.ram_capacity_gb)
     allocations = {category: reserves[category] for category in gaps}
     if allocations:
         total = sum(allocations.values())
         if total > budget_plan['budget_remaining']:
             allocations = {category: value * budget_plan['budget_remaining'] // total
                            for category, value in allocations.items()}
-        extra = max(0, budget_plan['budget_remaining'] - sum(allocations.values()))
-        allocations['GPU' if 'GPU' in allocations else next(iter(allocations))] += extra
+    budget_plan['unallocated_budget'] = max(0, budget_plan['budget_remaining'] - sum(allocations.values()))
     budget_plan['category_budgets'] = allocations
     web_source = preferred or next(iter(active), 'avito')
     from app.services.assembly_diagnostics import missing_diagnostic
@@ -449,7 +470,18 @@ def assemble_resilient(payload, db, search):
         raw_rows=observed_rows(db,active)
     for row in raw_rows:
         if row.category in raw_candidates:raw_candidates[row.category].append(row)
+    planning_advice = {
+        'CPU': 'Сверьте сокет и задачу; для игр оставьте бюджету видеокарты достаточный приоритет.',
+        'GPU': 'Подбирайте видеокарту под игру и разрешение; игровой FPS остаётся ориентиром модели без совпадающих измерений.',
+        'motherboard': 'Проверьте сокет выбранного CPU, тип памяти и форм-фактор корпуса.',
+        'memory': 'Ищите комплект из двух модулей (например, 2×8 или 2×16 ГБ); одинаковая ёмкость отдельных планок не гарантирует комплект.',
+        'storage': 'Сверьте интерфейс и формат накопителя со спецификацией платы.',
+        'psu': 'Проверьте точную модель, мощность и разъёмы питания видеокарты.',
+        'case': 'Проверьте длину видеокарты, высоту кулера и форм-фактор платы.',
+        'cooler': 'Проверьте крепление под сокет и допустимую высоту кулера в корпусе.'}
     missing = [{'type': category, 'label': PART_LABELS[category], 'query': queries[category][0],
+                'planning_reserve_rub': allocations.get(category, 0),
+                'planning_advice': planning_advice[category],
                 'budget_limit': allocations.get(category),
                 **missing_diagnostic(category, raw_candidates[category], budget_pool[category],
                     allocations.get(category,0),lambda row:partial_compatible(selected_rows,row),

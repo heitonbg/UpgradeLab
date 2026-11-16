@@ -1,10 +1,48 @@
 # FPS Benchmark Data & Calibration
 
+## Аудит покрытия и сравнения FPS — 2026-11-13
+
+Интерфейс теперь показывает абсолютную и относительную разницу (406 → 428 = +22 FPS, +5,4%) отдельно от диаграммы с нулевой шкалой. Нулевой/неизвестный baseline не создаёт процент; отрицательный прирост не превращается в положительный. Выбор игры явно отличает каталог названий от наличия расчётной модели.
+
+Повторно скачаны два публичных JSON FPSHQ с проверкой CC BY 4.0 и происхождения. Новый SHA-256 game medians: `7524108e548704154093467c107484dec75b1aa95474fdd085e6150fa7908043`, top50: `49ebaa2fb920b412894379f495f53f147a6f06de537040848d7c8be66536af80`. Файлы содержат соответственно 195 и 2400 строк; это не количество независимых игровых измерений. Подготовка measurements/aggregates/evaluation воспроизведена: 87 наблюдений, 78 когорт, 6 игр, 3 CPU, 5 GPU, 5 серий; 78 из 87 наблюдений относятся к Cyberpunk. Число настоящих измерений после обновления не выросло.
+
+Строгая scoring-когорта содержит только 3 конфигурации, legacy даёт прогноз на 2 из них: MAE 36,885 FPS, MAPE 20,222%. Это не оценка ошибки на всех играх. Остальные сравниваемые модели воздержались от прогноза: нет достаточного пересечения независимых источников. Доказанного повышения точности нет; production коэффициенты не изменены.
+
+Дополнительная проверка источников: https://fpshq.com/data/ прямо показывает ноль строк открытых community-измерений; https://github.com/emilioagustin83/pc-game-fps-dataset публикует estimated FPS. Упомянутые в README 2070 калибровочных измерений не представлены отдельной открытой таблицей с конфигурациями, поэтому их нельзя считать импортированными. На главной Open GPU Benchmarks есть предупреждение о synthetic scaffold: новые данные этого источника требуют проверки конкретных записей и исходных capture, одного названия official недостаточно.
+
+Дальнейшее расширение должно закрывать пропуски: независимые CPU-серии для CS2/X3D, GPU-серии для RDR2/1440p и других AAA; одинаковые пресеты, сцены и RT/FG отдельно. Для каждого источника нужен доступный измеренный набор с происхождением, а не значения другого FPS-калькулятора. До появления такой выборки расширение production списка игр не подтверждено.
+
+Проверки: 7 frontend проверок диаграммы, 22 backend проверки benchmark_data, 6 benchmark_aggregation; production build прошёл. SQLite не использовалась для импорта данных и не изменялась.
+
+## Дополнение — 2026-11-12: новые сводки и пользовательские прогоны
+
+С официального раздела выгрузок FPSHQ скачан статический JSON `game-fps-medians.json`: 195 сводных строк для 29 игр, версия 2026.10.14, период наблюдений 2026-07-15—2026-10-12, лицензия CC BY 4.0. SHA-256 сохранённого JSON: `7fb5515ecf6172650d617db6ba8d85ad6986c51b7f83a8a378617f93e057327e`. В 25 играх есть покрытие, отсутствующее среди шести игр локального набора измерений. Каждая строка — медиана по разным GPU; источники объединяют тесты обзоров и часть результатов сообщества, поэтому это **не** FPS точной пары CPU/GPU и не добавляется в measured-когорты, калибровку либо production FPS. Маршрут `GET /api/benchmarks/game-reference` и вкладка «Бенчмарки» показывают эти данные отдельно, с диапазоном P25–P75, числом GPU/тестов, датой, лицензией и ссылкой на FPSHQ.
+
+Снимок top-50 FPSHQ (`fpshq_model_top50_raw.json`, версия 2026.11.12, SHA-256 `61ab76be08f835e43eda72c8f3e8c1a762cf2b055505b307cba1854235420edd`) содержит 2400 точек: 6 `measured`, 728 `aggregate` и 1666 `model`. Шесть явно помеченных measured-точек находятся в точном наборе, но в них не указан CPU. Ещё 728 review-derived агрегатов показываются отдельным `GET /api/benchmarks/gpu-reference`, с явной пометкой о пересчёте и отсутствии CPU; 1666 model-точек не импортируются. Отдельный `GET /api/benchmarks/game-reference` отдаёт 195 медиан FPSHQ по играм. Вместе это 923 справочные строки по 29 играм, из которых 25 игр отсутствуют в точном наборе. Это шире по каталогу, но не 923 независимых прогона. Локальный точный набор — 87 наблюдений, 78 когорт и шесть игр; независимых издателей в одной когорте пока нет. Скрипт `python -m scripts.update_fpshq_benchmarks` обновляет оба статических набора атомарно, проверяет CC BY 4.0, URL происхождения и число строк; он не загружает файлы при старте приложения.
+
+Аккаунты могут отправить собственный прогон через форму на странице «Бенчмарки». Принимаются игра/версия, точные CPU/GPU, настройки, средний FPS и 1% Low; ссылка на доказательство необязательна, а согласие на публикацию после проверки обязательно. Лимит — 5 отправок за 24 часа на аккаунт. Новые записи закрыты и имеют статус `pending`: они не участвуют в общих цифрах до ручной проверки; пользователь может посмотреть статус через форму или `GET /api/benchmarks/submissions/mine`. Проверяющие аккаунты задаются списком `BENCHMARK_REVIEWER_EMAILS` через запятую; доступны очередь `GET /api/benchmarks/submissions/review-queue` и решение `PATCH /api/benchmarks/submissions/{id}` со статусом `approved` или `rejected`. Проверенные прогоны показываются отдельно в `GET /api/benchmarks/community`, не смешиваются с редакционными сводками. Не принимайте скриншот/ссылку как автоматически доказанное измерение: модератор проверяет конфигурацию и происхождение вручную.
+
+## Повышение качества подбора в 1440p
+
+Аудит RDR2/1440p выявил, что `objective=performance` ранжировал по самому слабому из CPU/GPU/RAM аппаратных proxy-процентов, а GPU использовалась лишь для разрешения равенства. Из-за этого дорогой топовый CPU мог выигрывать связку с заметно более слабой видеокартой. Теперь для игровых performance-сборок на режимах кроме CS2/1080p Low первым ранжируется класс GPU, затем игровой proxy CPU, RAM и общий proxy; для CPU-зависимого CS2/1080p Low первым остаётся CPU. Objective `balanced` сохраняет старый приоритет weakest-dimension. Это эвристика для распределения бюджета, а не подтверждённый прогноз FPS; FPS полной конфигурации остаётся непроверенным без соответствующего теста.
+
+## Просмотр измерений на сайте
+
+Раздел «Бенчмарки» и `GET /api/benchmarks?game=&cpu=&gpu=&limit=30&offset=0` показывают только сохранённые измеренные когорты. В карточке указаны игра, версия, CPU, GPU, VRAM, разрешение, пресет, RT, апскейлинг, OS, средний FPS, 1% Low при полном покрытии, число наблюдений, независимых издателей и ссылки на первичные публикации. Поиск CPU/GPU допускает частичное совпадение имени, но среднее считается только внутри полного ключа условий. Разные игры, VRAM, пресеты и разрешения не усредняются вместе. Для Ryzen 5 5600 + RTX 5060 в текущем проверенном наборе точной пары нет; API возвращает пустой результат без подстановки прогноза.
+
+Публичный точный набор содержит 87 измеренных наблюдений, 78 когорт, 6 игр и 0 когорт с двумя независимыми издателями. Отдельно опубликованы 195 широких сводок FPSHQ для 29 игр; 25 из них расширяют перечень игр, но не являются точными тестами CPU/GPU. Цель в 100 000 измерений не достигнута: источники с модельными FPS и неясными правами не выданы за measured. Для дальнейшего роста нужны первичные серии с точной конфигурацией, лицензией и проверяемым происхождением.
+
+## Обновление для пакета Amvera, 2026-11-12
+
+Офлайн-агрегация пересобрана из 87 лицензированных измерений: 78 строгих когорт, 0 когорт с двумя независимыми издателями. Новых прогонов Open GPU Benchmarks в этой итерации нет; из свежего FPSHQ top-50 добавлено шесть строк, помеченных самим источником как `measured`, остальные 2394 строки не смешивались с измерениями. Лицензия CC BY 4.0 и условия атрибуции указаны в manifest. Файлы исходников и отчётов входят в backend Code пакет; SQLite для чтения наборов не нужна.
+
+Исправлены две ошибки сводки: объём VRAM теперь входит в ключ когорты, а опубликованный 1% Low сохраняется только когда он есть у каждого наблюдения этой когорты. Поле `one_percent_low_observations` показывает фактическое покрытие; отсутствующие значения не восстанавливаются по процентилям среднего FPS. Это исследовательский отчёт: он не меняет production FPS Engine и не доказывает улучшения прогноза. Для следующего обновления нужно получить новые первичные записи из разрешённого API, сохранить ответ с SHA-256 и проверить независимые серии перед повторной калибровкой.
+
 Дата исследования: 2026-11-10. Существующие незакоммиченные изменения сохранены. Рабочая SQLite, дизайн, price TTL и правила авторизации не изменены. Commit, push и deployment не выполнялись.
 
 ## Вывод
 
-Получен воспроизводимый нормализованный набор **81 наблюдение: 73 исходных прогона Open GPU Benchmarks и 8 уникальных опубликованных точек TechFuelHQ**. Это 4 игры, 3 точные модели CPU, 3 модели GPU/устройства, 4 тестовые серии и 2 издателя. После объединения повторных прогонов для оценки остаются 72 конфигурации.
+Получен воспроизводимый нормализованный набор **87 наблюдений: 73 строки Open GPU Benchmarks, 8 уникальных точек TechFuelHQ и 6 неполных measured-строк FPSHQ**. Это 6 игр, 3 точные модели CPU, 5 моделей GPU/устройств, 5 серий и 3 издателя. После объединения повторов остаются 78 когорт; точного CPU у шести FPSHQ точек нет.
 
 Новый независимый источник добавил 8 точек и 2 игры к прежнему покрытию. Переход от dashboard к per-GPU records восстановил отдельные прогоны; повторы не объявляются новыми независимыми сериями. **Сопоставимых данных для доказанного улучшения Windows FPS Engine пока недостаточно. Новая модель не включена в production.**
 
@@ -54,14 +92,16 @@ Robots.txt проверялся отдельно от лицензии: дост
 
 | Показатель | Значение |
 | --- | --- |
-| Наблюдений measured / estimated | 81 / 0 |
-| Исходных per-run записей / publisher points | 73 / 8 |
-| Конфигураций после объединения повторных прогонов | 72 |
-| Уникальных игр | 4 |
-| Точных моделей CPU / GPU | 3 / 3 |
-| Издателей / серий | 2 / 4 |
-| Основные настройки заполнены | 69/81 = 85,19% |
-| Есть опубликованный 1% Low | 78/81 |
+| Наблюдений measured / estimated | 87 / 0 |
+| Исходных per-run записей / publisher points / неполных summaries | 73 / 8 / 6 |
+| Отдельных FPSHQ GPU review aggregates | 728 (не raw runs; CPU неизвестен) |
+| Отдельных FPSHQ game medians | 195 (сводки разных GPU) |
+| Конфигураций после объединения повторных прогонов | 78 |
+| Уникальных игр | 6 |
+| Точных моделей CPU / GPU | 3 / 5 |
+| Издателей / серий | 3 / 5 |
+| Основные настройки заполнены | 69/87 = 79,31% |
+| Есть опубликованный 1% Low | 84/87 |
 | Native stock Windows | 4 прогона → 3 конфигурации |
 | Native stock Linux с известной сценой | 8 прогонов, отдельная когорта |
 | Новых разрешённых измерений CS2 | 0 |
@@ -107,20 +147,20 @@ Robots.txt проверялся отдельно от лицензии: дост
 | Метрика | Значение |
 | --- | --- |
 | n независимых по настройкам конфигураций | 2; одна аппаратная пара/серия |
-| MAE | 86,385 FPS |
-| MAPE / MdAPE | 46,559% / 46,559% |
+| MAE | 36,885 FPS |
+| MAPE / MdAPE | 20,222% / 20,222% |
 | Покрытие эвристического интервала | 0/2 |
 | Покрытие строгой Windows-когорты | 2/3 конфигураций = 66,67% |
-| Покрытие всех конфигураций набора | 2/72 = 2,78% |
-| Покрытые исходные наблюдения | 3/81 = 3,70% |
+| Покрытие всех конфигураций набора | 2/78 = 2,56% |
+| Покрытые исходные наблюдения | 3/87 = 3,45% |
 | Ошибка X3D-сравнений | n/a, 0 контрольных пар |
 
 Это ограниченная внешняя диагностика одной связки, не глобальная MAE. Per-game/CPU/GPU/resolution/X3D breakdown содержится в evaluation_report.json; отсутствующая группа имеет n=0/null, а не 0 ошибок. Linux, OC, RT и FG не смешивались с Windows/raster. Для новых кандидатов без прогноза MAE/MAPE/MdAPE=null; coverage=0 в существующей когорте, interval coverage не определяется.
 
 ### Примеры AAA из измерений
 
-- OGB, RTX 5080 FE / Ryzen 9 9950X3D, Cyberpunk 2.31, native 1080p High: измерено 193,64 FPS; legacy 114, интервал 75–150.
-- Та же серия, native 1440p High: среднее двух исходных прогонов 179,13; legacy 86, интервал 60–115.
+- OGB, RTX 5080 FE / Ryzen 9 9950X3D, Cyberpunk 2.31, native 1080p High: измерено 193,64 FPS; legacy 176, интервал 120–230.
+- Та же серия, native 1440p High: среднее двух исходных прогонов 179,13; legacy 123, интервал 85–160.
 - TechFuel, Astral 5080 manual OC / 7800X3D, Cyberpunk 4K native PT: 19 average / 15 1% Low. Это RT, другая система и неизвестный build; перенос к raster/stock не выполняется.
 - TechFuel, Alan Wake 2 RT + DLSS Quality: 49 average / 38 1% Low. Полный preset и FG неизвестны; это не готовая калибровочная точка.
 - TechFuel, Wukong Cinematic 4K output: 34 average / 27 1% Low; внутренний render scale неизвестен, не выдаётся за native.
@@ -184,3 +224,136 @@ Default output prepare — versioned app/data/benchmarks. Для read-only во�
 Текущий вывод: больше проверяемых исходных данных получено, но **доказательств для улучшения и включения новой FPS-модели пока нет**.
 
 Предлагаемый коммит: `feat(benchmarks): curate licensed FPS runs and add source-held-out evaluation`.
+## Повторная проверка открытых источников — 2026-11-12
+
+Официальный [Open GPU Benchmarks API](https://opengpubenchmarks.com/api/v1/official.json) отдаёт 93 записи под [CC BY 4.0](https://opengpubenchmarks.com/license/). Сравнение по `id` с сохранёнными снимками `ogb_rtx5080_raw.json` и `ogb_steam_machine_raw.json` дало **0 новых ID**. Community API отдаёт одну запись OpenBenchmarker с `game_type=synthetic`; она исключена. После добавления FPSHQ набор содержит 87 пригодных наблюдений и 78 строгих когорт; дубликаты не добавлялись.
+
+Из [FPSHQ FPS model top 50](https://fpshq.com/en/data/fps-model-top50/) сохранён полный лицензированный снимок (SHA-256 `61ab76be08f835e43eda72c8f3e8c1a762cf2b055505b307cba1854235420edd`). Импортируются только **6 строк `source=measured`** из 2400; 728 `aggregate` и 1666 `model` исключены. У точек FPSHQ есть игра, GPU, разрешение, пресет, средний FPS и 1% Low, но нет CPU, RAM, точной сцены, версии игры, RT/апскейлинга и ссылки на первичный прогон. Они показаны как неполные опубликованные измерения, не используются для точного прогноза связки или обучения. После импорта: **87 наблюдений, 78 групп, 6 игр, 3 издателя; ноль групп с несколькими независимыми издателями**. Рабочая FPS-модель не менялась.
+
+[FPSHQ game-fps-medians](https://fpshq.com/en/data/game-fps-medians/) содержит 195 групповых медиан по игре, разрешению и пресету, но каждая группа объединяет разные GPU и часть точек пересчитана из обзорных таблиц. Эти данные показываются через отдельный reference endpoint, не попадают в точные measured-когорты или production FPS. [PCGameBenchmarks dataset](https://github.com/emilioagustin83/pc-game-fps-dataset) содержит внешние расчётные, а не измеренные FPS. С 2026-11-15 его закреплённый CC BY 4.0 snapshot импортирован отдельно для GPU-only ориентиров на 16 441 играх; он по-прежнему не добавляется к базе реальных тестов и не обучает CPU/GPU pair модель. Детали: [PCGAMEBENCHMARKS_IMPORT.md](PCGAMEBENCHMARKS_IMPORT.md). Для роста базы нужны новые лицензированные первичные записи с точными CPU/GPU, настройками и источником; миллиарды несуществующих строк создавать нельзя.
+
+
+## Пользовательский импорт CSV/JSON
+
+Вместо большой формы добавлена область загрузки, серверный предпросмотр, уточнение отсутствующих характеристик и согласие перед модерацией. Разбор не гарантирует подлинность. Принятая методика 1% Low — обратное среднее медленных 1% frame intervals — хранится рядом с результатом и не смешивается с P1. Исходные raw frametime доступны только владельцу/модератору; публичный результат содержит статистику и предупреждения. Подробнее: ARCHITECTURE.md.
+
+Форматы сверены по первичным источникам: [PresentMon CSV](https://github.com/GameTechDev/PresentMon/blob/main/README-ConsoleApplication.md#csv-columns), [CapFrameX capture](https://github.com/CXWorld/CapFrameX/blob/master/source/CapFrameX.PresentMonInterface/PresentMonCaptureService.cs), [CapFrameX statistics](https://github.com/CXWorld/CapFrameX/blob/master/source/CapFrameX.Statistics.NetStandard/FrametimeStatisticProvider.cs). Поддерживается ограниченный набор форматов/колонок, не произвольный CSV с FPS и не каждый вариант экспорта этих программ. Для неподдерживаемых форматов сервер показывает ошибку и не угадывает единицы измерения.
+
+
+## Итерация: покрытие режимов и честная доступность FPS (2026-11-13)
+
+Добавлен режим 4K High. Если для конкретной видеокарты/игры есть строка FPSHQ в 4K, используется она; иначе результат явно остаётся расчётной оценкой с переносом GPU-производительности от QHD, а CPU ограничение сохраняется. RTX 5090 D сопоставляется с RTX 5090 как семейный GPU-ориентир (Cyberpunk 2077, 1440p High: 171 FPS по FPSHQ), но UI маркирует его как непроверенную модель и отдельно показывает прогноз всей системы. Эти 171 FPS не являются результатом теста 5090 D или пары CPU/GPU.
+
+Таблица FPSHQ показывает 2 400 строк/50 игр с фильтрами по игре, разрешению и происхождению, сортировкой FPS/игра и пагинацией (`measured`, `aggregate`, `model`); три типа данных визуально разделены. Каталог на 16 623 названия игр остаётся каталогом названий, а не базой FPS. На текущем наборе нет оснований заявить точный прогноз для каждой из 16 тысяч игр: CPU/GPU-связки и настройки в большинстве отсутствуют. Для расширения нужны новые разрешённые игровые измерения, включая файлы пользователей после проверки/модерации.
+
+## FPS Engine v2: evidence storage and frame-time candidate — 2026-11-13
+
+### Данные и происхождение
+
+Текущий curated snapshot содержит **87 source-backed измерений**: 73 записи Open GPU Benchmarks, 8 TechFuelHQ и 6 FPSHQ. Лицензии в каждой записи сохранены как CC BY 4.0 с URL, publisher, series ID, настройками и датой/snapshot-манифестом; estimated FPSHQ model rows не импортируются в `measurements.json`. В полном наборе 6 игр, 3 CPU-имени, 5 GPU-имён, 5 тестовых серий, 69/87 записей с полными настройками и 84 записи с 1% Low. Качество покрытия не равно независимой обучающей выборке.
+
+Для native Windows desktop, stock, native raster, версии и настроек одной серии доступны **4 прогона одной точной пары**: Ryzen 9 9950X3D + RTX 5080 Founders Edition в Cyberpunk 2077 2.31 — 1080p High, два прогона 1440p High и 4K High. Это один publisher и одна серия. Остальные 83 записи не позволяют строить такую же строгую парную оценку (неполные условия, RT/апскейлинг/другая ОС или только GPU без CPU).
+
+### Хранилище и повторяемый импорт
+
+Добавлены аддитивные таблицы `benchmark_sources` и `benchmark_measurements`. Вторая хранит нормализованные CPU/GPU keys, игру/разрешение/preset, тип данных, средний FPS, 1% Low, series ID и исходную JSON-запись целиком. Первая хранит лицензию, атрибуцию, source URL и SHA-256 snapshot-манифест. Дедупликация использует существующий валидатор источников; повторный импорт не меняет строки, а конфликтующий ID отклоняется. Аккаунты, объявления, сборки и пользовательские pending submissions остаются отдельными.
+
+Таблицы создаются аддитивной `migrate_benchmarks`. Для автоматической загрузки snapshot в постоянную SQLite можно задать `BENCHMARK_IMPORT_ON_START=true`; импорт идемпотентен. Для ручного импорта укажите базу явно:
+
+```powershell
+cd C:\vscode\upgradeLab\backend
+.\.venv\Scripts\python.exe -m scripts.import_benchmarks --database-url sqlite:///./storage/benchmarks.sqlite
+.\.venv\Scripts\python.exe -m scripts.evaluate_fps_v2
+```
+
+Состояние хранения и манифест выдаёт `GET /api/benchmarks/dataset-info`; исходные записи доступны через `GET /api/benchmarks/measurements`. Измерения не смешиваются с пользовательскими отправками или FPSHQ review aggregates.
+
+### Модель и проверка
+
+`FPS Engine v2 candidate 0.1` поддерживает два строго ограниченных случая: показывает среднее/1% Low при совпадении пары, игры, версии, preset, native условий и известных RAM-параметров; либо линейно интерполирует **время кадра** (`1000 / FPS`) по числу пикселей между двумя измеренными разрешениями той же пары. Экстраполяции нет. Значения остаются `measured_reference` или `estimated_interpolation`, а не переписывают production legacy. PassMark не используется для преобразования чужого GPU в тестируемую модель.
+
+Leave-one-resolution-out на реальных данных: для 1440p из 1080p/4K той же серии оценка кандидата — примерно **150.16 FPS** против опубликованных **179.13 FPS** (MAE 28.97, MdAPE 16.17%); тот же legacy baseline на этой точке — около **123.00 FPS** (MAE 56.13, MdAPE 31.33%). Это только **одна точка внутри одной тестовой серии**: она не является независимым test split, статистическим доказательством или основанием включать v2 по умолчанию. Тест показывает возможный выигрыш на конкретной интерполяции и одновременно значимую ошибку.
+
+Независимый split по `publisher + series_id` имеет 0 тестовых точек. Переменной CPU при фиксированной GPU и переменной GPU при фиксированном CPU в пригодной когорте нет. Поэтому отдельные игровые CPU/GPU-кривые, их взаимодействие, X3D-эффект и ML/CatBoost/LightGBM **не откалиброваны**; такие предсказания v2 пока отклоняет. 1% Low выводится только из соответствующих опубликованных значений; интерполированный 1% Low помечается как оценка. Достоверность референса ограничена одной серией.
+
+`POST /api/fps/predict` сохраняет baseline и возвращает `candidate_v2` отдельно. Калькулятор также показывает эту проверку в раскрываемом блоке, сохраняя существующий FPS и подбор. Production-модель не переключена. Сравнительный JSON генерируется `python -m scripts.evaluate_fps_v2` в `app/data/benchmarks/fps_v2_evaluation.json`.
+
+Профильные тесты покрывают реальные записи 9950X3D/RTX 5080, 1% Low, RAM mismatch, отказ от экстраполяции, leave-one-resolution-out, API-интеграцию, идемпотентность импорта и сохранение provenance.
+
+## FPS Engine v4 Universal: покрытие (2026-11-14)
+
+Каталог содержит 16 447 уникальных выбираемых названий. В локальных данных пока нет Steam AppID, минимальных/рекомендуемых системных требований, жанров или тегов; год выпуска есть у 16 389 записей. Архив бенчмарков содержит 87 строк, из которых только 4 проходят строгий фильтр нативных измерений. Все четыре относятся к одной игре, одной модели CPU, одной GPU и одной связке. Сохранены 19 профилей прежней модели. Единственный пример точной пары для v4: Cyberpunk 2077 / Ryzen 9 9950X3D / RTX 5080 — 179,13 среднего FPS и 136,21 FPS 1% Low, два наблюдения в одной серии.
+
+Выбрать можно любую игру из каталога, но это не означает, что для каждой можно рассчитать FPS. API явно помечает измерение, старый профиль или нехватку данных и воздерживается от числа без опоры. Процентили PassMark для CPU и GPU считаются по отдельным группам устройств и не преобразуются в FPS. В этой реализации новые измерения не импортировались; независимой проверочной выборки для вывода об общем улучшении точности нет.
+
+Метаданные Steam не загружались: у локального каталога нет AppID, а актуальный официальный список приложений требует Steam Web API key. Старый публичный endpoint списка приложений помечен как устаревший. Страницы магазина не сканировались, AppID по похожему названию не угадывался.
+
+## PCGameBenchmarks: массовая GPU-only оценка (2026-11-15)
+
+Импортирован закреплённый CC BY 4.0 snapshot: 16 441 однозначных профиля каталога и 197 292 внешние оценки по 12 GPU. Все записи типизированы external_model_estimate; они не считаются измерениями и не смешиваются с curated pair measurements/FPSHQ measured. Сопоставление по точному URL/названию/подтверждённым alias или проверенному AppID; неоднозначные версии отложены. Resolver использует G3D score только внутри игровой кривой источника, для 1080p High native. Он не выдаёт FPS системы, CPU bottleneck, 1% Low или значения для других настроек. После строгой проверки классификатора численный ориентир доступен для 196/785 GPU на кривой CS2; прежнее значение 328 включало небезопасные сопоставления. Полный разбор причин отказа приведён в PCGAMEBENCHMARKS_IMPORT.md. API/данные/алгоритм и тестовые результаты описаны в [PCGAMEBENCHMARKS_IMPORT.md](PCGAMEBENCHMARKS_IMPORT.md).
+
+## FPS Engine v4 — final coverage and comparison (2026-11-15)
+
+### Data inventory
+
+| Evidence | Count | What the count means |
+|---|---:|---|
+| Selectable local games | 16,447 | Catalog entries; this is not FPS coverage |
+| PCGameBenchmarks profiles | 16,441 | Licensed external game profiles |
+| PCGameBenchmarks GPU points | 197,292 | 12 GPU-oriented model estimates per profile; not measured FPS |
+| PassMark CPU rows | 1,434 | Hardware-index records, not CPU gaming benchmarks |
+| PassMark GPU rows | 785 | Hardware-index records used only inside the external GPU model's score curve |
+| Curated benchmark archive rows | 87 | Source-backed records; 4 pass the strict native full-system filter |
+| Strict native coverage | 1 game, 1 CPU, 1 GPU, 1 publisher series | Cyberpunk 2077, Ryzen 9 9950X3D, RTX 5080 |
+
+The four eligible native rows cover 1080p, 1440p, and 4K High in one test series. There is no fixed-GPU, multiple-CPU comparison group and no independent publisher holdout. Consequently, CPU frame-time calibration, general CPU/GPU interaction, an ML model, and general system-FPS accuracy are not established.
+
+### Leakage-safe model comparison
+
+| Path | Scored common holdout points | Result |
+|---|---:|---|
+| Legacy system estimate | 1 | 123 FPS vs 179.13 measured; MAE 56.13 FPS, MdAPE/P90 APE 31.33%, bias −56.13 FPS |
+| FPS v2 measured-pair path | 1 | 150.16 FPS vs 179.13 measured; MAE 28.97 FPS, MdAPE/P90 APE 16.17%, bias −28.97 FPS |
+| FPS v3 hardware/workload model | 0 | Abstains: CPU/GPU/game workload anchors are missing |
+| FPS v4 measured-pair resolver | 1 | 150.16 FPS on a held-out 1440p point; same pair interpolation as v2, not independent validation |
+| External GPU-only model | 0 full-system targets | A 201 FPS external estimate at 1080p is recorded beside 193.64 measured full-system FPS, but no error is calculated because targets and protocols are not equivalent |
+
+The common comparison contains only one point from one publisher series. The v2/v4 leave-one-resolution-out candidate supports one of three eligible resolution holds (coverage 1/3). It is a descriptive diagnostic, not a claim that the engine has achieved a validated accuracy improvement. Model estimates from PCGameBenchmarks are never treated as ground truth.
+
+### GPU-only class coverage on the local catalog
+
+The final read-only CS2 1080p High crosswalk run found a numeric GPU-only estimate for 193 of 785 catalog GPUs. Counts by class: 452 desktop, 81 integrated, 76 workstation, 61 virtualized, 39 non-rendering/display adapters, 4 mobile, and 72 unknown. Supported outputs were 174 desktop, 10 integrated, and 9 devices whose exact source record explicitly resolved an otherwise unknown class. The remaining 592 abstained: 312 below the safe G3D reference range, 76 workstation without a dedicated curve, 61 virtualized without a matching curve, 54 source-device-type conflicts, 45 unknown class, 39 non-rendering adapters, 4 mobile without a separate curve, and 1 above the safe range. The earlier 196/785 count is superseded by this final rerun.
+
+A broader batch pass produced a GPU-oriented estimate for the same RTX 3060 at 1080p High on all 16,441 external game profiles in approximately 0.43 seconds locally. This measures lookup throughput and profile availability, not benchmark accuracy or full-system FPS.
+
+### API and integration checks
+
+The read-only API smoke test opened `backend/pc_upgrade.db` with `mode=ro` and `PRAGMA query_only=ON`. All 100 `/api/fps/predict` requests succeeded: 86 returned the explicitly labeled external GPU-model path and 14 the labeled legacy profile path. CPU Adequacy was available in 46 of those requests. A separate exact-pair request returned Cyberpunk 2077 1440p High at 179.13 average / 136.21 1% low (2 observations, 1 series), and 4K High at 91.48 / 76.80 (1 observation, 1 series).
+
+Builder returned its shared v4 evidence envelope for an RTX 3060 / Ryzen 5 5600 example, but the smoke script stubs assembly selection and internal offer synchronization; it does not measure or validate optimizer ranking. Upgrader correctly kept system FPS and system gain null when only GPU-oriented estimates were available. A comparable RTX 3060-to-RTX 4060 external GPU-only delta was +20 FPS for the same source revision/settings; it is not full-system upgrade FPS. CPU replacement produced no fake FPS delta; its reported PassMark CPU requirement adequacy change is a hardware index only.
+
+### Limitations and next data needed
+
+No external data were scraped in this iteration. The existing pinned CC BY snapshot was reused; no network fetch, live store call, or database write was needed. More data must come from licensed, independently published runs with exact CPU/GPU, game version, scene, resolution, preset, RT/upscaling/frame-generation settings, and source series. CPU curves require multiple CPUs with the GPU and settings fixed; GPU curves require multiple GPUs with the CPU/settings fixed. Until then the engine keeps the legacy baseline in production and abstains from unsubstantiated component FPS or bottleneck claims.
+
+Final unified-engine regression (2026-11-15): backend 745 passed / 2 skipped on isolated temporary SQLite; frontend 122/122; production build and compileall passed; `git diff --check` passed.
+
+### Unified adaptive output contract — 2026-11-15
+
+`POST /api/fps/predict`, Builder and Upgrader expose the shared `fps_result` from `app.services.adaptive_fps`. The result is one of: direct system measurement, estimated system FPS, GPU-only orientation, or unavailable. GPU-only values are never scored as full-system FPS. Source details and settings remain nested for optional diagnostics. Older v2/v3/v4 evidence fields are kept for API compatibility rather than presented as alternative answers in the UI.
+
+Title-level coverage is 16,447 selectable games; 19 with a legacy full-system profile; one with direct pair measurements (four strict rows for one CPU/GPU pair in one series); 16,441 with an external GPU-profile curve; 16,427 in the per-title GPU-only tier; one without a per-title curve, which can still use the cross-game reference. Hardware catalogue: 1,434 CPU and 785 GPU rows. In the audited CS2 1080p High case, safe class/range mapping yields GPU-only values for 193/785 GPUs. The source profile being present does not ensure every target GPU is supported.
+
+The current common leakage-safe accuracy check is one held-out 1440p point within a single source series (v2/v4 pair interpolation MAE 28.97 FPS, MdAPE/P90 APE 16.17%; legacy MAE 56.13 FPS, MdAPE/P90 APE 31.33%). It is descriptive only. External PCGameBenchmarks model estimates are not ground truth. There is not enough independent data to claim universal accuracy, calibrate bottleneck attribution, train ML, or transfer results to RT/upscaling/FG and unsupported resolutions.
+
+### Always-return-a-number fallback — 2026-11-15
+
+The resolver now returns `best_available_fps` whenever a positive GPU reference can be established, including for catalog titles without a CPU/GPU pair. The evidence order is exact full-system measurement, same-pair interpolation, legacy full-system estimate, same-setting FPSHQ GPU reference, same-title PCGameBenchmarks GPU estimate, nearest same-title GPU anchor for a score outside the safe curve, then the cross-game catalog median. This broad fallback is not selected-game FPS; its P10/P90 values describe a population of different games, not prediction uncertainty.
+
+GPU reference numbers remain separate from `average_fps`. API/UI preserve both the requested resolution and source resolution. A nearest anchor is a published value for the named source GPU and is explicitly not transferred to the selected GPU. Unsupported physical device classes or absent hardware scores without an exact source crosswalk may still return no number, because no hardware-specific basis exists.
+
+The local FPSHQ top-50 snapshot has 2,400 rows, 50 games, and 16 GPUs: 1,666 `model`, 728 `aggregate`, 6 `measured` source labels. The 6 labeled rows are GPU references and do not provide paired system FPS; FPSHQ is included as GPU-only evidence. For RTX 5090 + Cyberpunk 2077 at 1440p High, the local FPSHQ record returns 171 GPU FPS. With Ryzen 5 5600, the main legacy system estimate is 166 FPS and stays separately labeled. These numbers are examples of different evidence tiers, not an accuracy validation.
+
+The requirements-anchored CPU+GPU scenario can use exact recommended requirements or exact minimum requirements if no recommended pair resolves. It uses PassMark CPU/G3D as relative hardware features and a PCGameBenchmarks or FPSHQ GPU point as baseline. Its fixed scenario parameters and sensitivity sweep are experimental, very-low-confidence and uncalibrated; no RAM factor, 1% Low, or bottleneck is generated. The current strict full-system holdout remains one point, so no universal-accuracy claim or production promotion is made.
+
+Run `backend/scripts/evaluate_requirements_anchored.py` for source/hardware coverage and monotonicity checks. It opens the SQLite database read-only. The report deliberately separates coverage from accuracy.

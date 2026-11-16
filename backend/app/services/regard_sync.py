@@ -33,10 +33,22 @@ def sync_lock(engine):
         yield
     finally:lock.close()  # OS releases the lock, including on process termination.
 
-def download(engine,directory,transport=None):
+def download(engine,directory,transport=None,*,supplied_rights=None):
     from app.services.source_permissions import network_allowed
     with Session(engine) as db:
         access=db.get(CatalogAccess,'regard');rights=validated_rights(access) if access else None
+    if supplied_rights is not None:
+        from app.schemas.catalog import CatalogRights
+        from app.core.price_time import as_utc, utc_now
+        try:
+            candidate = CatalogRights.model_validate(supplied_rights)
+            stamp = as_utc(candidate.confirmed_at)
+            if (candidate.source != 'regard' or not candidate.development
+                    or not candidate.public_display or not stamp or stamp > utc_now()):
+                raise ValueError('invalid bootstrap rights')
+            rights = candidate
+        except (ValueError, TypeError):
+            raise CatalogError('automatic_download_not_authorized') from None
     if not settings.regard_download_enabled or not rights or not rights.automatic_download or not network_allowed('regard'):
         raise CatalogError('automatic_download_not_authorized')
     if settings.regard_price_url!='https://www.regard.ru/api/site/pricelist':raise CatalogError('unconfirmed_price_endpoint')

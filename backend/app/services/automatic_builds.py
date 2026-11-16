@@ -1,4 +1,5 @@
 """Select the complete PC with its CPU/GPU, supply and cooler in one budget."""
+from app.services.selection_cache import memoized_check
 import json
 import re
 import time
@@ -18,6 +19,7 @@ from app.services.performance import estimate_fps, fps_outlook
 from app.services.assembly_policy import part_limit, psu_requirement, cooling_requirement
 
 
+@memoized_check
 def attrs(offer):
     return json.loads(offer.attributes)
 
@@ -37,6 +39,7 @@ def board_matches(board, payload):
             and data.get('form_factor') in (None, 'ATX', 'mATX', 'Mini-ITX'))
 
 
+@memoized_check
 def memory_configuration(memory):
     title, data = memory.name.upper(), attrs(memory)
     ram = data.get('ram_type') or next((r for r in ('DDR4', 'DDR5') if r in title), None)
@@ -174,7 +177,7 @@ def memory_candidates(items):
 def memory_matches(memory, payload):
     config = memory_configuration(memory)
     return bool(config and config['ram_type'] == payload.ram_type and config['capacity_gb'] >= payload.ram_capacity_gb
-                and config['modules'] in (1, 2))
+                and config['modules'] == 2)
 
 
 def memory_quality(config, requested_capacity):
@@ -185,6 +188,26 @@ def memory_quality(config, requested_capacity):
     """
     capacity = min(config['capacity_gb'], 32) / min(max(requested_capacity, 16), 32)
     return (max(.01, min(1.0, capacity)) * (config['modules'] / 2)) ** .5
+
+
+def ordered_hardware_pairs(cpus, gpus, prices, prioritize_gpu=False):
+    """Put expensive-GPU/low-cost-CPU pairs first for GPU-bound performance searches.
+
+    The optimizer has a time bound. Without this ordering it can spend that
+    budget on database-order CPU/GPU pairs before ever examining the strongest
+    affordable GPUs. The final rank still considers every feasible pair found.
+    """
+    pairs = list(product(cpus, gpus))
+    if prioritize_gpu:
+        pairs.sort(key=lambda pair: (
+            -pair[1].raw_score,
+            prices[pair[1].id].price_rub,
+            prices[pair[0].id].price_rub,
+            -pair[0].raw_score,
+            pair[0].id,
+            pair[1].id,
+        ))
+    return pairs
 
 
 def cpu_board_matches(cpu, board):
@@ -230,6 +253,12 @@ def unique_models(offers, limit, key_fn=None):
 
 def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, flexible=False, observed=False):
     from app.services.builds import build_options, desktop_gpu
+    from app.services.fps_engine_v4 import supported_profile
+    game_profile = supported_profile(payload.game)
+    game_name = payload.game.value if hasattr(payload.game, 'value') else str(payload.game)
+    if payload.workload=='gaming' and payload.selection_policy=='target_fps' and game_profile is not None:
+        flexible=True
+        preferred_source=None
     pool = {category: [] for category in ('motherboard', 'memory', 'storage', 'psu', 'cooler', 'case')}
     evidence = {}
     for offer in available_offers(db, payload.price_sources, include_unavailable=observed):
@@ -322,7 +351,19 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
     # Board/CPU compatibility does not depend on the GPU. Do not repeat its
     # regex and attribute checks for every RAM/SSD/case combination of every GPU.
     cpu_bases={}
-    for cpu, gpu in product(cpus, gpus):
+    target_policy=payload.workload=='gaming' and payload.selection_policy=='target_fps' and game_profile is not None
+    prioritize_gpu = (payload.workload == 'gaming' and payload.objective == 'performance'
+                      and not (game_name == 'CS2' and payload.mode.value == '1080p_low'))
+    pairs=ordered_hardware_pairs(cpus,gpus,prices,prioritize_gpu)
+    if target_policy:
+        support_floor=min(cost for cost,_ in bases)+min(row.price_rub for row in pool['psu'])+min(row.price_rub for row in pool['cooler'])
+        def priority(pair):
+            cpu,gpu=pair
+            fps=estimate_fps(cpu.raw_score,gpu.raw_score,gpu.name,payload.game,payload.mode,1.0,cpu.name)
+            floor=prices[cpu.id].price_rub+prices[gpu.id].price_rub+support_floor
+            return (floor>payload.budget,fps<payload.target_fps,floor if fps>=payload.target_fps else -fps,cpu.id,gpu.id)
+        pairs=sorted(pairs,key=priority)
+    for cpu, gpu in pairs:
         if time.monotonic()>deadline:
             timed_out=True;break
         examined+=1
@@ -364,7 +405,7 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
             # 2 TB is optional; use it when the additional complete-build cost
             # is modest and capacity is actually priced from this offer.
             return capacity < 2000 or row[0] - cheapest_cost <= payload.budget * .05
-        suitable = [row for row in viable if acceptable_drive(row)] or [cheapest]
+        suitable = ([row for row in viable if acceptable_drive(row)] or [cheapest]) if not target_policy else []
         def drive_rank(row):
             drive = evidence[row[1][2].id]
             capacity = drive['capacity_gb']
@@ -372,10 +413,11 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
                     capacity >= 1000 if payload.budget >= 80000 else capacity >= 500,
                     drive['interface'] == 'NVMe',
                     min(capacity, 2000), -row[0])
-        cost, base = max(suitable, key=drive_rank)
+        cost, base = min(viable,key=lambda row:row[0]) if target_policy else max(suitable, key=drive_rank)
         # Compare RAM options for this same board/SSD/case composition. The
         # optimization uses declared capacity/modules/speed, never an FPS bonus.
-        same_support = [(candidate_cost, candidate) for candidate_cost, candidate in viable
+        memory_ties = viable[:bisect_right(costs, cost)] if target_policy else viable
+        same_support = [(candidate_cost, candidate) for candidate_cost, candidate in memory_ties
                         if candidate[0].id == base[0].id and candidate[2].id == base[2].id
                         and candidate[3].id == base[3].id]
         if same_support:
@@ -385,6 +427,7 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
                 q = memory_quality(cfg, payload.ram_capacity_gb)
                 speed=cfg.get('speed_mt_s') or 0
                 kit=bool(cfg.get('factory_kit'))
+                if target_policy:return (candidate_cost, -kit, -speed)
                 if payload.objective == 'economy':
                     return (candidate_cost, -q, -speed)
                 if payload.objective == 'balanced':
@@ -400,13 +443,13 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
                                 and base_cost + supply.price_rub + item.price_rub <= payload.budget]
             cooler = min(preferred_coolers,key=lambda item:item.price_rub) if preferred_coolers else cooler
         # Optional comfort/efficiency upgrades must preserve this CPU/GPU pair.
-        if payload.budget >= 70000:
+        if payload.budget >= 70000 and not target_policy:
             towers = [item for item in coolers if evidence[item.id]['cooling_class'] >= 2
                       and (cooler.source != preferred_source or item.source == preferred_source)
                       and item.price_rub <= cooler.price_rub + 1500
                       and base_cost + supply.price_rub + item.price_rub <= payload.budget]
             cooler = towers[0] if towers else cooler
-        if payload.budget >= 100000:
+        if payload.budget >= 100000 and not target_policy:
             gold = [item for item in supplies if 'Gold' in evidence[item.id]['label']
                     and (supply.source != preferred_source or item.source == preferred_source)
                     and item.price_rub <= supply.price_rub + 1000
@@ -430,7 +473,8 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
             continue
         memory_info = memory_configuration(base[1])
         # Keep legacy FPS independent of uncalibrated RAM/channel heuristics.
-        fps = estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, payload.game, payload.mode, 1.0, cpu.name)
+        fps = (estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, game_profile, payload.mode, 1.0, cpu.name)
+               if game_profile is not None else None)
         # Equal-weight geometric mean of normalized CPU Mark, GPU G3D Mark,
         # and declared RAM quality. This is a hardware proxy, not calibrated FPS.
         ram_score=memory_quality(memory_info,payload.ram_capacity_gb)
@@ -438,14 +482,43 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
         gpu_norm=bisect_right(gpu_scores,gpu.raw_score)/max(1,len(gpu_scores))
         hw_score=(cpu_norm*gpu_norm*ram_score)**(1/3)
         balance_score=min(cpu_norm,gpu_norm,ram_score)
-        # Only a hardware proxy: CPU Mark is used as a floor, never an FPS ratio.
-        # Competitive 1080p Low breaks ties toward CPU; higher presets toward GPU.
-        scenario_tie = cpu_norm if payload.game.value == 'CS2' and payload.mode.value == '1080p_low' else gpu_norm
-        option = (cpu, gpu, cost, fps, hw_score, balance_score, scenario_tie)
+        # This remains a hardware proxy, not a claimed FPS prediction. For
+        # 1440p/high and GPU-heavy games, maximize GPU class before spending on
+        # CPU percentile; for CPU-limited CS2 1080p Low, reverse that priority.
+        cpu_limited = game_name == 'CS2' and payload.mode.value == '1080p_low'
+        scenario_tie = cpu_norm if cpu_limited else gpu_norm
+        scenario_secondary = gpu_norm if cpu_limited else cpu_norm
+        option = (cpu, gpu, cost, fps, hw_score, balance_score, scenario_tie, scenario_secondary, ram_score)
+        if target_policy:
+            from app.services.performance import cpu_capacity,gpu_capacity
+            cc=cpu_capacity(cpu.raw_score,cpu.name,payload.game,payload.mode,1.0)
+            gc=gpu_capacity(gpu.raw_score,gpu.name,payload.game,payload.mode)
+            option=(*option,min(cc,gc)/max(1,cc,gc))
         options.append(option)
         compositions[(cpu.id, gpu.id)] = components
     options = [o for o in options if (payload.selected_cpu_id is None or o[0].id == payload.selected_cpu_id)
                and (payload.selected_gpu_id is None or o[1].id == payload.selected_gpu_id)]
+    if options and payload.workload == 'gaming':
+        from app.services.benchmark_model_v2 import has_native_pair_measurement
+        from app.services.adaptive_fps import predict_adaptive_fps
+        resolution, preset = payload.mode.value.rsplit('_', 1)
+        if resolution == '4k':
+            resolution = '4K'
+        for index, option in enumerate(options):
+            cpu, gpu = option[:2]
+            if game_profile is not None and not has_native_pair_measurement(cpu.name, gpu.name, game_name, preset):
+                continue
+            memory_info = memory_configuration(compositions[(cpu.id, gpu.id)][1])
+            pair_result = predict_adaptive_fps(cpu, gpu, game_name, {
+                'resolution': resolution, 'preset': preset,
+                'ram_type': memory_info.get('ram_type') or payload.ram_type,
+                'ram_channels': memory_info.get('modules'),
+                'ram_capacity_gb': memory_info.get('capacity_gb'),
+            })
+            if (pair_result.get('average_fps') is not None
+                    and pair_result.get('technical_details', {}).get('status')
+                    in {'measured_reference', 'estimated_interpolation', 'universal_fallback_estimate'}):
+                options[index] = (*option[:3], pair_result['average_fps'], *option[4:])
     if not options:
         raise HTTPException(400, 'Полная сбалансированная сборка с подходящим питанием и охлаждением не найдена в бюджете. Проверьте доступность предложений, измените платформу или расширьте площадки.')
     if preferred_source and payload.selected_cpu_id is None:
@@ -453,20 +526,31 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
                   (prices[gpu.id].source==preferred_source) for cpu,gpu,*_ in options}
         most = max(counts.values())
         options = [option for option in options if counts[(option[0].id,option[1].id)] == most]
-    variants = build_options(options, payload.target_fps, payload.game, payload.mode, payload.workload, payload.objective,
+    if target_policy:
+        from app.services.target_selection import target_variants
+        variants=target_variants(options,payload.target_fps,prefer_cpu_headroom=payload.objective=='performance')
+    else:
+        variants = build_options(options, payload.target_fps, payload.game, payload.mode, payload.workload, payload.objective,
                              hardware_score=(lambda option: option[4]) if payload.workload=='gaming' else None,
-                             hardware_rank=(lambda option: (option[5],option[6],option[4],-option[2]))
+                             hardware_rank=(lambda option: (option[6],option[7],option[8],option[4],-option[2])
+                                            if payload.objective=='performance' else
+                                            (option[5],option[6],option[4],-option[2]))
                              if payload.workload=='gaming' and payload.objective in ('balanced','performance') else None)
 
     def render(option, key='recommended', title='Рекомендуемая', summary='Сбалансированная игровая конфигурация в вашем бюджете.'):
         cpu, gpu, _, fps = option[:4]
-        if key == 'recommended' and payload.workload == 'gaming' and payload.objective == 'performance':
+        if payload.workload == 'gaming' and game_profile is None:
+            summary = 'Игровой FPS для этой игры не оценён. Состав выбран по относительным аппаратным рейтингам CPU/GPU и совместимости.'
+        if not target_policy and key == 'recommended' and payload.workload == 'gaming' and payload.objective == 'performance' and game_profile is not None:
             title = 'Максимальная игровая производительность'
-            summary = ('Сильнейшая доступная по аппаратному балансу CPU/GPU/RAM сборка в бюджете. '
-                       'Реальный FPS для этой полной конфигурации не измерен.')
+            cpu_limited = game_name == 'CS2' and payload.mode.value == '1080p_low'
+            priority = ('Для CS2 в 1080p Low сначала учитывается CPU, затем GPU и RAM. '
+                        if cpu_limited else
+                        'В 1440p и остальных игровых режимах сначала учитывается класс GPU, затем CPU и RAM. ')
+            summary = priority + 'Реальный FPS для этой полной конфигурации не измерен.'
         supporting = list(compositions[(cpu.id, gpu.id)])
         board = supporting[0]
-        if payload.selected_case_offer_id is None:
+        if payload.selected_case_offer_id is None and not target_policy:
             index = {'recommended': 0, 'value': 1, 'performance': 2}[key]
             base_cost = sum(item.price_rub for item in supporting) - supporting[3].price_rub
             board_format = attrs(board).get('form_factor')
@@ -481,8 +565,8 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
                   **public_price(prices[item.id])} for item in (cpu, gpu)]
         parts += [part(item, evidence.get(item.id), board) for item in supporting]
         total = sum(item['price'] for item in parts)
-        gaming_metrics = payload.workload != 'cpu_work'
-        outlook = fps_outlook(fps, gpu.name, payload.game, payload.mode) if gaming_metrics else None
+        gaming_metrics = payload.workload != 'cpu_work' and game_profile is not None
+        outlook = fps_outlook(fps, gpu.name, game_profile, payload.mode) if gaming_metrics else None
         memory_info = memory_configuration(supporting[1])
         hardware_metrics = None if payload.workload=='cpu_work' else {
             'cpu_passmark': cpu.raw_score, 'gpu_g3d_mark': gpu.raw_score,
@@ -498,7 +582,12 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
             'storage_interface': evidence[supporting[2].id]['interface'],
             'balanced_floor_proxy': option[5], 'scenario_tiebreak_proxy': option[6],
         }
-        return {'solver_diagnostics':{'method':'bounded joint search','cpu_candidates':len(cpus),'gpu_candidates':len(gpus),'original_cpu_candidates':original_counts[0],'original_gpu_candidates':original_counts[1],'pairs_examined':examined,'time_limit_reached':timed_out,'global_optimum_proven':False},'workload':payload.workload,'objective':payload.objective, 'selection_score':cpu.raw_score if payload.workload=='cpu_work' else option[5], 'selection_basis':'cpu_mark' if payload.workload=='cpu_work' else 'weakest_normalized_cpu_gpu_ram_hardware_dimension', 'hardware_quality_score':None if payload.workload=='cpu_work' else option[4], 'hardware_quality_basis':None if payload.workload=='cpu_work' else 'conservative_cpu_mark_total_and_per_core_percentile_gpu_g3d_and_declared_ram_proxy', 'hardware_metrics':hardware_metrics, 'scenario': 'build', 'game': payload.game.value, 'mode': payload.mode.value, 'variant_key': key, 'title': title, 'summary': summary,
+        cpu_limited_build = game_name == 'CS2' and payload.mode.value == '1080p_low'
+        selection_basis = ('target_fps_same_gpu_cpu_headroom' if target_policy and payload.objective=='performance' else 'target_fps_then_complete_cost' if target_policy else 'cpu_mark' if payload.workload=='cpu_work' else
+                           'cpu_gaming_proxy_then_gpu_percentile' if payload.objective=='performance' and cpu_limited_build else
+                           'gpu_percentile_then_cpu_gaming_proxy' if payload.objective=='performance' else
+                           'weakest_normalized_cpu_gpu_ram_hardware_dimension')
+        return {'solver_diagnostics':{'method':'bounded joint search','cpu_candidates':len(cpus),'gpu_candidates':len(gpus),'original_cpu_candidates':original_counts[0],'original_gpu_candidates':original_counts[1],'pairs_examined':examined,'time_limit_reached':timed_out,'global_optimum_proven':False},'workload':payload.workload,'objective':payload.objective, 'selection_score':fps if target_policy else cpu.raw_score if payload.workload=='cpu_work' else option[5], 'selection_basis':selection_basis, 'hardware_quality_score':None if payload.workload=='cpu_work' else option[4], 'hardware_quality_basis':None if payload.workload=='cpu_work' else 'conservative_cpu_mark_total_and_per_core_percentile_gpu_g3d_and_declared_ram_proxy', 'hardware_metrics':hardware_metrics, 'scenario': 'build', 'game': game_name, 'mode': payload.mode.value, 'variant_key': key, 'title': title, 'summary': summary,
                 'actual_config': {'socket':payload.socket,'ram_type':payload.ram_type,'ram_capacity_gb':payload.ram_capacity_gb},
                 'budget_reallocated': flexible or supporting[2].price_rub > part_limit('storage', payload.budget), 'memory_configuration': memory_info,
                 'preferred_parts_count': sum(item.get('price_source') == LABELS.get(preferred_source) for item in parts),
@@ -508,6 +597,8 @@ def assemble_auto(payload, db, allowed_offer_ids=None, preferred_source=None, fl
                 # No current benchmark validates this complete CPU/GPU/RAM
                 # configuration; a legacy interval cannot certify the goal.
                 'target_reached': None,
+                'target_reached_by_model':fps>=payload.target_fps if gaming_metrics else None,
+                'selection_policy':payload.selection_policy if game_profile is not None else 'hardware_proxy',
                 'recommendation': summary,
                 'compatibility_notes': [f'Плата выбрана под {payload.socket} и {payload.ram_type}; поддержка CPU в BIOS требует отдельной проверки.',
                     (f"Память: {memory_info['modules']} модуля; конфигурация поддерживает двухканальный режим при поддержке платы. Это аппаратная характеристика, не FPS-бонус." if memory_info['modules']==2 else

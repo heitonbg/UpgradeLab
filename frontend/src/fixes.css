@@ -1,0 +1,119 @@
+/* Small, scoped corrections from screenshot review. */
+
+/* Review step: remove the doubled heading-to-card gap. */
+.flow-heading{margin-block:12px 10px}
+.flow-panel:not([hidden]){padding-top:14px}
+@media(max-width:700px){.flow-heading{margin-bottom:8px}.flow-panel:not([hidden]){padding-top:10px}}
+
+/* The configurator mode bar already replaces the legacy scenario tabs. */
+.configurator-stack .scenario-switch.scenario-tabs{display:none!important}
+
+/* Marketplace sort should align with the other full-width sidebar controls. */
+.market-controls .market-sort{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;width:100%;min-width:0}
+.market-controls .market-sort select{width:100%!important;max-width:none!important;box-sizing:border-box}
+@media(max-width:800px){.market-controls-top{grid-template-columns:minmax(0,1fr)}}
+
+/* Keep one quiet divider and consistently aligned actions in the listing editor. */
+.listing-form .result-actions.listing-actions{position:static;bottom:auto;display:flex;align-items:center;gap:10px;margin:14px 0 0;padding:16px 0 0;border-top:1px solid var(--border);background:transparent;box-shadow:none}
+.listing-form .listing-actions button{min-height:44px;margin:0;align-self:center}
+
+/* Source segments keep their own button surfaces; remove the large tinted fieldset behind them. */
+.store-offers .source-picker,.builder-form .source-picker{background:transparent!important;border-color:transparent!important;box-shadow:none!important}
+
+/* Fit the measured-results table to desktop width so an empty overflow strip is not shown. */
+.benchmark-table-wrap{width:100%;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table{width:100%;min-width:0;table-layout:fixed}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th,.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table td{overflow-wrap:anywhere}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(1){width:22%}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(2){width:13%}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(3){width:14%}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(4){width:11%}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(5){width:10%}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(6){width:19%}
+.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table th:nth-child(7){width:11%}
+@media(max-width:760px){.benchmark-games-tab>.benchmark-table-wrap .benchmark-data-table{min-width:720px}}
+.benchmark-table-wrap::-webkit-scrollbar{height:8px}
+.benchmark-table-wrap::-webkit-scrollbar-track{background:transparent}
+.benchmark-table-wrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px}
+
+/* Reduce the unused space between the Regard intro and its filters. */
+.regard-public-catalog>.page-heading{margin-bottom:12px}
+.regard-public-catalog>.configuration-form{margin:0;padding:0}
+.regard-public-catalog>.configuration-form .form-grid{margin-top:0}
+
+/* Keep the hero image clean and avoid a second route into component search. */
+.hero-image-caption,.configurator-stack>.catalog-link{display:none!important}
+
+/* Give the community model/name search the full width of its filter panel. */
+.market-search{position:relative;display:block;width:100%;min-width:0;box-sizing:border-box;padding:0;border:0;background:transparent}
+.market-search>svg{position:absolute;z-index:1;left:14px;top:50%;transform:translateY(-50%);pointer-events:none}
+.market-search>input{display:block;box-sizing:border-box;appearance:none;-webkit-appearance:none;flex:none;width:100%!important;min-width:0;height:50px;margin:0;padding:10px 46px 10px 42px!important;border:1px solid var(--accent)!important;border-radius:9px!important;background:var(--input-surface)!important;outline:none!important;box-shadow:none!important}
+.market-search>input::-webkit-search-decoration,.market-search>input::-webkit-search-cancel-button,.market-search>input::-webkit-search-results-button,.market-search>input::-webkit-search-results-decoration{-webkit-appearance:none}
+.market-search>button{position:absolute;z-index:2;right:6px;top:50%;transform:translateY(-50%);width:38px;min-height:38px;display:grid;place-items:center}
+.market-reference-note{color:var(--text-muted)}
+
+.geo-delivery-toggle{margin-top:18px}
+.geo-delivery-toggle small{display:block;margin-top:4px;line-height:1.5}
+
+/* Readable copy and mobile navigation, after legacy layout rules. */
+small{font-size:max(12px,.85em)}
+.main-nav button{font-size:13px;white-space:nowrap;min-width:0}
+.main-nav button::after{content:none}
+@media(max-width:768px){
+ .site-header .main-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;width:100%;max-width:100%;padding:6px 0 10px;overflow:visible}
+ .site-header .main-nav button{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:44px;padding:8px!important;font-size:12px;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+ .site-header{height:auto;min-height:unset;grid-template-rows:auto auto;gap:8px;padding-bottom:0}
+ .upgrade-result .result-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .upgrade-result .result-actions>button{width:100%;min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere;padding:10px}
+ .resale-price-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+ .resale-price-controls>button{width:100%;white-space:normal}
+}
+@media(max-width:360px){.upgrade-result .result-actions{grid-template-columns:minmax(0,1fr)}}
+
+.lesson-context{font-size:13px;color:var(--text-secondary);line-height:1.6;margin:18px 0}
+.lesson-concepts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.lesson-concepts article{padding:14px;border:1px solid var(--border);border-radius:7px;min-width:0}
+.lesson-concepts h4,.lesson-review h4{font-size:14px;margin:0 0 8px}.lesson-concepts p,.lesson-review p{font-size:13px;line-height:1.65;margin:6px 0}
+.lesson-question-title{font-size:17px;line-height:1.5}.lesson-body h3:focus{outline:none}.lesson-body h3:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.lesson-answer-marker{display:block;margin-top:6px;font-size:12px}.lesson-review{margin:18px 0;font-size:13px}.lesson-review article{border-top:1px solid var(--border);padding:14px 0}
+.lesson-heading>.text-btn{min-height:44px;flex-shrink:0}.lesson-body{overflow-wrap:anywhere}.lesson-answers label{min-height:48px}
+@media(max-width:700px){.lesson-concepts{grid-template-columns:minmax(0,1fr)}.lesson-heading{flex-wrap:wrap}.lesson-actions .ui-button{width:100%;white-space:normal;min-height:44px}}
+
+.capture-upload{display:grid;gap:16px}.capture-upload-heading{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.capture-upload-heading h2{margin:0 0 8px}.capture-upload p{font-size:13px;line-height:1.6}.capture-drop{display:grid;justify-items:center;gap:12px;padding:28px 16px;border:2px dashed var(--border);border-radius:8px;text-align:center}.capture-drop span{font-size:12px}.capture-preview{display:grid;gap:16px}.capture-metrics{display:flex;gap:24px;flex-wrap:wrap;margin:0}.capture-metrics dd{font-size:22px;margin:4px 0}.capture-metrics dt{font-size:12px}.capture-metadata{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.capture-metadata label,.capture-metadata>div{display:grid;gap:7px;min-width:0}.capture-metadata input,.capture-metadata select{width:100%;min-height:44px;padding:10px}.capture-warnings{padding:12px;border-left:3px solid var(--accent)}.capture-consent{display:flex;gap:10px;align-items:flex-start;font-size:13px}.capture-consent input{margin-top:3px}.capture-upload button{min-height:44px}.capture-preview>.primary-btn{justify-self:start}
+@media(max-width:600px){.capture-metadata{grid-template-columns:minmax(0,1fr)}.capture-upload-heading>button,.capture-preview>.primary-btn{width:100%;white-space:normal}.capture-metrics{gap:14px}}
+
+/* Compact results and stable card geometry. */
+.store-offer-list { grid-template-columns: repeat(auto-fill,minmax(min(100%,280px),1fr)); align-items:start; }
+.store-offer-list > article.panel { display:flex!important; flex-direction:column!important; gap:12px; padding:20px!important; min-width:0; height:auto!important; text-align:left; }
+.store-offer-list > article.panel > * { width:100%; min-width:0; margin:0!important; grid-column:auto!important; }
+.store-offer-list > article.panel > .category-image { width:96px; height:96px; }
+.store-offer-list > article.panel .result-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px!important; }
+.store-offer-list > article.panel .result-actions button { margin:0; flex:1 1 140px; }
+.store-offer-list > article.panel > strong { font-size:16px; }
+.upgrade-result { display:flex; flex-direction:column; gap:16px; }
+.upgrade-result > p, .upgrade-result > details { margin:0; }
+.upgrade-result .resale-price-form { padding:16px; border:1px solid var(--border); border-radius:8px; }
+.upgrade-result .resale-price-controls { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.upgrade-result .resale-price-controls label { flex:1 1 240px; }
+.upgrade-result .resale-price-controls button { flex:0 1 auto; }
+.upgrade-choice-grid { align-items:start; }
+.upgrade-choice-card { min-width:0; height:auto; }
+@media(max-width:600px) { .store-offer-list { grid-template-columns:1fr; } .upgrade-result .result-actions > * { flex:1 1 160px; } }
+
+.store-offer-list > article.panel > .category-visual { width:100%; height:140px!important; min-height:0!important; aspect-ratio:auto; }
+.store-offer-list > article.panel > .category-visual img { height:140px; width:100%; object-fit:contain; }
+.store-offer-list > article.panel > strong { min-height:68px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+
+
+/* Dedicated benchmark submission page. */
+.benchmark-submit-page { display:grid; gap:24px; max-width:960px; margin:0 auto; }
+.benchmark-submit-page > .secondary-btn { justify-self:start; }
+.capture-upload-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+.capture-upload-heading > div:first-child { flex:1 1 300px; }
+.capture-template { display:grid; gap:14px; padding:20px; background:var(--surface, #171a20); border:1px solid var(--border, #303640); border-radius:12px; }
+.capture-template h3, .capture-template p { margin:0; }
+.capture-template pre { margin:0; padding:16px; overflow:auto; font-size:13px; line-height:1.7; background:var(--bg, #111318); border-radius:8px; }
+.benchmark-contribute { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:20px; }
+.benchmark-contribute h2 { margin:0 0 8px; }
+.benchmark-contribute p { margin:0; }
+@media(max-width:600px) { .capture-upload-actions { width:100%; } .capture-upload-actions > button { flex:1 1 140px; } .capture-template { padding:16px; } .benchmark-contribute > button { width:100%; } }

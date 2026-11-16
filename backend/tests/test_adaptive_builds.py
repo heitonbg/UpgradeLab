@@ -49,6 +49,17 @@ class AdaptiveBuildTests(unittest.TestCase):
         with patch('app.services.builds.search_offers',return_value={}),patch.object(settings,'offers_browser_enabled',False):
             return assemble(BuildRequest(**{**self.payload,**changes}),self.db)
 
+    def test_unprofiled_game_build_keeps_gpu_reference_separate_from_system_fps(self):
+        result = self.build(game='Catalog game without a workload profile')
+        self.assertEqual(result['scenario'], 'build')
+        self.assertGreater(result['fps'], 0)
+        self.assertIsNone(result['fps_outlook'])
+        self.assertEqual(result['selection_policy'], 'hardware_proxy')
+        self.assertEqual(result['fps_result']['technical_details']['status'], 'universal_fallback_estimate')
+        self.assertGreater(result['fps_result']['average_fps'], 0)
+        self.assertGreater(result['fps_result']['gpu_oriented_fps'], 0)
+        self.assertEqual(len(result['parts']), 8)
+
     def test_cheaper_gpu_frees_budget_for_complete_cpu_board_and_memory(self):
         self.add('GPU','GeForce RTX 4060',30000,3);self.db.commit()
         result=self.build()
@@ -58,6 +69,8 @@ class AdaptiveBuildTests(unittest.TestCase):
         self.assertEqual(len(result['parts']),8)
         self.assertEqual(next(part for part in result['parts'] if part['type']=='GPU')['name'],'Radeon RX 6600')
         self.assertEqual(result['preferred_parts_count'],8)
+        self.assertEqual(result['fps_result']['result_type'], 'estimated_system_fps')
+        self.assertEqual(result['fps'], round(result['fps_result']['average_fps']))
 
     def test_retail_gpu_does_not_replace_a_complete_avito_pc(self):
         self.add('GPU','GeForce RTX 4060',15000,3,source='regard');self.db.commit()
@@ -110,6 +123,7 @@ class AdaptiveBuildTests(unittest.TestCase):
             self.assertTrue(memory_matches(memory,BuildRequest(**self.payload)))
         self.assertEqual(memory_configuration(Obj(name='DDR4 16GB',attributes='{}'))['modules'],1)
         self.assertEqual(memory_configuration(Obj(name='DDR4 16GB',attributes='{}'))['specification_confidence'],'parsed_from_title')
+        self.assertFalse(memory_matches(Obj(name='DDR4 16GB',attributes='{}'),BuildRequest(**self.payload)))
         self.assertFalse(memory_matches(Obj(name='DDR4 8GB',attributes='{}'),BuildRequest(**self.payload)))
 
     def test_ram_shortlist_keeps_capacity_module_speed_and_price_tradeoffs(self):
@@ -142,32 +156,31 @@ class AdaptiveBuildTests(unittest.TestCase):
         self.assertEqual(len(pairs),1)
         self.assertEqual(memory_configuration(pairs[0])['capacity_gb'],16)
         self.assertEqual(pairs[0].price_rub,5000)
+        self.assertTrue(memory_matches(pairs[0],BuildRequest(**self.payload)))
 
-    def test_performance_and_economy_objectives_choose_different_ram_compositions(self):
+    def test_performance_and_economy_objectives_both_keep_dual_channel_ram(self):
         self.add('memory','DDR4 16GB 2400MHz',4000)
         self.db.scalar(select(StoreOffer).where(StoreOffer.category=='memory')).price_rub=9000
         self.db.commit()
         performance=self.build(objective='performance')
         economy=self.build(objective='economy')
         self.assertEqual(performance['memory_configuration']['modules'],2)
-        self.assertEqual(economy['memory_configuration']['modules'],1)
-        self.assertNotEqual(performance['parts'][3]['name'],economy['parts'][3]['name'])
+        self.assertEqual(economy['memory_configuration']['modules'],2)
+        self.assertEqual(performance['parts'][3]['name'],economy['parts'][3]['name'])
         self.assertIsNotNone(performance['hardware_quality_score'])
         self.assertIn('cpu_mark',performance['hardware_quality_basis'])
         self.assertEqual(performance['hardware_metrics']['ram_modules'],2)
         self.assertIsNone(performance['target_reached'])
         self.assertIsNone(economy['target_reached'])
 
-    def test_single_module_is_allowed_without_a_dual_channel_fps_bonus(self):
+    def test_single_module_cannot_be_selected_as_a_complete_build_memory_kit(self):
         dual=self.build()
         row=self.db.scalar(select(StoreOffer).where(StoreOffer.category=='memory'))
         row.name='DDR4 16GB';self.db.commit()
         single=self.build()
-        self.assertEqual(single['status'],'draft')
-        self.assertTrue(single['prices_confirmed'])
-        self.assertEqual(single['memory_configuration']['modules'],1)
-        self.assertLessEqual(single['fps'],dual['fps'])
-        self.assertTrue(any('один модуль' in note for note in single['compatibility_notes']))
+        self.assertNotEqual(single['status'],'complete')
+        self.assertFalse(any(part['type']=='memory' for part in single['parts']))
+        self.assertEqual(dual['memory_configuration']['modules'],2)
 
     def test_cpu_work_build_does_not_publish_a_game_fps_prediction(self):
         result=self.build(workload='cpu_work')

@@ -7,9 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from app.services.catalog_files import CatalogError
-from scripts.startup import backup, bootstrap_lock, main, preflight
+from scripts.startup import backup, bootstrap_lock, main, network_refresh, preflight, run_import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_regard_feed import BASE, xlsx
 from scripts.regard_feed import schema
@@ -68,26 +69,63 @@ class BootstrapTests(unittest.TestCase):
                 with bootstrap_lock(database):
                     pass
 
-    def test_invalid_bootstrap_still_starts_http_for_separate_readiness(self):
+    def test_failed_import_does_not_stop_http_entrypoint(self):
         with patch.dict("os.environ", {"REGARD_BOOTSTRAP_ON_START": "true"}):
             with patch("scripts.startup.bootstrap", side_effect=CatalogError("corrupt_xlsx")):
                 with patch("scripts.startup.os.execvp") as execvp:
                     main()
+                    run_import()
         execvp.assert_called_once()
 
-    def test_concurrent_bootstrap_does_not_start_second_http(self):
+    def test_concurrent_bootstrap_is_skipped_without_stopping_http(self):
         with patch.dict("os.environ", {"REGARD_BOOTSTRAP_ON_START": "true"}):
             with patch("scripts.startup.bootstrap", side_effect=CatalogError("bootstrap_already_running")):
                 with patch("scripts.startup.os.execvp") as execvp:
-                    with self.assertRaises(SystemExit):
-                        main()
-        execvp.assert_not_called()
+                    main()
+                    run_import()
+        execvp.assert_called_once()
     def test_disabled_bootstrap_starts_server_without_import(self):
         with patch.dict("os.environ", {"REGARD_BOOTSTRAP_ON_START": "false"}):
             with patch("scripts.startup.bootstrap") as run, patch("scripts.startup.os.execvp") as execvp:
                 main()
+                run_import()
         run.assert_not_called()
         self.assertEqual(execvp.call_args.args[0], "uvicorn")
+
+    def test_amvera_disabled_bootstrap_explains_empty_catalog(self):
+        with patch.dict("os.environ", {"REGARD_BOOTSTRAP_ON_START": "false", "AMVERA": "1"}):
+            with patch("scripts.startup.bootstrap") as run:
+                with self.assertLogs("regard_bootstrap", level="WARNING") as logs:
+                    run_import()
+        run.assert_not_called()
+        self.assertIn("status=skipped code=disabled", logs.output[0])
+
+    def test_network_refresh_replaces_price_only_after_import(self):
+        price = self.root / "price.xlsx"
+        price.write_bytes(b"previous")
+        fake_engine = SimpleNamespace(url=SimpleNamespace(database=str(self.root / "pc_upgrade.db")))
+
+        def fetch(_engine, directory, **kwargs):
+            path = Path(directory) / "price.xlsx"
+            path.write_bytes(b"new official bytes")
+            return path
+
+        with patch("scripts.startup.engine", fake_engine), patch("app.services.regard_sync.download", side_effect=fetch):
+            with patch("scripts.startup.bootstrap", side_effect=CatalogError("import_failed")):
+                with self.assertRaisesRegex(CatalogError, "import_failed"):
+                    network_refresh()
+            self.assertEqual(price.read_bytes(), b"previous")
+            with patch("scripts.startup.bootstrap", return_value={"status": "succeeded"}):
+                network_refresh()
+        self.assertEqual(price.read_bytes(), b"new official bytes")
+
+    def test_enabled_download_runs_after_local_bootstrap(self):
+        with patch.dict("os.environ", {"REGARD_BOOTSTRAP_ON_START": "true"}):
+            with patch("scripts.startup.settings.regard_download_enabled", True):
+                with patch("scripts.startup.bootstrap") as local, patch("scripts.startup.network_refresh") as network:
+                    run_import()
+        local.assert_called_once()
+        network.assert_called_once()
 
 
 if __name__ == "__main__":

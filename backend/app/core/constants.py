@@ -61,3 +61,12 @@ ESTIMATED_GAME_PROFILES = {
 for game, modes in ESTIMATED_GAME_PROFILES.items():
     GAME_PROFILES[game] = {mode: {'cpu': cpu, 'gpu': gpu, 'overhead': .95}
                            for mode, (cpu, gpu) in zip(CalcMode, modes)}
+
+# 4K uses measured GPU references when available; otherwise scale the QHD
+# GPU limit by pixel count and keep the CPU limit unchanged. This is an
+# explicitly estimated mode, not a direct 4K system measurement.
+for _profiles in GAME_PROFILES.values():
+    _qhd = _profiles.get(CalcMode.MODE_1440P_HIGH)
+    if _qhd:
+        _profiles[CalcMode.MODE_4K_HIGH] = {"cpu": _qhd["cpu"], "gpu": _qhd["gpu"] * .60,
+                                            "overhead": _qhd["overhead"]}

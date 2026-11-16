@@ -44,3 +44,18 @@ class BenchmarkEstimateTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_rtx_5090d_cyberpunk_qhd_uses_real_gpu_reference_without_calling_it_pair_fps(self):
+        reference = benchmark_reference('GeForce RTX 5090 D', 'Cyberpunk 2077', '1440p_high')
+        self.assertEqual(reference['fps'], 171)
+        self.assertTrue(reference['gpu_reference'])
+        self.assertFalse(reference['exact_gpu'])
+        self.assertIn('not a CPU/GPU system test', reference['note'])
+
+    def test_4k_high_has_a_supported_estimate_profile(self):
+        from app.core.constants import GAME_PROFILES
+        from app.services.performance import estimate_fps
+        from app.schemas.calculate import GameName, CalcMode
+        self.assertIn(CalcMode.MODE_4K_HIGH, GAME_PROFILES[GameName.CYBERPUNK])
+        value = estimate_fps(25000, 220000, 'GeForce RTX 5090', GameName.CYBERPUNK, CalcMode.MODE_4K_HIGH, 1, 'Ryzen 5 5600')
+        self.assertGreater(value, 0)

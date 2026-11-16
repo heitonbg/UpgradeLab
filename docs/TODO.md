@@ -1,5 +1,10 @@
 # Следующие итерации
 
+## Сделано 2026-11-12
+
+- FPSHQ: добавлены шесть явно помеченных measured-точек в существующий набор и 195 отдельно атрибутированных сводных справок по 29 играм; 25 игр расширяют покрытие вне текущего точного набора. Результаты моделей и агрегаты не выданы за отдельные прогоны. Для аккаунтов добавлена отправка пользовательских замеров с очередью ручной проверки.
+- Автоподбор игровых сборок для GPU-зависимых режимов теперь ставит GPU-класс перед CPU proxy; CS2/1080p Low остаётся CPU-first. Это исправляет перекос между дорогим CPU и слабой видеокартой, но не заменяет данные об FPS конкретной полной сборки.
+
 1. Выполнено 2026-11-09 (итерация 2): единые UTC-часы, нормализация Z/offset/naive, границы TTL, защита от будущих дат; 39 новых тестов. Подробности: ARCHITECTURE.md и TECHNICAL_AUDIT.md.
 2. Ручная сборка: учитывать подтверждённую конфигурацию RAM, передавать cpu_name в estimate_fps, проверять известные питание/габариты/крепления. Не обещать совместимость неизвестных параметров.
 3. Лимиты авторизации выполнены 2026-11-09 (итерация 3): SQLite-квоты, защита распределённых попыток, Retry-After, 34 новых backend-теста. См. AUTH_SECURITY.md. Остались подтверждение proxy trust Amvera, Origin-проверка выдачи сессии и осознанно сохранённое раскрытие email через регистрацию.
@@ -198,3 +203,54 @@ UL-005 исправлен: старый result больше не показыв�
 - [ ] Подтвердить частоты/слоты/XMP-EXPO по конкретным моделям плат и ревизиям CPU; не выводить их из названия набора RAM.
 - [ ] Расширить лицензированные независимые FPS-серии; обучать и включать статистическую/ML модель только после честного holdout.
 - [ ] Профилировать параллельные запросы и SSD/RAM shortlist на большем каталоге: V3 p95 10.491 с, ускорение относительно V2 не доказано.
+
+
+- [x] Блокировать одинаковый расчёт апгрейда; копировать ссылки без native Share.
+- [x] Сохранять и отзывать публичные снимки конфигураций; читать ссылку без пересчёта цен.
+- [x] CSV/JSON предпросмотр, методика FPS/low, ограничение размера, дубликаты, pending и закрытые frametime.
+- [x] Подбор игровых сборок по целевому прогнозу с совместной ценой, DDR5 и отдельным вариантом с доплатой.
+- [ ] Проверить новые таблицы/backup и авторизацию на фактических двух доменах Amvera после загрузки релиза.
+- [ ] Расширить тесты импортёра настоящими пользовательскими файлами разных версий CapFrameX/PresentMon без персональных путей.
+- [ ] Калибровать FPS на независимых игровых сериях; новая цель подбора сама по себе точность модели не повышает.
+
+
+- [ ] Расширять CPU/GPU-pair FPS только по новым измерениям с известными настройками; один список названий игр не даёт системного FPS. Для большинства каталога пока доступна только отдельная внешняя GPU-оценка, если совпадает видеокарта и режим.
+- [ ] Собирать добровольные CapFrameX/PresentMon выгрузки; сверять метаданные, удалять дубликаты и держать пользовательские результаты отдельно до модерации.
+- [ ] Калибровать 4K и оценки для GPU вне точных FPSHQ строк на независимых источниках до сужения диапазона ошибки.
+
+- [ ] Получить независимые лицензированные тестовые серии с контролируемой вариацией CPU при фиксированной GPU и GPU при фиксированном CPU; только тогда калибровать frame-time curves и bottleneck взаимодействие.
+- [ ] Проверить candidate v2 на независимом publisher/test-series holdout с несколькими играми, версиями и настройками; до этого production использует legacy baseline.
+- [ ] Не обучать CatBoost/LightGBM до достаточной независимой выборки; текущие 4 строгих прогона принадлежат одной паре и одной серии.
+- [ ] Включать BENCHMARK_IMPORT_ON_START на backend deployment только после обычного backup текущей Amvera SQLite; импорт additive и idempotent.
+
+## FPS Engine v4 — status after final verification (2026-11-15)
+
+- [x] Reuse the pinned CC BY 4.0 PCGameBenchmarks snapshot: 16,441 game profiles and 197,292 GPU-oriented model estimates. No second game-catalog import was needed.
+- [x] Keep system measurements, legacy estimates, external GPU-only estimates, and CPU requirement indices distinct in the shared resolver/API/Builder/Upgrader.
+- [x] Normalize `4K`, `2160p`, `3840x2160`, and `3840×2160`; add exact 4K API coverage.
+- [x] Make v4 pair validation with a held-out resolution possible without exposing a production override; report legacy/v2/v3/v4 and GPU-only comparability separately.
+- [x] Re-run the safe GPU-class audit: 193/785 numeric GPU-only estimates for the CS2 1080p High curve; report abstention reasons rather than expanding coverage by VRAM guessing.
+- [x] Verify 100 read-only FPS API requests, Builder/Upgrader evidence envelopes, backend/frontend tests, and production build.
+- [ ] Obtain multiple independently licensed fixed-GPU CPU series and fixed-CPU GPU series before implementing calibrated frame-time decomposition or bottleneck claims.
+- [ ] Validate v2/v4 on independent publishers, games, CPU/GPU variants, and settings; current common holdout is one point within one test series and must not promote the candidate.
+- [ ] Obtain comparable GPU-only measurements before scoring PCGameBenchmarks GPU-only estimates for accuracy.
+- [ ] Expand device-specific curves only with source-provenanced reference points; keep unsupported device classes and out-of-range scores abstaining.
+
+## Unified adaptive FPS result — 2026-11-15
+
+- [x] Use one evidence resolver/result shape for FPS API, Builder and Upgrader.
+- [x] Keep system measurements, system estimates, GPU-only orientation and unavailable results distinct in the UI.
+- [x] Exclude RAM from FPS coefficients; keep it only as measurement context / mismatch filter.
+- [x] Withhold uncalibrated bottleneck labels and unsupported CPU FPS deltas.
+- [ ] Add independently licensed CPU-fixed/GPU-varied and GPU-fixed/CPU-varied test series before claiming general accuracy or promoting a universal full-system model.
+- [ ] Calibrate 4K transfer, RT, upscaling, frame generation and unsupported GPU classes with matched reference data.
+
+
+## Steam requirements — 16.11.2026
+
+Реализованы SQLite-кеш, durable очередь, отдельный HTTPX worker и интеграция с FPS Engine без LLM/Chromium. На Amvera включается STEAM_WORKER_ENABLED=true (автоматически при AMVERA=1). Проверки и ограничения: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md). Остаётся проверка Linux lifecycle и точности прогнозов на независимых измерениях; deployment не выполнялся.
+
+
+### Steam lifecycle hardening, 16.11.2026
+
+Один Uvicorn --workers 1, supervised дочерний worker, общий явный DATABASE_URL /data, restart check 15 s, idle queue 10 s. Новые SQLite используют DELETE/FULL вместо принудительного WAL. Реальные browser E2E и Windows crash/restart пройдены. Linux/container и фактический storage Amvera не проверены из-за отсутствия Docker/WSL; подготовлен scripts.steam_linux_smoke. Подробности, RAM и команды: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md), steam_amvera_validation.json.

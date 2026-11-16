@@ -33,3 +33,7 @@ Thumbs.db
 *.db-*
 *.sqlite
 *.sqlite3
+
+# Local release packages and worker process locks
+*.zip
+*.bootstrap.lock

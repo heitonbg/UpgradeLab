@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import os
+import threading
 from starlette.staticfiles import StaticFiles
 from app.core.config import settings
 from app.api import hardware, calculate, listings, autodetect, account
@@ -11,9 +12,13 @@ from app.db.models import Hardware
 from sqlalchemy import select
 
 def create_app() -> FastAPI:
+    from app.db.migrations import migrate_steam_requirements
+    migrate_steam_requirements(engine)
     Base.metadata.create_all(bind=engine)
-    from app.db.migrations import migrate_listings
+    from app.db.migrations import migrate_listings, migrate_benchmarks, migrate_hardware_specifications
     migrate_listings(engine)
+    migrate_benchmarks(engine)
+    migrate_hardware_specifications(engine)
     with SessionLocal() as db:
         has_hardware = db.scalar(select(Hardware.id).limit(1)) is not None
     if not has_hardware:
@@ -26,6 +31,33 @@ def create_app() -> FastAPI:
         load_offer_file(db)
     app = FastAPI(title="UpgradeLab", version="1.1.0")
 
+    @app.on_event("startup")
+    def start_steam_worker():
+        app.state.steam_worker = None
+        if settings.steam_requirements_enabled and settings.steam_worker_enabled:
+            from app.services.steam_lifecycle import SteamSupervisor
+            app.state.steam_worker = SteamSupervisor()
+            app.state.steam_worker.start()
+
+    @app.on_event("shutdown")
+    def stop_steam_worker():
+        supervisor = getattr(app.state, 'steam_worker', None)
+        if supervisor is not None:
+            supervisor.close()
+
+    @app.on_event("startup")
+    def start_regard_import():
+        if os.getenv("AMVERA") == "1":
+            from scripts.startup import run_import
+            threading.Thread(target=run_import, name="regard-bootstrap", daemon=True).start()
+
+    @app.on_event("startup")
+    def import_benchmark_snapshot():
+        if settings.benchmark_import_on_start:
+            from app.services.benchmark_storage import import_curated_benchmarks
+            with SessionLocal() as db:
+                import_curated_benchmarks(db)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -34,11 +66,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from app.api import games, catalog_history, product_discovery, catalog_admin, catalog_public
+    from app.api import games, benchmarks, catalog_history, product_discovery, catalog_admin, catalog_public
+    from app.api import shared_builds
+    app.include_router(shared_builds.router)
+    app.include_router(benchmarks.router)
     app.include_router(product_discovery.router)
     app.include_router(catalog_history.router)
     app.include_router(catalog_admin.router)
     app.include_router(catalog_public.router)
+    from app.api import steam_requirements
+    app.include_router(steam_requirements.router)
     app.include_router(games.router)
     app.include_router(hardware.router)
     app.include_router(calculate.router)

@@ -33,8 +33,8 @@ def report_progress(message):
 
 def public_job(job,db=None):
     if db is not None and job.result:
-        from app.services.result_access import current_result
-        if not current_result(db,json.loads(job.result)):
+        from app.services.result_access import current_result_many
+        if not current_result_many(db,json.loads(job.result)):
             return {'id':job.id,'kind':job.kind,'status':'failed','progress':'Предложения изменились',
                 'created_at':job.created_at.isoformat()+'Z','updated_at':job.updated_at.isoformat()+'Z',
                 'result':None,'error':'Объявления или права доступа изменились. Повторите поиск.'}

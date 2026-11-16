@@ -1,0 +1,130 @@
+/* Mobile layout layer, loaded after the shared desktop styles. */
+.mobile-menu-toggle,.benchmark-filter-toggle{display:none}
+
+/* Benchmark submission is a page-level action rather than a second bottom panel. */
+.benchmark-page-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
+.benchmark-page-heading>div{min-width:0;flex:1 1 420px}
+.benchmark-page-heading>.primary-btn{flex:0 0 auto;min-height:44px}
+@media (max-width: 760px){
+ :root{--header-height:0px}
+ .app-shell,.workspace,.content,.home-page,.benchmark-page,.benchmark-games-tab,.benchmark-submit-page,.marketplace-browser,.market-results-area,.configurator-stack,.build-result,.custom-configurator,.account-grid{min-width:0;max-width:100%}
+ .workspace{width:100%}
+ .site-header{position:relative!important;top:auto!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;min-height:64px;height:auto;padding:10px 12px!important;align-items:center;backdrop-filter:none;background:var(--background);z-index:10}
+ .site-header .brand{grid-column:1;grid-row:1;min-width:0;font-size:17px;gap:6px}
+ .brand svg{width:20px;flex-shrink:0}
+ .site-header .header-account{grid-column:2;grid-row:1;min-width:0}
+ .header-account .account-chip{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;padding:8px;font-size:13px}
+ .header-account .register-link{display:none}
+ .account-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .mobile-menu-toggle{display:block;grid-column:3;grid-row:1;min-height:44px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-primary);font-size:13px}
+ .site-header .main-nav{display:none!important}
+ .site-header.mobile-menu-open .main-nav{display:grid!important;grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px 0 2px;overflow:visible}
+ .site-header .main-nav button{min-width:0;min-height:44px;white-space:normal;padding:10px!important;font-size:13px}
+ .content{width:100%;padding:18px 12px 36px!important}
+ .panel{min-width:0;padding:16px!important}
+ .page-heading{margin:0 0 16px}
+ .page-heading h1{font-size:26px;line-height:1.2;margin:8px 0 10px}
+ .page-heading>p:last-child{font-size:14px;line-height:1.5}
+ p,li{overflow-wrap:break-word}
+ input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important;min-height:44px;max-width:100%}
+ .form-grid,.builder-grid,.custom-config-form,.account-grid,.benchmark-filters,.capture-metadata{grid-template-columns:minmax(0,1fr)!important;gap:16px}
+ fieldset,.form-grid>*,.panel>*,.flow-panel,.builder-step{min-width:0}
+ .flow-heading{margin:16px 0!important}
+ .flow-panel,.builder-step{padding:14px!important}
+ .flow-panel:not([hidden]){min-height:0!important}
+ .flow-navigation{gap:6px;padding:8px 0;margin-bottom:12px}
+ .flow-navigation button{min-width:0;padding:8px 4px;font-size:12px}
+ .flow-navigation button small{display:none}
+ .flow-footer{padding:12px 14px;gap:10px;flex-wrap:wrap}
+ .flow-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap}
+ .flow-footer>button{flex:0 1 auto;min-width:0;min-height:44px;padding:9px!important;font-size:12px;white-space:nowrap}
+ .flow-footer:has(button[type="submit"])>button:last-child{white-space:normal;text-align:center}
+ .configurator-modebar{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible}
+ .configurator-modebar button{min-width:0;padding:10px 5px;font-size:12px;white-space:normal}
+ .build-choice-grid,.upgrade-choice-grid,.market-grid{grid-template-columns:minmax(0,1fr)!important}
+ .build-choice-card,.upgrade-choice-card{min-width:0;padding:16px!important}
+ .result-actions,.capture-upload-actions{gap:10px;flex-wrap:wrap}
+ .result-actions>button,.result-actions>a{flex:1 1 150px;min-width:0;white-space:normal;min-height:44px;text-align:center;padding:10px 12px}
+ .modal-backdrop{padding:10px;align-items:center}
+ .modal-dialog{width:100%!important;min-width:0!important;max-width:100%!important;max-height:calc(100dvh - 20px);overflow-y:auto;border-radius:12px}
+ .modal-content{padding:16px!important;min-width:0}
+ .modal-heading{padding:14px 16px!important;gap:12px}
+ .modal-heading h3{font-size:18px;min-width:0}
+ .modal-close{min-width:44px;min-height:44px}
+ .benchmark-page{gap:14px}
+ .benchmark-tabs{margin:0 0 8px}
+ .benchmark-filter-toggle{display:block;width:100%;margin-bottom:12px;min-height:44px}
+ #benchmark-filters:not(.mobile-filters-open){display:none}
+ .benchmark-table-wrap{width:100%;max-width:100%;min-width:0;overflow:auto;max-height:none!important;border:0}
+ .benchmark-measurements-table{display:block;min-width:0!important;width:100%;background:transparent}
+ .benchmark-measurements-table thead{display:none}
+ .benchmark-measurements-table tbody{display:grid;gap:12px}
+ .benchmark-measurements-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+ .benchmark-measurements-table tbody th,.benchmark-measurements-table tbody td{display:grid;align-content:start;gap:4px;min-width:0;padding:0;border:0;overflow-wrap:anywhere;font-size:14px}
+ .benchmark-measurements-table tbody th{grid-column:1/-1}
+ .benchmark-measurements-table tbody td::before{font-size:12px;color:var(--text-muted);font-weight:400}
+ .benchmark-measurements-table tbody td:nth-child(2)::before{content:'Процессор'}
+ .benchmark-measurements-table tbody td:nth-child(3)::before{content:'Видеокарта'}
+ .benchmark-measurements-table tbody td:nth-child(4)::before{content:'Средний FPS'}
+ .benchmark-measurements-table tbody td:nth-child(5)::before{content:'1% Low'}
+ .benchmark-measurements-table tbody td:nth-child(6)::before{content:'Выборка'}
+ .benchmark-measurements-table tbody td:nth-child(7)::before{content:'Сравнить'}
+ .benchmark-measurements-table input[type=checkbox]{width:24px;height:24px}
+ .benchmark-measurements-table .benchmark-number{font-size:20px;white-space:normal}
+ .benchmark-compare>div{grid-template-columns:minmax(0,1fr)!important}
+ .home-hero{display:flex!important;flex-direction:column;min-height:0}
+ .home-hero-copy{order:1;padding:22px 18px!important}
+ .home-hero-copy h1{font-size:32px;line-height:1.15}
+ .home-hero-copy>p:not(.eyebrow){font-size:14px;line-height:1.6}
+ .home-hero-image{order:2;position:relative!important;inset:auto!important;height:170px!important;min-height:0;width:100%;opacity:1}
+ .home-hero-image img{width:100%;height:100%;object-fit:cover;object-position:center}
+ .hero-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+ .home-capabilities{display:none}
+ .home-workflows{grid-template-columns:minmax(0,1fr)!important;gap:10px;margin-top:20px;padding:20px 0}
+ .home-workflows>button{min-height:0!important;padding:16px!important;padding-right:82px!important;text-align:left;border-radius:10px}
+ .home-workflows>button .category-visual{display:block!important;right:6px;bottom:8px;width:64px!important;height:64px!important;opacity:.72;mix-blend-mode:normal}
+ .home-workflows>button .category-visual img{display:block!important;width:100%;height:100%;object-fit:contain}
+ .home-workflows h3{font-size:18px;line-height:1.35;max-width:none;margin:12px 0 6px}
+ .home-workflows p{max-width:none;font-size:13px;line-height:1.5;margin-bottom:12px}
+ .home-workflows .workflow-link{font-size:13px;line-height:1.4}
+ .section-title h2,.home-method h2{font-size:23px}
+ .category-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+ .category-grid button{min-width:0}
+ .home-method{grid-template-columns:minmax(0,1fr);padding:18px!important;gap:20px}
+ .home-method ol{padding-left:20px}
+ .notice{margin-bottom:16px;padding:12px 44px 12px 12px;font-size:13px;line-height:1.5}
+ .fps-chart{padding:14px!important;margin-inline:0}
+ .fps-chart-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ .fps-chart-row meter{grid-column:1/-1;grid-row:auto;width:100%}
+ .fps-chart-row strong{grid-column:2;grid-row:1}
+ .fps-chart-change>div{flex-wrap:wrap;gap:8px}
+ .fps-chart-change strong{font-size:23px}
+ .source-segments{display:flex;flex-wrap:wrap;gap:6px}
+ .source-segments button{flex:1 1 95px;min-width:0;white-space:normal;min-height:44px;padding:10px 6px}
+ .benchmark-measurements-table tbody th{width:100%!important;max-width:none!important;min-width:0!important}
+ .benchmark-games-tab>.result-actions,.fpshq-reference>.result-actions{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
+ .benchmark-games-tab>.result-actions>button,.fpshq-reference>.result-actions>button{min-width:0;padding:8px;font-size:13px;flex:none}
+ .benchmark-extra>summary{min-height:44px;padding:12px 0;font-size:14px;cursor:pointer}
+ .benchmark-extra>.panel{margin-top:12px}
+ .category-grid button{display:flex;align-items:center;gap:8px;padding:12px;min-height:76px;text-align:left}
+ .category-grid button .category-visual{width:40px!important;height:40px!important;flex:0 0 40px;margin:0;aspect-ratio:1}
+ .category-grid button .category-visual img{width:100%;height:100%;object-fit:contain}
+ .category-grid button>span{min-width:0;padding:0;font-size:12px;white-space:normal;overflow-wrap:normal}
+ .category-grid button>span svg{display:none}
+ .benchmark-page-heading{display:grid;gap:16px}
+ .benchmark-page-heading>.primary-btn{width:100%;white-space:normal}
+ .site-header{padding-top:max(10px,env(safe-area-inset-top))!important}
+ .content{padding-left:max(12px,env(safe-area-inset-left))!important;padding-right:max(12px,env(safe-area-inset-right))!important;padding-bottom:max(36px,env(safe-area-inset-bottom))!important}
+ .configuration-form.flow-form{padding:0!important;border:0!important;background:transparent;box-shadow:none;max-width:100%}
+ .flow-form .flow-panel{padding:16px 14px!important;border:0;max-height:none;overflow:visible}
+ .flow-form .flow-panel fieldset>legend{display:block!important;float:none!important;width:auto!important;margin:0 0 10px!important;padding:0!important}
+ .flow-form .builder-step{padding:0!important}
+ .flow-form .flow-footer{padding-inline:14px!important}
+ .modal-backdrop{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}
+ .modal-dialog{max-height:calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+ .modal-dialog{display:flex;flex-direction:column;overflow:hidden}
+ .modal-heading{flex-shrink:0}
+ .modal-content{overflow-y:auto;min-height:0;max-height:none!important;overscroll-behavior:contain}
+ .modal-dialog.modal-editor{min-height:0!important;height:auto;max-height:calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+ .modal-backdrop:has(.modal-editor){padding:10px;padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}}
+@media(min-width:390px) and (max-width:760px){.content{padding-left:max(16px,env(safe-area-inset-left))!important;padding-right:max(16px,env(safe-area-inset-right))!important}}

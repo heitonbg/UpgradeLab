@@ -177,8 +177,10 @@ def ram_performance_factor(game, cpu_name='', ram_type=None, ram_channels=None):
 
 def estimate_fps(cpu_raw, gpu_raw, gpu_name, game, mode, ram_factor=1, cpu_name=''):
     profile = GAME_PROFILES[game][mode]
-    return max(1, round(min(cpu_capacity(cpu_raw, cpu_name, game, mode, ram_factor),
-                            gpu_capacity(gpu_raw, gpu_name, game, mode)) * profile['overhead']))
+    cpu_limit = cpu_capacity(cpu_raw, cpu_name, game, mode, ram_factor)
+    reference = benchmark_reference(gpu_name, game.value, mode.value, gpu_raw)
+    gpu_limit = reference["fps"] if reference else gpu_capacity(gpu_raw, gpu_name, game, mode)
+    return max(1, round(min(cpu_limit, gpu_limit) * profile['overhead']))
 
 
 def fps_outlook(estimate, gpu_name, game, mode):
@@ -205,4 +207,8 @@ def fps_outlook(estimate, gpu_name, game, mode):
                               "url": "https://tanki.su/ru/content/docs/download/"}] if game == GameName.MIR_TANKOV else []),
         "settings": "Без DLSS/FSR, генерации кадров и трассировки лучей; разрешение рендера соответствует выбранному.",
         "uncertainty": "Границы — эвристическая оценка разброса, не измерение и не статистический доверительный интервал.",
+        "gpu_reference": ({"fps": round(benchmark["fps"]), "sources": benchmark["sources"],
+                           "note": benchmark["note"], "measurement_type": benchmark.get("measurement_type"),
+                           "exact_gpu": benchmark.get("exact_gpu", False)}
+                          if benchmark and benchmark.get("gpu_reference") else None),
     }

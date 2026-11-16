@@ -2,17 +2,31 @@
 CATEGORIES = ('CPU', 'GPU', 'motherboard', 'memory', 'storage', 'psu', 'case', 'cooler')
 
 
-def planning_reserves(pool, budget):
-    # Planning reserves are never offered as product prices. Cheaper real
-    # observations may lower them; missing products keep an explicit reserve.
-    floors = dict(zip(CATEGORIES, (2500, 5000, 2500, 1500, 2000, 3000, 1500, 800)))
+def planning_reserves(pool, budget, ram_types=None, ram_capacity_gb=16):
+    # These are budget allocations, not product quotes. RAM is the exception
+    # to percentage-only estimates: its floor follows current kit pricing.
+    floors = dict(zip(CATEGORIES, (2500, 5000, 2500, 13000, 2000, 3000, 1500, 800)))
     shares = dict(zip(CATEGORIES, (.10, .25, .08, .05, .07, .08, .05, .025)))
-    return {cat: min([max(floors[cat], round(budget * shares[cat]))] +
-                    [row.price_rub for row in pool[cat]]) for cat in CATEGORIES}
+    types = {value for value in (ram_types or ('DDR4', 'DDR5')) if value in ('DDR4', 'DDR5')}
+    if not types:
+        types = {'DDR4', 'DDR5'}
+    capacity = max(8, int(ram_capacity_gb or 16))
+    ram_floor_by_type = {
+        'DDR4': (13000 if capacity <= 16 else 29000 * capacity // 32),
+        'DDR5': (28000 if capacity <= 16 else 47000 * capacity // 32),
+    }
+    floors['memory'] = min(ram_floor_by_type[value] for value in types)
+    reserves = {}
+    for category in CATEGORIES:
+        estimate = max(floors[category], round(budget * shares[category]))
+        observed = min([estimate] + [row.price_rub for row in pool[category]])
+        reserves[category] = max(floors['memory'], observed) if category == 'memory' else observed
+    return reserves
 
 
-def partial_budget_plan(pool, budget, preferred_source=None, compatible=None):
-    reserves = planning_reserves(pool, budget)
+def partial_budget_plan(pool, budget, preferred_source=None, compatible=None, ranker=None,
+                        ram_types=None, ram_capacity_gb=16):
+    reserves = planning_reserves(pool, budget, ram_types, ram_capacity_gb)
     # Beam search considers skipping an unaffordable category, instead of
     # displaying independent quotes whose combined price exceeds the budget.
     states = [([], 0, 0)]  # rows, quoted cost, reserve for skipped categories
@@ -35,6 +49,8 @@ def partial_budget_plan(pool, budget, preferred_source=None, compatible=None):
         next_states.sort(key=lambda state: (-len(state[0]),
             -sum(row.source == preferred_source for row in state[0]) if preferred_source else 0,
             state[1], tuple(row.id for row in state[0])))
+        if ranker is not None:
+            next_states.sort(key=lambda state:(*ranker(state[0]),len(state[0]),-state[1]),reverse=True)
         states = next_states[:64]
         if not states:
             return [], {'budget': budget, 'known_parts_subtotal': 0,

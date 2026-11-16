@@ -1,3 +1,5 @@
+from app.services.steam_storage import with_requirements
+from app.services.selection_cache import selection_scope
 """Budgeted CPU/GPU selection with explicitly priced supporting parts."""
 from typing import Literal
 from fastapi import HTTPException
@@ -10,7 +12,7 @@ from app.schemas.offers import Source, LABELS, SearchOffers
 from app.db.models import StoreOffer
 from app.services.offers import available_offers, fresh, public_offer, search_offers
 from app.services.gaming_selection import gaming_options
-from app.services.performance import estimate_fps, fps_outlook, ram_performance_factor
+from app.services.performance import estimate_fps, fps_outlook
 from app.services.component_quality import QUALITY_SEARCHES, quality_check, invalid_manual_part
 from app.services.storage_compatibility import nvme_board_evidence
 import re
@@ -37,7 +39,7 @@ def board_socket(title):
 
 
 def desktop_gpu(name):
-    return not re.search(r"laptop|mobile|notebook|max-q|\b(?:GTX|RTX)\s*\d+M\b", name, re.I)
+    return not re.search(r"laptop|mobile|notebook|max-q|quadro|tesla|radeon\s+pro|rtx\s+(?:a\d|pro)|\b(?:GTX|RTX)\s*\d+M\b", name, re.I)
 
 
 class Part(BaseModel):
@@ -59,16 +61,28 @@ class BuildRequest(GeoQuery):
     scenario: Literal["build"]
     budget: int = Field(gt=0, le=10000000)
     target_fps: int = Field(default=60, ge=1, le=1000)
-    game: GameName
+    game: GameName | str
     mode: CalcMode
-    socket: Literal["AM4", "AM5", "LGA1151", "LGA1200", "LGA1700"]
-    ram_type: Literal["DDR4", "DDR5"]
+
+    @field_validator('game', mode='before')
+    @classmethod
+    def normalize_known_game(cls, value):
+        if isinstance(value, GameName):
+            return value
+        try:
+            return GameName(str(value).strip())
+        except ValueError:
+            return str(value).strip()
+    socket: Literal["AUTO", "AM4", "AM5", "LGA1151", "LGA1200", "LGA1700"]
+    ram_type: Literal["AUTO", "DDR4", "DDR5"]
     ram_capacity_gb: int = Field(ge=8, le=512)
     price_sources: list[Source] | None = Field(default=None, min_length=1, max_length=13)
     pricing_mode: Literal["offers", "reference", "hybrid"] | None = None
     condition: Literal["any", "new", "used"] = "any"
     workload: Literal["gaming", "cpu_work"] = "gaming"
     objective: Literal["balanced", "performance", "economy"] = "balanced"
+    selection_policy: Literal['hardware_proxy','target_fps'] = 'hardware_proxy'
+    include_stretch: bool = True
     auto_parts: bool = False
     allow_store_fallback: bool = True
     allow_platform_change: bool = True
@@ -101,7 +115,8 @@ def build_options(options, target_fps, game=None, mode=None, workload="gaming", 
         score=lambda o:o[0].raw_score if workload=='cpu_work' else (hardware_score(o) if hardware_score else o[3])
         if hardware_rank is None:
             options=nondominated_options(options,score)
-        ranked=sorted(options,key=lambda o:(score(o),-o[2],-o[0].id,-o[1].id),reverse=True)
+        ranked=(sorted(options,key=hardware_rank,reverse=True) if hardware_rank is not None else
+                sorted(options,key=lambda o:(score(o),-o[2],-o[0].id,-o[1].id),reverse=True))
         if objective=='economy':
             if hardware_score is not None:
                 # Uncalibrated FPS estimates cannot certify an auto-build goal.
@@ -144,6 +159,8 @@ def build_options(options, target_fps, game=None, mode=None, workload="gaming", 
     return chosen
 
 
+@selection_scope
+@with_requirements
 def assemble(payload: BuildRequest, db):
     from app.services.offer_geography import offer_scope,financial_evidence
     from app.services.internal_offers import sync_internal
@@ -151,6 +168,60 @@ def assemble(payload: BuildRequest, db):
     from app.services.planning_prices import price_mode_scope
     with offer_scope(payload),price_mode_scope(payload.pricing_mode):
         result=financial_evidence(_assemble(payload,db),db,payload)
+        from app.services.adaptive_fps import predict_adaptive_fps
+        from app.services.fps_engine_v4 import relative_pair_proxy
+        hardware_rows = list(db.scalars(select(Hardware)).all())
+        cpu_catalog = [row for row in hardware_rows if row.type == 'CPU' and row.raw_score > 0]
+        gpu_catalog = [row for row in hardware_rows if row.type == 'GPU' and row.raw_score > 0]
+        cpu_scores = [row.raw_score for row in cpu_catalog]
+        gpu_scores = [row.raw_score for row in hardware_rows if row.type == 'GPU' and row.raw_score > 0]
+        for variant in [result,*result.get('alternatives',[])]:
+            cpu_part = next((part for part in variant.get('parts',[]) if part.get('type') == 'CPU'), None)
+            gpu_part = next((part for part in variant.get('parts',[]) if part.get('type') == 'GPU'), None)
+            cpu = db.get(Hardware, cpu_part.get('id')) if cpu_part and cpu_part.get('id') else None
+            gpu = db.get(Hardware, gpu_part.get('id')) if gpu_part and gpu_part.get('id') else None
+            if cpu is not None and gpu is not None:
+                game_name = payload.game.value if hasattr(payload.game, 'value') else str(payload.game)
+                resolution, preset = payload.mode.value.rsplit('_', 1)
+                if resolution == '4k': resolution = '4K'
+                if payload.workload == 'gaming':
+                    memory_info = variant.get('memory_configuration') or {}
+                    actual_config = variant.get('actual_config') or {}
+                    ram_type = memory_info.get('ram_type') or actual_config.get('ram_type') or payload.ram_type
+                    ram_modules = memory_info.get('modules')
+                    fps_result = predict_adaptive_fps(
+                        cpu, gpu, game_name,
+                        {"resolution": resolution, "preset": preset,
+                         "ram_type": ram_type,
+                         "ram_channels": 2 if ram_modules is None or ram_modules >= 2 else 1,
+                         "ram_capacity_gb": memory_info.get('capacity_gb')
+                            or actual_config.get('ram_capacity_gb') or payload.ram_capacity_gb},
+                        cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog,
+                    )
+                    fps_result['relative_hardware'] = relative_pair_proxy(
+                        cpu.raw_score, gpu.raw_score, cpu_scores, gpu_scores)
+                    variant['fps_result'] = fps_result
+                    variant['fps'] = (round(fps_result['average_fps'])
+                                      if fps_result.get('average_fps') is not None else None)
+                    variant['fps_outlook'] = None
+                    average = fps_result.get('average_fps')
+                    # A system forecast does not validate the complete
+                    # selected build. Keep confirmation unset and expose the
+                    # model-only comparison separately.
+                    variant['target_reached_by_model'] = (average >= payload.target_fps
+                                                          if average is not None else None)
+                    if fps_result['result_type'] == 'measured_system_fps':
+                        variant['recommendation'] = ('Сборка выбрана с учётом опубликованного теста этой связки CPU/GPU. '
+                            'Результат относится к условиям источника и не является тестом собранного ПК.')
+                    elif fps_result['result_type'] == 'estimated_system_fps':
+                        variant['recommendation'] = ('FPS показан как расчётный прогноз по игровой модели. '
+                            'Он не является замером; проверьте совместимость, цены и наличие перед покупкой.')
+                    elif fps_result['result_type'] == 'gpu_reference_only':
+                        variant['recommendation'] = ('Вариант ранжирован по аппаратным характеристикам. '
+                            'Доступен только отдельный ориентир видеокарты, FPS всей системы не рассчитан.')
+                    else:
+                        variant['recommendation'] = ('Вариант ранжирован по аппаратным характеристикам. '
+                            'Игровой FPS для этой конфигурации обоснованно не рассчитан.')
         for variant in [result,*result.get('alternatives',[])]:
             catalog_parts=False
             from app.db.models import StoreOffer
@@ -165,12 +236,32 @@ def assemble(payload: BuildRequest, db):
             if any(p.get('price_basis')=='reference' for p in variant.get('parts',[])):
                 variant['price_note']='Есть справочные цены из прошлых наблюдений; текущая стоимость, наличие и доставка этих позиций не подтверждены. '+variant.get('price_note','')
                 variant.update(purchase_ready=False,prices_confirmed=False,status='draft')
+        if payload.include_stretch and payload.auto_parts and payload.workload=='gaming' and payload.selection_policy=='target_fps' and (result.get('fps') or 0)<payload.target_fps:
+            from app.services.assembly_draft import draft_build
+            cap=min(10000000,round(payload.budget*1.5))
+            stretch=draft_build(payload.model_copy(update={'budget':cap}),db)
+            if stretch and stretch.get('fps',0)>=payload.target_fps and stretch['total_price']>payload.budget:
+                variants=[{k:v for k,v in stretch.items() if k!='alternatives'}]
+                for variant in variants:
+                    variant.update(over_budget=True,budget_shortfall=variant['total_price']-payload.budget,
+                        requested_budget=payload.budget,remaining_budget=payload.budget-variant['total_price'],
+                        title='Целевой прогноз с увеличенным бюджетом',
+                        summary='Отдельный вариант дороже вашего бюджета. FPS, цены и доступность требуют проверки.')
+                result['stretch_alternatives']=variants
+            result['stretch_search_budget_cap']=cap
         return result
 
 
 def _assemble(payload: BuildRequest, db):
-    if payload.ram_type not in SOCKET_MEMORY[payload.socket]:
-        raise HTTPException(422, "Тип памяти не подходит выбранной платформе")
+    from app.services.fps_engine_v4 import supported_profile, relative_hardware_index
+    game_profile = supported_profile(payload.game)
+    automatic_platform = (payload.auto_parts and payload.selection_policy == "target_fps"
+                          and payload.socket == "AUTO")
+    if not automatic_platform:
+        if payload.ram_type == "AUTO":
+            raise HTTPException(422, "Automatic memory type requires automatic gaming platform selection")
+        if payload.ram_type not in SOCKET_MEMORY[payload.socket]:
+            raise HTTPException(422, "Memory type is not compatible with the selected platform")
     parts = []
     selected_board = None
     # Refresh required categories automatically so a user does not have to
@@ -211,9 +302,16 @@ def _assemble(payload: BuildRequest, db):
             if key == "motherboard" and ((attrs.get("socket") and attrs["socket"] != payload.socket) or
                                           (attrs.get("ram_type") and attrs["ram_type"] != payload.ram_type)):
                 raise HTTPException(400, "Выбранная плата не подходит сокету или памяти")
-            if key == "memory" and ((attrs.get("ram_type") and attrs["ram_type"] != payload.ram_type) or
-                                    (attrs.get("capacity_gb") and attrs["capacity_gb"] < payload.ram_capacity_gb)):
-                raise HTTPException(400, "Выбранная память не соответствует типу или объёму сборки")
+            if key == "memory":
+                from types import SimpleNamespace
+                from app.services.automatic_builds import memory_configuration
+                memory_info = memory_configuration(SimpleNamespace(
+                    name=offer.name if offer else manual.name,
+                    attributes=json.dumps(attrs if offer else {})))
+                if (not memory_info or memory_info['ram_type'] != payload.ram_type
+                        or memory_info['capacity_gb'] < payload.ram_capacity_gb
+                        or memory_info['modules'] != 2):
+                    raise HTTPException(400, "Для полной сборки выберите совместимый комплект RAM из двух модулей нужного объёма")
             if key == "cooler" and attrs.get("sockets") and payload.socket not in attrs["sockets"]:
                 raise HTTPException(400, "Кулер не поддерживает сокет сборки")
         elif not manual:
@@ -240,6 +338,8 @@ def _assemble(payload: BuildRequest, db):
     remaining = payload.budget - sum(part["price"] for part in parts)
     prices = price_map(db, payload.price_sources)
     hardware = list(db.scalars(select(Hardware)))
+    cpu_catalog = [h for h in hardware if h.type == "CPU" and h.raw_score > 0]
+    gpu_catalog = [h for h in hardware if h.type == "GPU" and h.raw_score > 0]
     cpus = [h for h in hardware if h.type == "CPU" and h.raw_score>0 and h.socket == payload.socket and h.id in prices]
     # The same socket can span incompatible CPU generations. Apply the
     # automatic solver's existing chipset rules to offers and manual titles.
@@ -247,28 +347,64 @@ def _assemble(payload: BuildRequest, db):
     board = selected_board or payload.motherboard
     cpus = [h for h in cpus if cpu_board_matches(h, board)]
     gpus = [h for h in hardware if h.type == "GPU" and h.raw_score>0 and h.id in prices and desktop_gpu(h.name)]
-    memory_factor = 1.16 if payload.ram_type == "DDR5" else 1.07
     options = []
     for cpu in cpus:
         for gpu in gpus:
             cost = prices[cpu.id].price_rub + prices[gpu.id].price_rub
             if cost <= remaining:
-                fps = estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, payload.game, payload.mode, ram_performance_factor(payload.game,cpu.name,payload.ram_type,2), cpu.name)
+                fps = (estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, game_profile, payload.mode, 1.0, cpu.name)
+                       if game_profile is not None else None)
                 options.append((cpu, gpu, cost, fps))
     options = [o for o in options if (payload.selected_cpu_id is None or o[0].id == payload.selected_cpu_id)
                and (payload.selected_gpu_id is None or o[1].id == payload.selected_gpu_id)]
+    if options and payload.workload == 'gaming':
+        # The existing legacy score already matches the adaptive legacy method.
+        # Replace it with stronger published pair evidence where such a cohort
+        # exists; don't scan benchmark rows for every CPU/GPU Cartesian pair.
+        from app.services.benchmark_model_v2 import has_native_pair_measurement
+        from app.services.adaptive_fps import predict_adaptive_fps
+        resolution, preset = payload.mode.value.rsplit('_', 1)
+        if resolution == '4k':
+            resolution = '4K'
+        game_name = payload.game.value if hasattr(payload.game, 'value') else str(payload.game)
+        for index, option in enumerate(options):
+            option_cpu, option_gpu = option[0], option[1]
+            if game_profile is not None and not has_native_pair_measurement(option_cpu.name, option_gpu.name, game_name, preset):
+                continue
+            evidence = predict_adaptive_fps(option_cpu, option_gpu, game_name, {
+                'resolution': resolution, 'preset': preset,
+                'ram_type': payload.ram_type,
+                'ram_channels': 2,
+                'ram_capacity_gb': payload.ram_capacity_gb,
+            }, cpu_catalog=cpu_catalog, gpu_catalog=gpu_catalog)
+            if (evidence.get('average_fps') is not None
+                    and evidence.get('technical_details', {}).get('status')
+                    in {'measured_reference', 'estimated_interpolation', 'universal_fallback_estimate'}):
+                options[index] = (*option[:3], evidence['average_fps'], *option[4:])
     if not options:
         raise HTTPException(400, f"После подбора остальных деталей осталось {max(0, remaining):,} ₽ на CPU и GPU. Совместимая пара с доступными ценами не найдена. Увеличьте бюджет или смените платформу; требования к БП, SSD и комплектности охлаждения сохраняются.")
-    variants = build_options(options, payload.target_fps, payload.game, payload.mode, payload.workload, payload.objective)
+    if game_profile is None and payload.workload == 'gaming':
+        cpu_scores = [row.raw_score for row in hardware if row.type == 'CPU' and row.raw_score > 0]
+        gpu_scores = [row.raw_score for row in hardware if row.type == 'GPU' and row.raw_score > 0]
+        def pair_rank(option):
+            cpu_index = relative_hardware_index(option[0].raw_score, cpu_scores)['percentile']
+            gpu_index = relative_hardware_index(option[1].raw_score, gpu_scores)['percentile']
+            if cpu_index is None or gpu_index is None:
+                return 0.0
+            return (max(cpu_index, 0.1) * max(gpu_index, 0.1)) ** 0.5
+        variants = build_options(options, payload.target_fps, None, None, payload.workload,
+                                 payload.objective, hardware_score=lambda option: option[3])
+    else:
+        variants = build_options(options, payload.target_fps, payload.game, payload.mode, payload.workload, payload.objective)
     cpu, gpu, cost, fps = variants[0][3]
     selected = [{"type": h.type, "id": h.id, "name": h.name, "price": prices[h.id].price_rub,
                  **public_price(prices[h.id])} for h in (cpu, gpu)]
     total = payload.budget - remaining + cost
     result = {"scenario": "build", "parts": selected + parts, "total_price": total,
             "remaining_budget": payload.budget - total, "fps": fps,
-            "fps_outlook": fps_outlook(fps, gpu.name, payload.game, payload.mode),
-            "target_reached": fps_outlook(fps, gpu.name, payload.game, payload.mode)['minimum'] >= payload.target_fps,
-            "recommendation": "Подобрана игровая конфигурация по бюджету. FPS указан оценочным диапазоном; проверьте игровые тесты перед покупкой.",
+            "fps_outlook": fps_outlook(fps, gpu.name, game_profile, payload.mode) if game_profile is not None else None,
+            "target_reached": None,
+            "recommendation": ("Подобрана игровая конфигурация по бюджету. FPS указан оценочным диапазоном; проверьте игровые тесты перед покупкой." if game_profile is not None else "Игра выбрана из каталога. FPS и узкое место не рассчитаны; CPU/GPU ранжированы по отдельным аппаратным процентилям."),
             "compatibility_notes": [
                 f"CPU подобран под сокет {payload.socket}; платформа поддерживает {payload.ram_type}.",
                 "Для расчёта принят двухканальный комплект памяти. Проверьте, что выбраны два модуля.",
@@ -284,7 +420,7 @@ def _assemble(payload: BuildRequest, db):
         alternatives.append({**result, "variant_key": key, "title": title, "summary": summary,
                              "parts": variant_parts, "total_price": variant_total,
                              "remaining_budget": payload.budget - variant_total, "fps": variant_fps,
-                             "fps_outlook": fps_outlook(variant_fps, variant_gpu.name, payload.game, payload.mode),
-                             "target_reached": fps_outlook(variant_fps, variant_gpu.name, payload.game, payload.mode)['minimum'] >= payload.target_fps,
+                             "fps_outlook": fps_outlook(variant_fps, variant_gpu.name, game_profile, payload.mode) if game_profile is not None else None,
+                             "target_reached": None,
                              "recommendation": summary})
     return {**result, "alternatives": alternatives}

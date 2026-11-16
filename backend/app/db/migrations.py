@@ -15,3 +15,22 @@ def migrate_listings(engine):
         for name,definition in LISTING_COLUMNS.items():
             if name not in columns:
                 connection.execute(text(f'ALTER TABLE listings ADD COLUMN {name} {definition}'))
+
+
+def migrate_benchmarks(engine):
+    """Create only the new benchmark tables; existing user tables are untouched."""
+    from app.db.models import BenchmarkMeasurement, BenchmarkSource
+    BenchmarkSource.__table__.create(bind=engine, checkfirst=True)
+    BenchmarkMeasurement.__table__.create(bind=engine, checkfirst=True)
+
+
+def migrate_hardware_specifications(engine):
+    """Add the optional one-to-one technical-spec table; preserve catalog rows."""
+    from app.db.models import HardwareSpecification
+    HardwareSpecification.__table__.create(bind=engine, checkfirst=True)
+
+
+def migrate_steam_requirements(engine):
+    """Verified online SQLite backup, then only the three new Steam tables."""
+    from app.services.steam_storage import ensure_schema
+    return ensure_schema(engine)

@@ -119,6 +119,9 @@ class AssemblyFallbackTests(unittest.TestCase):
         self.assertEqual(result['status'],'partial')
         self.assertEqual(len(result['missing_parts']),8)
         self.assertTrue(result['missing_parts'][0]['links'])
+        gaps={part['type']:part for part in result['missing_parts']}
+        self.assertNotIn('planning_price_references',gaps['CPU'])
+        self.assertNotIn('planning_price_references',gaps['GPU'])
         self.assertNotIn('total_price',result)
         self.assertNotIn('fps',result)
 

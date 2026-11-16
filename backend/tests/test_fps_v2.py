@@ -21,10 +21,12 @@ import json,math
 from datetime import datetime,timedelta
 from types import SimpleNamespace as Obj
 from sqlalchemy import select
-from app.db.models import StoreOffer
+from app.db.models import StoreOffer, BenchmarkMeasurement, BenchmarkSource
 from app.services.game_catalog import search_games,catalog
 from app.services.fps_validation import measured_native,grouped_split,series_key,metrics,validation_report
 from app.services.fps_v2 import predict
+from app.services.benchmark_model_v2 import predict_pair, model_coverage
+from app.services.benchmark_storage import import_curated_benchmarks
 from app.services.builds import BuildRequest,assemble
 from app.services.saved_prices import snapshot_items,linked_offer
 from app.services.planning_prices import scoped_inventory
@@ -34,8 +36,13 @@ class CatalogTests(unittest.TestCase):
         self.assertGreater(len(catalog()),16000)
         self.assertEqual(search_games('GTA 5')['items'][0]['id'],'GTA V')
         self.assertEqual(search_games('Counter-Strike 2')['items'][0]['id'],'CS2')
-    def test_unsupported_is_not_fake_fps(self):
-        self.assertTrue(any(not r['fps_supported'] for r in search_games('')['items']))
+    def test_external_gpu_estimates_are_separate_from_full_system_fps_support(self):
+        rows = catalog()
+        self.assertTrue(all(row['selectable'] for row in rows))
+        self.assertEqual(sum(row.get('external_gpu_estimate_available') for row in rows), 16441)
+        self.assertEqual(sum(row['fps_capability'] == 'external_model_estimate' for row in rows), 16427)
+        self.assertEqual(sum(row['fps_capability'] == 'insufficient_data' for row in rows), 1)
+        self.assertTrue(all('fps_supported' not in row for row in rows))
         self.assertEqual(search_games('zzzzzzzznonexistent')['items'],[])
     def test_cached_search(self):
         self.assertIs(search_games('Hades'),search_games('Hades'))
@@ -84,6 +91,69 @@ class FpsGateTests(unittest.TestCase):
         self.assertEqual(weak_cpu['limiting_component'],'CPU');self.assertEqual(weak_gpu['limiting_component'],'GPU')
     def test_no_cpu_or_gpu_score_no_prediction(self):
         self.assertIsNone(predict(Obj(name='Unknown',raw_score=0),self.gpu,'CS2')['average_fps'])
+
+class EmpiricalV2Tests(unittest.TestCase):
+    def test_real_pair_measurement_includes_provenance_and_one_percent_low(self):
+        result=predict_pair('AMD Ryzen 9 9950X3D','GeForce RTX 5080','Cyberpunk 2077','1440p','high',
+                            ram_type='DDR5',ram_channels=2,ram_capacity_gb=64)
+        self.assertEqual(result['status'],'measured_reference')
+        self.assertEqual(result['measurement_type'],'measured')
+        self.assertAlmostEqual(result['average_fps'],179.13,places=2)
+        self.assertAlmostEqual(result['one_percent_low'],136.21,places=2)
+        self.assertEqual(result['sample_count'],2)
+        self.assertEqual(result['independent_series'],1)
+        self.assertEqual(result['sources'][0]['license'],'CC-BY-4.0')
+
+    def test_resolution_prediction_refuses_extrapolation(self):
+        exact=predict_pair('Ryzen 9 9950X3D','RTX 5080','Cyberpunk 2077','1440p','high',
+                           ram_type='DDR5',ram_channels=2,ram_capacity_gb=64)
+        self.assertEqual(exact['status'],'measured_reference')
+        outside=predict_pair('Ryzen 9 9950X3D','RTX 5080','Cyberpunk 2077','720p','high',
+                             ram_type='DDR5',ram_channels=2,ram_capacity_gb=64)
+        self.assertEqual(outside['status'],'insufficient_data')
+        self.assertIn('экстраполяция запрещена',outside['reason'])
+
+    def test_ram_mismatch_and_unmeasured_pair_abstain(self):
+        mismatch=predict_pair('Ryzen 9 9950X3D','RTX 5080','Cyberpunk 2077','1440p','high',
+                              ram_type='DDR4',ram_channels=2,ram_capacity_gb=64)
+        unknown=predict_pair('Ryzen 5 5600','RTX 4060','Cyberpunk 2077','1440p','high')
+        self.assertEqual(mismatch['status'],'insufficient_data')
+        self.assertEqual(unknown['status'],'insufficient_data')
+
+    def test_v2_coverage_does_not_claim_cpu_gpu_curves(self):
+        report=model_coverage()
+        self.assertEqual(report['native_pair_observations'],4)
+        self.assertEqual(report['paired_configurations'],1)
+        self.assertFalse(report['cpu_gpu_curves_calibrated'])
+
+    def test_curated_dataset_import_is_idempotent_and_preserves_provenance(self):
+        from sqlalchemy import create_engine, select, func
+        from sqlalchemy.orm import Session
+        from app.db.migrations import migrate_benchmarks
+        engine=create_engine('sqlite:///:memory:')
+        try:
+            migrate_benchmarks(engine)
+            with Session(engine) as db:
+                first=import_curated_benchmarks(db)
+                second=import_curated_benchmarks(db)
+                self.assertEqual(first['inserted'],87)
+                self.assertEqual(first['total_records'],87)
+                self.assertEqual(second['inserted'],0)
+                self.assertEqual(second['unchanged'],87)
+                self.assertEqual(db.scalar(select(func.count()).select_from(BenchmarkSource)),first['total_sources'])
+                row=db.scalar(select(BenchmarkMeasurement).where(
+                    BenchmarkMeasurement.game=='Cyberpunk 2077',
+                    BenchmarkMeasurement.data_type=='measured',
+                    BenchmarkMeasurement.cpu.is_not(None),
+                    BenchmarkMeasurement.gpu.is_not(None),
+                ))
+                payload=json.loads(row.payload)
+                self.assertTrue(payload['source_url'].startswith('https://'))
+                self.assertIn('license',payload)
+                self.assertTrue(row.cpu_key and row.gpu_key)
+        finally:
+            engine.dispose()
+
 
 class PlanningTests(unittest.TestCase):
     def setUp(self):

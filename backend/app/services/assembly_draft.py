@@ -36,6 +36,7 @@ def observed_rows(db,sources):
 
 def draft_build(payload,db,preferred_source=None):
     rows=observed_rows(db,payload.price_sources)
+    from app.services.planning_prices import inventory_scope
     lookup={row.id:row for row in rows}
     historical={row.id for row in rows if row.origin in ('product_page','feed') or
                 json.loads(row.attributes).get('last_verified_price')}
@@ -55,7 +56,8 @@ def draft_build(payload,db,preferred_source=None):
     for ids in pools:
         if not ids:continue
         try:
-            result=solve_profiles(payload,db,ids,preferred_source=preferred_source,observed=True)
+            with inventory_scope(rows):
+                result=solve_profiles(payload,db,ids,preferred_source=preferred_source,observed=True)
         except HTTPException as error:
             if error.status_code!=400:raise
             continue

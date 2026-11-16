@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from './Button'
 import { Icon } from './Icon'
 
-export function useStepFlow(count) {
+export function useStepFlow(count, enabled = true) {
   const [step, setStep] = useState(0)
   const [furthest, setFurthest] = useState(0)
   const formRef = useRef(null)
@@ -14,6 +14,16 @@ export function useStepFlow(count) {
     heading?.focus({ preventScroll: true })
     heading?.scrollIntoView({ block: 'nearest' })
   }, [step])
+  useEffect(() => {
+    if (!enabled) return undefined
+    const onKeyDown = event => {
+      if (event.key !== 'Escape' || event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.target?.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
+      setStep(current => Math.max(0, current - 1))
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [enabled])
   function invalidAt(index) {
     return [...(formRef.current?.querySelectorAll(`[data-flow-panel="${index}"] input, [data-flow-panel="${index}"] select`) || [])]
       .find(input => !input.disabled && !input.checkValidity())
@@ -63,13 +73,13 @@ export function StepHeading({ flow, steps }) {
   </header>
 }
 
-export function StepFooter({ flow, count, onNext, busy, submitLabel }) {
+export function StepFooter({ flow, count, onNext, onExit, busy, submitLabel, submitDisabled = false }) {
   return <div className="flow-footer">
-    <Button type="button" variant="secondary" disabled={flow.step === 0 || busy} onClick={() => flow.go(flow.step - 1)}>Назад</Button>
+    <Button type="button" variant="secondary" disabled={busy} onClick={() => flow.step === 0 ? onExit?.() : flow.go(flow.step - 1)}>{flow.step === 0 ? 'Выйти из подбора' : 'Назад'}</Button>
     <span>{flow.step + 1} / {count}</span>
     {flow.step < count - 1
       ? <Button key="continue" type="button" onClick={onNext} disabled={busy}>Продолжить<Icon name="arrow" size={16}/></Button>
-      : <Button key="submit" type="submit" loading={busy}>{busy ? 'Подождите…' : submitLabel}{!busy && <Icon name="arrow" size={16}/>}</Button>}
+      : <Button key="submit" type="submit" loading={busy} disabled={submitDisabled}>{busy ? 'Подождите…' : submitLabel}{!busy && <Icon name="arrow" size={16}/>}</Button>}
   </div>
 }
 

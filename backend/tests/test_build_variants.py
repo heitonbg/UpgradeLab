@@ -108,7 +108,8 @@ class BuildVariantsTests(unittest.TestCase):
             self.assertEqual(sum(part['price'] for part in variant['parts']), variant['total_price'])
             self.assertLessEqual(variant['total_price'], self.payload['budget'])
             self.assertEqual(variant['remaining_budget'], self.payload['budget'] - variant['total_price'])
-            self.assertEqual(variant['target_reached'], variant['fps_outlook']['minimum'] >= self.payload['target_fps'])
+            self.assertIsNone(variant['target_reached'])
+            self.assertEqual(variant['target_reached_by_model'], variant['fps'] >= self.payload['target_fps'])
             self.assertNotIn('alternatives', variant)
 
     def test_selected_alternative_survives_recalculation_for_saving(self):
@@ -124,7 +125,8 @@ class BuildVariantsTests(unittest.TestCase):
     def test_small_budget_does_not_duplicate_cards(self):
         result = assemble(BuildRequest(**{**self.payload, 'budget': 11000, 'target_fps': 1000}), self.db)
         self.assertEqual(len(result['alternatives']), 1)
-        self.assertFalse(result['target_reached'])
+        self.assertIsNone(result['target_reached'])
+        self.assertFalse(result['target_reached_by_model'])
 
     def test_invalid_selected_pair_is_rejected(self):
         request = BuildRequest(**self.payload, selected_cpu_id=1)

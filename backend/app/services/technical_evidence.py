@@ -1,4 +1,5 @@
 """Tri-state, provenance-bearing hardware evidence; no lookalike PSU revisions."""
+from app.services.selection_cache import memoized_check
 import json,re
 from pydantic import BaseModel,Field
 from typing import Literal
@@ -30,6 +31,7 @@ def slots(board):
         return evidence if ' '.join(evidence.applies_to.casefold().split())==' '.join(board.name.casefold().split()) else None
     except (ValueError,TypeError):return None
 
+@memoized_check
 def storage_status(board,drive):
     from app.services.component_quality import quality_check
     from app.services.storage_compatibility import nvme_board_evidence
@@ -49,6 +51,7 @@ def storage_status(board,drive):
     if interface=='NVMe' and nvme_board_evidence(board):return {'status':'compatible','reason':'existing_reviewed_nvme_evidence'}
     return {'status':'unknown','reason':'storage_slot_evidence_missing'}
 
+@memoized_check
 def psu_status(offer,cpu=None,gpu=None):
     from app.services.component_quality import quality_check
     from app.services.assembly_policy import psu_requirement

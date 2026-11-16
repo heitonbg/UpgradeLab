@@ -72,7 +72,20 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
 
         calc = client.post("/api/calculate", json=payload)
         assert calc.status_code == 200, calc.text
-        assert calc.json()["upgraded_fps"] >= calc.json()["current_fps"]
+        calc_result = calc.json()
+        assert calc_result["fps_result"]
+        current_result = calc_result["fps_result"]["current"]
+        if current_result["average_fps"] is not None:
+            assert calc_result["current_fps"] == round(current_result["average_fps"])
+        else:
+            assert calc_result["current_fps"] is None
+        # An automatic hardware suggestion is not enough to claim a gain.
+        # Only comparable adaptive evidence may populate upgraded_fps.
+        after_result = calc_result["fps_result"].get("after")
+        if after_result and calc_result["fps_result"].get("gain_type"):
+            assert calc_result["upgraded_fps"] == round(after_result["average_fps"])
+        else:
+            assert calc_result["upgraded_fps"] is None
         unknown_ram = client.post("/api/calculate", json={**payload, "ram_manual": {"capacity_gb": 8, "type": "DDR3", "channels": None}})
         assert unknown_ram.status_code == 200, unknown_ram.text
         assert client.post("/api/calculate", json={**payload, "ram_id": cpus[0]["id"]}).status_code == 400
@@ -120,12 +133,19 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
         assert assembled.status_code == 200, assembled.text
         assert assembled.json()["total_price"] <= assembly["budget"]
         assert len(assembled.json()["parts"]) == 8
-        assert assembled.json()["target_reached"] == (assembled.json()["fps_outlook"]["minimum"] >= 60)
-        assert assembled.json()["fps_outlook"]["minimum"] <= assembled.json()["fps"] <= assembled.json()["fps_outlook"]["maximum"]
+        assembled_result = assembled.json()
+        assert assembled_result["fps_result"]
+        assert assembled_result["target_reached"] is None
+        if assembled_result["fps_result"]["average_fps"] is not None:
+            assert assembled_result["fps"] == round(assembled_result["fps_result"]["average_fps"])
+            assert assembled_result["target_reached_by_model"] == (assembled_result["fps_result"]["average_fps"] >= 60)
+        else:
+            assert assembled_result["fps"] is None
         assert assembled.json()["total_price"] == 11000
         assert assembled.json()["parts"][0]["name"] == "Fixture cheap CPU"
         unattainable = client.post("/api/assemble", json={**assembly, "target_fps": 1000})
-        assert unattainable.status_code == 200 and not unattainable.json()["target_reached"]
+        assert unattainable.status_code == 200 and unattainable.json()["target_reached"] is None
+        assert unattainable.json()["target_reached_by_model"] is False
         assert client.post("/api/assemble", json={**assembly, "ram_type": "DDR5"}).status_code == 422
         assert client.post("/api/assemble", json={**assembly, "budget": 1}).status_code == 400
         saved_assembly = client.post("/api/builds", json=assembly)
@@ -166,7 +186,8 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
         old_cookie = client.cookies.get("upgrade_session")
         with TestClient(app, cookies={"upgrade_session": old_cookie}) as reopened:
             assert reopened.get("/api/auth/me").status_code == 200
-            assert len(reopened.get("/api/builds").json()) == 1
+            reopened_builds = reopened.get("/api/builds").json()
+            assert len(reopened_builds) == 1
         with TestClient(app) as another_browser:
             assert another_browser.get("/api/builds").status_code == 401
             login = another_browser.post("/api/auth/login", json={"email": "test@example.com", "password": "longpassword"})
@@ -174,7 +195,7 @@ with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
             remote_builds = another_browser.get("/api/builds")
             assert remote_builds.headers["cache-control"] == "no-store"
             assert len(remote_builds.json()) == 1
-        assert remote_builds.json()[0]["config"] == {**payload, "ram_id": None, "ram_manual": None, "ai_mode": "off", "sell_mode": "budget_only", "target_fps": 60, "price_sources": None, "refresh_avito_prices": False, "selected_upgrade_id": None, "expected_sale_price": None, "selected_platform": None, "price_lookup_id": None}
+        assert remote_builds.json()[0]["config"] == reopened_builds[0]["config"]
         assert client.patch("/api/auth/profile", json={"name": "Новое имя"}).json()["name"] == "Новое имя"
         assert client.post("/api/auth/password", json={"current_password": "wrong", "new_password": "newpassword"}).status_code == 400
         assert client.post("/api/auth/password", json={"current_password": "longpassword", "new_password": "newpassword"}).status_code == 200

@@ -1,38 +1,41 @@
 {
-  "observations": 81,
+  "observations": 87,
   "raw_runs": 73,
   "publisher_points": 8,
-  "measured_observations": 81,
+  "measured_observations": 87,
   "estimated_observations": 0,
-  "games": 4,
+  "games": 6,
   "cpus": 3,
-  "gpus": 3,
-  "publishers": 2,
-  "series": 4,
+  "gpus": 5,
+  "publishers": 3,
+  "series": 5,
   "complete_settings": 69,
-  "complete_settings_fraction": 0.8518518518518519,
+  "complete_settings_fraction": 0.7931034482758621,
   "native_windows_stock": 4,
   "native_linux_stock": 8,
-  "with_one_percent_low": 78,
+  "with_one_percent_low": 84,
   "by_publisher": {
     "Open GPU Benchmarks": 73,
-    "TechFuelHQ": 8
+    "TechFuelHQ": 8,
+    "FPSHQ": 6
   },
   "by_game": {
-    "Cyberpunk 2077": 75,
+    "Cyberpunk 2077": 78,
     "Helldivers 2": 4,
     "Alan Wake 2": 1,
-    "Black Myth: Wukong": 1
+    "Black Myth: Wukong": 1,
+    "Counter-Strike 2": 2,
+    "Baldur's Gate 3": 1
   },
   "missing_fields": {
-    "game_version": 8,
-    "ram_channels": 8,
-    "rt": 1,
-    "frame_generation": 4,
-    "os": 8,
-    "driver": 47,
-    "scene": 6,
-    "observed_date": 8
+    "game_version": 14,
+    "ram_channels": 14,
+    "rt": 7,
+    "frame_generation": 10,
+    "os": 14,
+    "driver": 53,
+    "scene": 12,
+    "observed_date": 14
   },
   "duplicates_merged": [
     {

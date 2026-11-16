@@ -42,6 +42,21 @@ class AggregateTests(unittest.TestCase):
               run('rt',70,rt=True),run('game',60,game='Dota 2')]
         self.assertEqual(len(aggregate(rows)),4)
 
+    def test_vram_variants_do_not_share_a_cohort(self):
+        rows=[run('8gb',100,vram_gb=8),run('16gb',120,vram_gb=16)]
+        self.assertEqual(len(aggregate(rows)),2)
+
+    def test_low_is_reported_only_with_complete_coverage(self):
+        rows=[run('a',100,one_percent_low=70),
+              run('b',120,publisher='B',series='two',one_percent_low=90)]
+        item=aggregate(rows)[0]
+        self.assertEqual(item['one_percent_low_fps'],80)
+        self.assertEqual(item['one_percent_low_observations'],2)
+        rows[1].pop('one_percent_low')
+        item=aggregate(rows)[0]
+        self.assertIsNone(item['one_percent_low_fps'])
+        self.assertEqual(item['one_percent_low_observations'],1)
+
     def test_estimates_are_excluded_and_invalid_rows_rejected(self):
         self.assertEqual(aggregate([run('estimate',100,data_type='estimated')]),[])
         with self.assertRaises(ValueError):aggregate([run('same',100),run('same',120)])

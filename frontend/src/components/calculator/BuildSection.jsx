@@ -1,3 +1,5 @@
+import { useRequirementsRefresh } from '../../hooks/useSteamRequirements'
+import { request } from '../../api/client'
 import { compatibilityLabel, buildMetric } from '../../lib/buildPresentation'
 import { publicSourceIds } from '../../lib/publicSources'
 import { Select } from '../ui/Select'
@@ -8,7 +10,7 @@ import { CategoryImage } from '../CategoryImage'
 import { GeoControls } from '../GeoControls'
 import { compatibilityNotice } from '../../lib/offerEvidence.js'
 import { Icon } from '../ui/Icon'
-import { FpsEvidence } from './FpsEvidence'
+import { AdaptiveFpsDetails } from './FpsEvidence'
 import { useEffect,useState } from 'react'
 import { runSearch } from '../../api/searchJobs'
 import { GamePicker } from './GamePicker'
@@ -17,7 +19,7 @@ import { PriceSources, StoreOffers, STORES } from '../StoreOffers'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { LoadingPanel } from '../ui/LoadingPanel'
-import { BuildChoices } from './BuildChoices'
+import { BuildChoices, StretchBuilds } from './BuildChoices'
 import { useStepFlow, StepNavigation, StepHeading, StepFooter, ReviewSummary } from '../ui/StepFlow'
 import { AssemblyPartialResult, AssemblySearchSummary, AssemblyPriceNotice, PartPriceEvidence } from './AssemblySearchSummary'
 
@@ -35,32 +37,57 @@ function selectedBuild(choice, config) {
   return {...build, config: {...config, ...choice.actual_config, selected_cpu_id: choice.parts.find(part => part.type === 'CPU')?.id, selected_gpu_id: choice.parts.find(part => part.type === 'GPU')?.id, selected_case_offer_id: choice.parts.find(part => part.type === 'case')?.offer_id || null}}
 }
 
-export function BuildSection({ onSave, onFind, active = true, offerIntent, onOfferConsumed }) {
-  const flow = useStepFlow(STEPS.length)
-  const { cpus, gpus } = useHardware()
-  const [form,setForm] = useState({condition:'any',workload:'gaming',objective:'performance',selected_cpu_id:null,selected_gpu_id:null,pricing_mode:'offers',city_id:null,geo_mode:'all',max_price:null,budget:'',target_fps:60,game:GAMES[0].value,mode:MODES[0].value,socket:'AM4',ram_type:'DDR4',ram_capacity_gb:16,price_sources:STORES.filter(([id])=>id!=='avito').map(([id])=>id),allow_store_fallback:false,allow_platform_change:true,auto_parts:true,case_style:'gaming',...emptyParts})
+export function BuildSection({ onSave, onFind, active = true, offerIntent, onOfferConsumed, onExit }) {
+  const flow = useStepFlow(STEPS.length, active)
+  const { cpus, gpus } = useHardware(active)
+  const [form,setForm] = useState({condition:'any',workload:'gaming',objective:'performance',selected_cpu_id:null,selected_gpu_id:null,pricing_mode:'offers',city_id:null,geo_mode:'all',max_price:null,budget:'',target_fps:60,game:GAMES[0].value,mode:MODES[0].value,socket:'AUTO',ram_type:'AUTO',ram_capacity_gb:16,price_sources:STORES.filter(([id])=>id!=='avito').map(([id])=>id),allow_store_fallback:false,allow_platform_change:true,auto_parts:true,case_style:'gaming',...emptyParts})
   useEffect(()=>{if(!offerIntent||!PARTS.some(([key])=>key===offerIntent.category))return;setForm(current=>({...current,...(offerIntent.selection_scope||{}),price_sources:current.price_sources&&!current.price_sources.includes(offerIntent.source)?[...current.price_sources,offerIntent.source]:current.price_sources,auto_parts:false,[offerIntent.category]:{name:offerIntent.name,price:offerIntent.price_rub,offer_id:offerIntent.id}}));onOfferConsumed?.()},[offerIntent,onOfferConsumed])
   const [offerPart,setOfferPart] = useState(null)
   const [result,setResult] = useState(null)
   const [searchProgress,setSearchProgress] = useState('Проверяем доступные площадки')
   const [partial,setPartial] = useState(null)
   const [busy,setBusy] = useState(false)
+  useRequirementsRefresh(result?.config?.game, result?.fps_result?.requirements_enrichment?.version, busy, async()=>{
+    const current=result, previousChoices=choices
+    if (!current?.config) return
+    const [resolution,preset]=current.config.mode.split('_')
+    const predictions=new Map()
+    const refresh=async build=>{
+      const cpu=build.parts?.find(p=>p.type==='CPU')?.id, gpu=build.parts?.find(p=>p.type==='GPU')?.id
+      if (!cpu || !gpu) return build
+      const key=cpu+':'+gpu
+      if (!predictions.has(key)) predictions.set(key,request('/api/fps/predict',{method:'POST',body:{cpu_id:cpu,gpu_id:gpu,game:current.config.game,resolution:resolution==='4k'?'4K':resolution,preset}}))
+      const prediction=await predictions.get(key)
+      return {...build,fps_result:prediction,fps:prediction.average_fps==null?null:Math.round(prediction.average_fps)}
+    }
+    const [updated,...updatedChoices]=await Promise.all([current,...previousChoices].map(refresh))
+    setResult(previous=>previous===current?updated:previous)
+    setChoices(previous=>previous===previousChoices?updatedChoices:previous)
+  })
   const [searchStartedAt,setSearchStartedAt] = useState(null)
   const [error,setError] = useState('')
   const [choices,setChoices] = useState([])
+  const [stretch,setStretch] = useState([])
   const [choiceConfig,setChoiceConfig] = useState(null)
   const [choicesOpen,setChoicesOpen] = useState(false)
+  const [lastSearchFingerprint,setLastSearchFingerprint] = useState('')
+  const platformLabel = form.socket === 'AUTO' ? 'Платформа — автоматически' : form.socket
+  const memoryLabel = form.ram_type === 'AUTO' ? 'Память — автоматически' : form.ram_type
   const set = key=>event=>setForm({...form,[key]:event.target.value})
   async function submit(event, retry=false) {
     event.preventDefault();if(busy)return
     if(!retry&&flow.step<STEPS.length-1){navigate(flow.step+1);return}
+    const fingerprint=JSON.stringify(form)
+    if(!retry&&lastSearchFingerprint===fingerprint&&choices.length){setChoicesOpen(true);return}
     if(!flow.validateAll())return
     setSearchStartedAt(Date.now())
-    if(publicSourceIds(form.price_sources).length===0){flow.go(2);setError('Выберите хотя бы одну площадку.');return}setBusy(true);setError('');setResult(null);setPartial(null);setChoices([]);setChoicesOpen(true)
-    const config = {...form,objective:'performance',pricing_mode:'offers',allow_store_fallback:false,price_sources:publicSourceIds(form.price_sources),scenario:'build',budget:Number(form.budget),target_fps:Number(form.target_fps),ram_capacity_gb:Number(form.ram_capacity_gb),...Object.fromEntries(PARTS.map(([key])=>[key,form.auto_parts?null:{name:form[key].name,price:Number(form[key].price),offer_id:form[key].offer_id||null}]))}
+    if(publicSourceIds(form.price_sources).length===0){flow.go(2);setError('Выберите хотя бы одну площадку.');return}setBusy(true);setError('');setResult(null);setPartial(null);setChoices([]);setStretch([]);setChoicesOpen(true)
+    const config = {...form,include_stretch:false,objective:'performance',selection_policy:'target_fps',pricing_mode:'offers',allow_store_fallback:false,price_sources:publicSourceIds(form.price_sources),scenario:'build',budget:Number(form.budget),target_fps:Number(form.target_fps),ram_capacity_gb:Number(form.ram_capacity_gb),...Object.fromEntries(PARTS.map(([key])=>[key,form.auto_parts?null:{name:form[key].name,price:Number(form[key].price),offer_id:form[key].offer_id||null}]))}
     setChoiceConfig(config)
     try {
       const data = await runSearch('assemble', config, {onProgress:setSearchProgress})
+      setStretch(data.stretch_alternatives||[])
+      setLastSearchFingerprint(fingerprint)
       if(data.status==='partial'){setPartial(data);setChoicesOpen(false);return}
       setChoices(data.alternatives?.length ? data.alternatives : [data])
       setResult(selectedBuild(data, config));setChoicesOpen(true)
@@ -87,16 +114,16 @@ export function BuildSection({ onSave, onFind, active = true, offerIntent, onOff
             <label>Состояние деталей<Select value={form.condition} onChange={set('condition')}><option value="any">Новые и б/у</option><option value="new">Только новые</option><option value="used">Только б/у</option></Select></label>
           </div><PriceSources value={form.price_sources} onChange={price_sources=>setForm({...form,price_sources})}/></fieldset>
           {form.workload==='gaming'?<fieldset className="builder-step game-settings"><legend>Во что будем играть</legend><div className="form-grid"><GamePicker value={form.game} onChange={game=>setForm({...form,game})}/><div className="game-performance"><label>Разрешение и графика<Select value={form.mode} onChange={set('mode')}>{MODES.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</Select></label><label>Целевой FPS<input required type="number" min="1" max="1000" value={form.target_fps} onChange={set('target_fps')}/></label></div></div></fieldset>:<p className="field-hint">Рабочий профиль оценивает CPU Mark и заданный объём RAM. Скорость конкретных приложений не измерена.</p>}
-          <p className="constraint-summary">Минимум {form.ram_capacity_gb} ГБ RAM{form.selected_cpu_id&&' · CPU зафиксирован'}{form.selected_gpu_id&&' · GPU зафиксирована'}{!form.allow_platform_change&&` · ${form.socket}/${form.ram_type}`} · <button type="button" className="text-btn" onClick={()=>navigate(1)}>Настроить ограничения</button></p>
+          <p className="constraint-summary">Минимум {form.ram_capacity_gb} ГБ RAM{form.selected_cpu_id&&' · CPU зафиксирован'}{form.selected_gpu_id&&' · GPU зафиксирована'}{!form.allow_platform_change&&` · ${platformLabel} · ${memoryLabel}`} · <button type="button" className="text-btn" onClick={()=>navigate(1)}>Настроить ограничения</button></p>
         </div>
         <div className="flow-panel" data-flow-panel="1" hidden={flow.step!==1}>
           <div className="foundation-intro"><Icon name="chip"/><div><h4>Доверьте основу подбору</h4><p>Проверим совместимость CPU, платы и памяти. Точные требования можно задать ниже.</p></div></div>
-          <div className="constraint-summary" aria-label="Действующие ограничения"><span>От {form.ram_capacity_gb} ГБ RAM</span>{form.selected_cpu_id&&<span>CPU: {cpus.find(c=>c.id===form.selected_cpu_id)?.name}</span>}{form.selected_gpu_id&&<span>GPU: {gpus.find(c=>c.id===form.selected_gpu_id)?.name}</span>}{!form.allow_platform_change&&<span>{form.socket} · {form.ram_type}</span>}<button type="button" className="text-btn" onClick={()=>setForm({...form,selected_cpu_id:null,selected_gpu_id:null,socket:'AM4',ram_type:'DDR4',ram_capacity_gb:16,case_style:'gaming',allow_platform_change:true})}>Сбросить ограничения</button></div>
-          <details className="advanced-settings"><summary>Расширенные настройки <span>CPU, GPU, платформа и память</span></summary><div className="form-grid">
+          <div className="constraint-summary" aria-label="Действующие ограничения"><span>Минимум {form.ram_capacity_gb} ГБ RAM</span>{form.selected_cpu_id&&<span>CPU: {cpus.find(c=>c.id===form.selected_cpu_id)?.name}</span>}{form.selected_gpu_id&&<span>GPU: {gpus.find(c=>c.id===form.selected_gpu_id)?.name}</span>}{!form.allow_platform_change&&<span>{platformLabel} · {memoryLabel}</span>}</div>
+          <details className="advanced-settings" open><summary>Расширенные настройки <span>CPU, GPU, платформа и память</span></summary><div className="form-grid">
             <HardwareSearch label="Фиксированный CPU" items={cpus.filter(cpu=>['AM4','AM5','LGA1151','LGA1200','LGA1700'].includes(cpu.socket))} value={form.selected_cpu_id} onChange={id=>setForm({...form,selected_cpu_id:id,...(id?{socket:cpus.find(c=>c.id===id)?.socket||form.socket,ram_type:cpus.find(c=>c.id===id)?.socket==='AM5'?'DDR5':'DDR4',allow_platform_change:false}:{})})}/>
-            <HardwareSearch label="Фиксированный GPU" items={gpus} value={form.selected_gpu_id} onChange={id=>setForm({...form,selected_gpu_id:id})}/>
-            <label>Платформа<Select disabled={Boolean(form.selected_cpu_id)} value={form.socket} onChange={e=>setForm({...form,socket:e.target.value,ram_type:e.target.value==='AM5'?'DDR5':'DDR4',allow_platform_change:false})}>{['AM4','AM5','LGA1151','LGA1200','LGA1700'].map(socket=><option key={socket}>{socket}</option>)}</Select></label>
-            <label>Тип памяти<Select value={form.ram_type} onChange={set('ram_type')}>{(form.socket==='AM5'?['DDR5']:form.socket==='LGA1700'?['DDR4','DDR5']:['DDR4']).map(type=><option key={type}>{type}</option>)}</Select></label>
+            <HardwareSearch label="Фиксированный GPU" items={gpus} value={form.selected_gpu_id} onChange={id=>setForm({...form,selected_gpu_id:id})} showVram={false}/>
+            <label>Платформа<Select disabled={Boolean(form.selected_cpu_id)} value={form.socket} onChange={e=>setForm({...form,socket:e.target.value,ram_type:e.target.value==='AUTO'?'AUTO':e.target.value==='AM5'?'DDR5':'DDR4',allow_platform_change:e.target.value==='AUTO'})}>{[['AUTO','Автоматически'],...['AM4','AM5','LGA1151','LGA1200','LGA1700'].map(socket=>[socket,socket])].map(([socket,label])=><option key={socket} value={socket}>{label}</option>)}</Select></label>
+            <label>Тип памяти<Select value={form.ram_type} onChange={set('ram_type')}>{(form.socket==='AUTO'?['AUTO','DDR4','DDR5']:form.socket==='AM5'?['DDR5']:form.socket==='LGA1700'?['DDR4','DDR5']:['DDR4']).map(type=><option key={type} value={type}>{type==='AUTO'?'Автоматически':type}</option>)}</Select></label>
             <label>Минимальный объём RAM, ГБ<input required type="number" min="8" max="512" value={form.ram_capacity_gb} onChange={set('ram_capacity_gb')}/></label>
           </div><label className="compact-setting"><input type="checkbox" disabled={Boolean(form.selected_cpu_id)} checked={form.allow_platform_change&&!form.selected_cpu_id} onChange={e=>setForm({...form,allow_platform_change:e.target.checked})}/><span>Разрешить другую совместимую платформу<small>{form.selected_cpu_id?'Чтобы менять платформу, снимите фиксацию CPU.':'При нехватке деталей пересмотрим CPU, плату и память; бюджет и объём RAM сохраняются.'}</small></span></label>
           <label className="compact-setting"><input type="checkbox" checked={form.auto_parts} onChange={e=>setForm({...form,auto_parts:e.target.checked})}/><span>Автоматически подобрать все комплектующие<small>Выключите, чтобы указать уже имеющиеся детали.</small></span></label></details>
@@ -107,19 +134,20 @@ export function BuildSection({ onSave, onFind, active = true, offerIntent, onOff
         <div className="flow-panel" data-flow-panel="3" hidden={flow.step!==3}><ReviewSummary onEdit={navigate} items={[
           {label:form.workload==='gaming'?'Игра и графика':'Назначение',value:form.workload==='gaming'?form.game:'Работа с нагрузкой на CPU',note:form.workload==='gaming'?`${MODES.find(mode=>mode.value===form.mode)?.label} · цель ${form.target_fps} FPS`:`CPU Mark · минимум ${form.ram_capacity_gb} ГБ RAM`,icon:'gpu',step:0},
           {label:'Бюджет на весь ПК',value:form.budget?Number(form.budget).toLocaleString('ru-RU')+' ₽':'Не указан',note:'8 комплектующих · без периферии и доставки',icon:'box',step:0},
-          {label:'Платформа',value:`${form.socket} · ${form.ram_type} · ${form.ram_capacity_gb} ГБ`,note:form.auto_parts?'Автоматический подбор деталей':'Детали выбраны вручную',icon:'chip',step:1},
+          {label:'Платформа',value:`${platformLabel} · ${memoryLabel} · от ${form.ram_capacity_gb} ГБ`,note:form.auto_parts?'Автоматический подбор деталей':'Детали выбраны вручную',icon:'chip',step:1},
           {label:'Источники предложений',value:form.price_sources.length===2?'Regard + Биржа UpgradeLab':form.price_sources[0]==='regard'?'Regard':'Биржа UpgradeLab',note:'Только разрешённые к показу предложения',icon:'search',step:2},
-        ]}/><div className="flow-callout"><Icon name="exchange"/><p>Сравните цену, состав и диапазон FPS в карточках. Вы сможете изменить параметры и повторить поиск.</p></div></div>
+        ]}/></div>
         {error&&<div className="flow-error error" role="alert">{error}</div>}
-        <StepFooter flow={flow} count={STEPS.length} onNext={()=>navigate(flow.step+1)} busy={busy} submitLabel="Подобрать сборки"/>
+        <StepFooter flow={flow} count={STEPS.length} onNext={()=>navigate(flow.step+1)} onExit={onExit} busy={busy} submitDisabled={Boolean(lastSearchFingerprint&&lastSearchFingerprint===JSON.stringify(form))} submitLabel={lastSearchFingerprint===JSON.stringify(form)?'Параметры не изменились':'Подобрать сборки'}/>
       </form>
       <aside className="builder-sidebar"><div className="budget-card"><p className="eyebrow">Ваш ориентир</p><strong>{form.budget?Number(form.budget).toLocaleString('ru-RU')+' ₽':'Ваш бюджет'}</strong><span>На все 8 комплектующих</span><div><Icon name="chip"/><Icon name="gpu"/><Icon name="drive"/><Icon name="box"/></div><p>{form.workload==='cpu_work'?'Ориентируемся на CPU Mark и заданный объём RAM. Скорость приложений не измерена.':'Сравнивайте цену, состав и диапазон игрового FPS.'}</p></div><details className="quality-standard"><summary className="quality-heading"><Icon name="shield"/><h3>Что мы проверяем</h3></summary><ul><li><strong>Блок питания</strong><span>Модель, мощность и класс эффективности по спецификации производителя.</span></li><li><strong>Внутренний SSD</strong><span>M.2 NVMe при подтверждённом слоте платы; иначе SATA 2,5″. Проверенные серии, включая Netac и KingSpec. Б/у накопители требуют отдельной проверки состояния и ресурса.</span></li><li><strong>Полноценное охлаждение</strong><span>Кулер под ваш сокет. Крепления и вентиляторы отдельно не подставляются.</span></li></ul><p>Для автоматического подбора. Цены на качество могут потребовать большего бюджета.</p></details></aside>
     </div>
     {busy&&!choicesOpen&&<LoadingPanel title="Подбираем варианты сборки" description={searchProgress} startedAt={searchStartedAt} cards/>}
-    <Modal open={active&&choicesOpen} onClose={()=>setChoicesOpen(false)} title={busy?'Собираем варианты для вас':'Выберите свою сборку'} size="wide">{busy?<LoadingPanel title="Ищем детали и сверяем цены товаров" description={searchProgress} startedAt={searchStartedAt} cards/>:<BuildChoices choices={choices} targetFps={choiceConfig?.target_fps} onSelect={choice=>{setResult(selectedBuild(choice,choiceConfig));setChoicesOpen(false)}}/>}</Modal>
+    <Modal open={active&&choicesOpen} onClose={()=>setChoicesOpen(false)} title={busy?'Собираем варианты для вас':'Выберите свою сборку'} size="wide">{busy?<LoadingPanel title="Ищем детали и сверяем цены товаров" description={searchProgress} startedAt={searchStartedAt} cards/>:<BuildChoices choices={choices} stretchChoices={stretch} onBudget={budget=>{setForm(current=>({...current,budget:String(budget)}));setChoicesOpen(false);navigate(3)}} targetFps={choiceConfig?.target_fps} onSelect={choice=>{setResult(selectedBuild(choice,choiceConfig));setChoicesOpen(false)}}/>}</Modal>
     {choices.length>0&&!busy&&<div className="build-ready result-reveal"><div><strong>Варианты готовы</strong><p className="field-hint">Сравните состав и выберите подходящий вариант.</p></div><Button type="button" variant="secondary" onClick={()=>setChoicesOpen(true)}>Сравнить варианты ({choices.length})</Button></div>}
-    <Modal open={active&&Boolean(offerPart)} onClose={()=>setOfferPart(null)} title="Выбрать предложение" size="lg">{offerPart&&<StoreOffers key={offerPart} category={offerPart} initialQuery={form[offerPart].name} onSelect={offer=>{setForm({...form,[offerPart]:{name:offer.name,price:offer.price_rub,offer_id:offer.id}});setOfferPart(null)}}/>}</Modal>
+    <Modal open={active&&Boolean(offerPart)} onClose={()=>setOfferPart(null)} title="Выбрать предложение" size="lg">{offerPart&&<StoreOffers key={offerPart} category={offerPart} initialQuery={form[offerPart].name} initialSources={form.price_sources} initialGeo={form} onSelect={offer=>{setForm({...form,[offerPart]:{name:offer.name,price:offer.price_rub,offer_id:offer.id}});setOfferPart(null)}}/>}</Modal>
     {partial&&!busy&&<AssemblyPartialResult data={partial} onRetry={()=>submit({preventDefault(){}},true)} onEdit={()=>navigate(0)}/>}
+    {!busy&&!choicesOpen&&<StretchBuilds choices={stretch} onBudget={budget=>{setForm(current=>({...current,budget:String(budget)}));navigate(3)}}/>}
     {result&&<AssemblySearchSummary report={result.search_report}/>}
     {result&&<BuildResult result={result} onSave={()=>onSave(result)} onFind={onFind}/>}
   </section>
@@ -137,5 +165,5 @@ export function BuildResult({ result, onSave, onFind }) {
   const [compare,setCompare]=useState(null)
   const [saving,setSaving]=useState(false)
   async function save(){setSaving(true);try{await onSave?.()}finally{setSaving(false)}}
-  return <section className="panel build-result result-reveal"><header className="build-result-heading"><div><p className="eyebrow">Ваша конфигурация</p><h2>{result.title||'Подобранная сборка'}</h2></div><div className="build-fps"><strong>{buildMetric(result).value}</strong><span>{buildMetric(result).label} · ориентир</span></div></header><p className="choice-compatibility">{compatibilityLabel(result)}</p><AssemblyPriceNotice draft={result.status==='draft'||result.purchase_ready===false} note={result.price_note}/><p className="result-note">{result.recommendation}</p>{result.hardware_metrics&&<dl className="build-hardware-facts"><div><dt>Сценарий</dt><dd>{result.game} · {result.mode?.replace('_',' ')}</dd></div><div><dt>Выбор CPU/GPU</dt><dd>По слабейшему аппаратному показателю; игровой FPS не подтверждён</dd></div><div><dt>Память</dt><dd>{result.hardware_metrics.ram_modules} мод. · {result.hardware_metrics.ram_capacity_gb} ГБ{result.hardware_metrics.ram_factory_kit?' · KIT':''}</dd></div><div><dt>SSD</dt><dd>{result.hardware_metrics.storage_capacity_gb} ГБ · {result.hardware_metrics.storage_interface}</dd></div></dl>}{result.workload!=='cpu_work'&&<FpsEvidence outlook={result.fps_outlook}/>}<div className="build-parts">{result.parts.map(part=><div className="build-part-card account-item" key={part.type}><span className="part-symbol"><CategoryImage category={part.type}/></span><div className="part-information"><small>{partLabels[part.type]}</small><strong>{part.name}</strong>{part.price_offer_name&&part.price_offer_name!==part.name&&<small className="part-ad-title">В объявлении: {part.price_offer_name}</small>}<span>{part.price_source}{part.price_date&&' · '+new Date(part.price_date).toLocaleDateString('ru-RU')}{part.price_market==='used_ru'&&' · Б/у'}</span>{part.price_verified_at&&<small className="verified-price">Цена сверена по странице товара · {new Date(part.price_verified_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</small>}<PartPriceEvidence part={part}/>{part.compatibility&&<small className="field-hint">{compatibilityNotice(part.compatibility)}</small>}{part.purchase_warning&&<small className="part-purchase-warning">{part.purchase_warning}</small>}<QualityDetails quality={part.quality}/></div><div className="part-price-actions"><strong>{part.price.toLocaleString('ru-RU')} ₽</strong>{part.price_url&&<a href={part.price_url} target="_blank" rel="noopener noreferrer">Предложение<Icon name="arrow" size={12}/></a>}<button type="button" onClick={()=>setCompare(part)}>Сравнить цены</button>{part.id&&onFind&&<button type="button" onClick={()=>onFind({search:part.name})}>Найти на бирже</button>}</div></div>)}</div><BuildSummary result={result} onSave={onSave?save:undefined} saving={saving}/><details className="compatibility-details"><summary>Что проверить перед покупкой</summary><ul className="field-hint">{result.compatibility_notes.map(note=><li key={note}>{note}</li>)}</ul></details><Modal open={Boolean(compare)} onClose={()=>setCompare(null)} title="Предложения на площадках" size="lg">{compare&&<StoreOffers key={compare.name} initialQuery={compare.name} category={compare.type} hardwareId={compare.id}/>}</Modal></section>
+  return <section className="panel build-result result-reveal"><header className="build-result-heading"><div><p className="eyebrow">Ваша конфигурация</p><h2>{result.title||'Подобранная сборка'}</h2></div><div className="build-fps"><strong>{buildMetric(result).value}</strong><span>{buildMetric(result).label}</span></div></header><p className="choice-compatibility">{compatibilityLabel(result)}</p><AssemblyPriceNotice draft={result.status==='draft'||result.purchase_ready===false} note={result.price_note}/><p className="result-note">{result.recommendation}</p>{result.hardware_metrics&&<dl className="build-hardware-facts"><div><dt>Сценарий</dt><dd>{result.game} · {result.mode?.replace('_',' ')}</dd></div><div><dt>Выбор CPU/GPU</dt><dd>По слабейшему аппаратному показателю; игровой FPS не подтверждён</dd></div><div><dt>Память</dt><dd>{result.hardware_metrics.ram_modules} мод. · {result.hardware_metrics.ram_capacity_gb} ГБ{result.hardware_metrics.ram_factory_kit?' · KIT':''}</dd></div><div><dt>SSD</dt><dd>{result.hardware_metrics.storage_capacity_gb} ГБ · {result.hardware_metrics.storage_interface}</dd></div></dl>}{result.workload!=='cpu_work'&&<AdaptiveFpsDetails result={result.fps_result||result.fps_v4_evidence}/> }<div className="build-parts">{result.parts.map(part=><div className="build-part-card account-item" key={part.type}><span className="part-symbol"><CategoryImage category={part.type}/></span><div className="part-information"><small>{partLabels[part.type]}</small><strong>{part.name}</strong>{part.price_offer_name&&part.price_offer_name!==part.name&&<small className="part-ad-title">В объявлении: {part.price_offer_name}</small>}<span>{part.price_source}{part.price_date&&' · '+new Date(part.price_date).toLocaleDateString('ru-RU')}{part.price_market==='used_ru'&&' · Б/у'}</span>{part.price_verified_at&&<small className="verified-price">Цена сверена по странице товара · {new Date(part.price_verified_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</small>}<PartPriceEvidence part={part}/>{part.compatibility&&<small className="field-hint">{compatibilityNotice(part.compatibility)}</small>}{part.purchase_warning&&<small className="part-purchase-warning">{part.purchase_warning}</small>}<QualityDetails quality={part.quality}/></div><div className="part-price-actions"><strong>{part.price.toLocaleString('ru-RU')} ₽</strong>{part.price_url&&<a href={part.price_url} target="_blank" rel="noopener noreferrer">Предложение<Icon name="arrow" size={12}/></a>}<button type="button" onClick={()=>setCompare(part)}>Сравнить цены</button>{part.id&&onFind&&<button type="button" onClick={()=>onFind({search:part.name})}>Найти на бирже</button>}</div></div>)}</div><BuildSummary result={result} onSave={onSave?save:undefined} saving={saving}/><details className="compatibility-details"><summary>Что проверить перед покупкой</summary><ul className="field-hint">{result.compatibility_notes.map(note=><li key={note}>{note}</li>)}</ul></details><Modal open={Boolean(compare)} onClose={()=>setCompare(null)} title="Предложения на площадках" size="lg">{compare&&<StoreOffers key={compare.name} initialQuery={compare.name} category={compare.type} hardwareId={compare.id}/>}</Modal></section>
 }

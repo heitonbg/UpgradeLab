@@ -29,11 +29,17 @@ def geo_details(row,payload=None):
     delivery=g.delivery
     deliver=bool(payload.city_id and delivery and (payload.city_id in delivery.city_ids or delivery.mode=='russia') and delivery.mode in ('cities','russia') and
                  is_fresh(delivery.checked_at,timedelta(hours=24)))
+    # Regard's published delivery page confirms nationwide carrier delivery,
+    # but the destination price/availability is calculated per order. This is
+    # discovery evidence only; financial_evidence keeps the amount unknown.
+    regard_delivery=bool(payload.city_id and row.source=='regard' and payload.geo_mode=='delivery')
+    if regard_delivery:
+        deliver=True
     return {'city_id':g.city_id,'target_city_id':payload.city_id,'location_status':g.location_kind if g.city_id and fresh and g.basis else 'location_unknown',
         'availability_status':g.availability if fresh else 'unknown',
-        'local_match':local,'delivery_status':delivery.kind if deliver else 'unknown',
-        'delivery_cost_rub':0 if local else delivery.cost_rub if deliver else None,
-        'delivery_match':deliver,'delivery_cost_unknown':bool(not local and (not deliver or delivery.cost_rub is None))}
+        'local_match':local,'delivery_status':('store_delivery_cost_unconfirmed' if regard_delivery else delivery.kind) if deliver else 'unknown',
+        'delivery_cost_rub':0 if local else delivery.cost_rub if deliver and delivery else None,
+        'delivery_match':deliver,'delivery_cost_unknown':bool(not local and (not deliver or not delivery or delivery.cost_rub is None))}
 
 def filter_geography(rows,payload=None):
     payload=payload or query_scope() or GeoQuery()

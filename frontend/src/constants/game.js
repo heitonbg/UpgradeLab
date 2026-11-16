@@ -19,4 +19,5 @@ export const MODES = [
   { value: '1080p_low', label: '1080p Low (Киберспорт)' },
   { value: '1080p_high', label: '1080p High' },
   { value: '1440p_high', label: '1440p High' },
+  { value: '4k_high', label: '4K High' },
 ];

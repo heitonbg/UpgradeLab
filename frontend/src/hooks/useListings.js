@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createListing, getListings } from '../api/listings'
 
-export function useListings() {
+export function useListings(enabled = true) {
   const [listings, setListings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -23,7 +23,7 @@ export function useListings() {
     }
   }, [])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => { if (enabled) reload() }, [enabled, reload])
 
   const add = useCallback(async (payload) => {
     const created = await createListing(payload)

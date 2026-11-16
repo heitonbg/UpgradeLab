@@ -1,0 +1,121 @@
+{
+  "browser_success": {
+    "fallback_rendered": true,
+    "before_fps": 55,
+    "before_version": null,
+    "automatic_recalculations": 1,
+    "state": "available",
+    "after_fps": 52,
+    "after_version": "9ad51ef09e7386df623c5c4a45feb01c67da305758501061aa3a73760c848e1c",
+    "page_errors": [],
+    "rendered_dom_asserted": true
+  },
+  "browser_errors": {
+    "no_recommended": true,
+    "negative_cache": true,
+    "error_poll_count": 12,
+    "steam_error_bounded_polling": true,
+    "error_state": "queued",
+    "offline_poll_count": 12,
+    "worker_offline_bounded_polling": true,
+    "offline_state": "queued",
+    "changed_game_kept": true,
+    "positive_cache_reopen": true
+  },
+  "resources_windows": {
+    "idle_10_seconds": {
+      "api": {
+        "rss_mib": 122.84,
+        "peak_rss_mib": 130.46,
+        "cpu_seconds": 2.125,
+        "cpu_percent_one_core": 0.0
+      },
+      "worker": {
+        "rss_mib": 112.59,
+        "peak_rss_mib": 117.65,
+        "cpu_seconds": 1.109375,
+        "cpu_percent_one_core": 0.0
+      },
+      "worker_launcher": {
+        "rss_mib": 4.11,
+        "peak_rss_mib": 4.13,
+        "cpu_seconds": 0.0,
+        "cpu_percent_one_core": 0.0
+      }
+    },
+    "combined_idle_rss_mib": 239.54000000000002,
+    "enqueue_ms": 32.729,
+    "one_task": {
+      "status": "available",
+      "elapsed_seconds": 6.781,
+      "worker_cpu_seconds": 0.10938,
+      "resources": {
+        "api": {
+          "rss_mib": 123.71,
+          "peak_rss_mib": 130.46,
+          "cpu_seconds": 2.21875
+        },
+        "worker": {
+          "rss_mib": 114.72,
+          "peak_rss_mib": 117.65,
+          "cpu_seconds": 1.21875
+        },
+        "worker_launcher": {
+          "rss_mib": 4.11,
+          "peak_rss_mib": 4.13,
+          "cpu_seconds": 0.0
+        }
+      }
+    },
+    "cached_api_ms": {
+      "median": 12.185,
+      "p95": 22.599
+    },
+    "concurrent_100": {
+      "available": 100,
+      "median_ms": 44.325
+    },
+    "tasks": [
+      {
+        "id": 1,
+        "status": "completed",
+        "attempts": 1
+      }
+    ],
+    "journal": "delete"
+  },
+  "inprocess_experiment": {
+    "api_without_worker": {
+      "rss_mib": 114.94,
+      "peak_rss_mib": 127.29,
+      "cpu_seconds": 1.421875
+    },
+    "after_worker_rss_mib": 115.09,
+    "incremental_rss_mib": 0.15,
+    "idle_10s_cpu_seconds": 0.01562,
+    "scope": "Import + idle worker in same process; no production startup integration, no heavy parse, Windows only"
+  },
+  "linux_container": "NOT RUN: Docker unavailable, WSL not installed; real Amvera storage not accessible",
+  "health_during_worker_crash": {
+    "before": 200,
+    "during": 200,
+    "old_worker_pid": 17800,
+    "replacement_worker_pid": 10144
+  },
+  "tests": {
+    "backend_total": 821,
+    "backend_passed": 819,
+    "backend_skipped": 2,
+    "backend_seconds": 210.351,
+    "steam_profile_passed": 49,
+    "frontend_passed": 129,
+    "production_build": true,
+    "compileall": true,
+    "diff_check": true
+  },
+  "restart_cache_integrity": {
+    "status": "available",
+    "integrity_check": "ok",
+    "scope": "fresh API process using same disposable SQLite after terminating prior process tree"
+  }
+}

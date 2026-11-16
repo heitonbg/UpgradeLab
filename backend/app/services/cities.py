@@ -11,7 +11,7 @@ BY_ID = {city['city_id']: city for city in CITIES}
 if len(BY_ID) != len(CITIES):
     raise RuntimeError('Duplicate city ID')
 
-def search_cities(query='', limit=30):
+def search_cities(query='', limit=1000):
     text=key(query)
     if query in BY_ID:
         return [BY_ID[query]]

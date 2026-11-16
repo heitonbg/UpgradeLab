@@ -4,12 +4,17 @@ Profiles describe manufacturer specifications, not authenticity of a seller's
 item. Unknown models are excluded from automatic builds instead of inventing
 certification, internal interfaces, or cooler compatibility.
 """
+from app.services.selection_cache import memoized_check
 import json
 import re
 from app.services.offer_safety import UNSUITABLE
 
 
 PSUS = [
+    (r"\bDEEPCOOL\b.*\bPK750D\b", "DeepCool PK750D", 750, "80 PLUS Bronze",
+     "https://uk.deepcool.com/company/pressroom/newsrelease/2022/16346.shtml", []),
+    (r"\bDEEPCOOL\b.*\bPN750M\b", "DeepCool PN750M", 750, "80 PLUS Gold",
+     "https://www.deepcool.com/products/PowerSupplyUnits/powersupplyunits/PN750M-ATX3.1-Modular-Power-Supply/2023/17877.shtml", []),
     (r"\bDEEPCOOL\b.*\bPK550D\b", "DeepCool PK550D", 550, "80 PLUS Bronze",
      "https://www.deepcool.com/products/PowerSupplyUnits/powersupplyunits/PK550D-80-PLUS-Bronze-Power-Supply/2022/15621.shtml/",
      ["SCP", "OPP", "OTP", "OVP", "OCP", "UVP"]),
@@ -26,6 +31,11 @@ PSUS = [
 for watts, sku in [(550, 'cp-9020277-na'), (650, 'cp-9020278-na'), (750, 'cp-9020279-na')]:
     PSUS.append((rf"\bCORSAIR\b.*\bCX{watts}\b", f"Corsair CX{watts}", watts, "80 PLUS Bronze",
                  f"https://www.corsair.com/us/en/p/psu/{sku}/cx-series-cx{watts}-{watts}-watt-80-plus-bronze-atx-power-supply-{sku}", []))
+for watts, sku in ((650, 'cp-9020302-na'), (750, 'cp-9020295-na')):
+    PSUS.append((rf"\bCORSAIR\b.*\bRM{watts}E\b", f"Corsair RM{watts}e", watts, "80 PLUS Gold",
+                 f"https://www.corsair.com/us/en/p/psu/{sku}/rme-series-rm{watts}e-fully-modular-low-noise-atx-power-supply-{sku}", []))
+    PSUS.append((rf"\bSEASONIC\b.*\bCORE\s+GX[- ]?{watts}\b", f"Seasonic CORE GX-{watts}", watts, "80 PLUS Gold",
+                 "https://seasonic.com/core-gx-atx-3-2024/", ["OPP", "OVP", "UVP", "SCP", "OCP", "OTP"]))
 SSDS = [
     (r"\bSAMSUNG\b.*\b870\s*EVO\b", "Samsung 870 EVO",
      "https://semiconductor.samsung.com/consumer-storage/internal-ssd/870evo/"),
@@ -48,6 +58,8 @@ NVME_SSDS = [
      "https://documents.westerndigital.com/content/dam/doc-library/en_us/assets/public/western-digital/product/internal-drives/wd-blue-ssd/product-brief-wd-blue-sn580-nvme-ssd.pdf", "nCache 4.0; без выделенного DRAM-кеша"),
 ]
 NVME_SSDS += [
+    (r"\b(?:WD[_ -]?BLACK|WESTERN DIGITAL)\b.*\bSN770\b", "WD_BLACK SN770", {500, 1000, 2000},
+     "https://documents.westerndigital.com/content/dam/doc-library/en_us/assets/public/western-digital/product/internal-drives/wd-black-ssd/product-brief-wd-black-sn770-nvme-ssd.pdf", "PCIe 4.0 x4 NVMe; DRAM-less; capacity-specific performance"),
     (r"\bNETAC\b.*\bNV3000[-\s]*Q\b", "Netac NV3000-Q", {512},
      "https://www.netac.com/uploads/20260331/e2b575a1d737b0c4affcac33de563ce9.pdf", "3D NAND; характеристики зависят от ревизии"),
     (r"\bNETAC\b.*\bNV3000\b(?![-\s]*(?:Q|RGB)\b)", "Netac NV3000", {500, 1000, 2000},
@@ -71,19 +83,24 @@ COOLERS = [
      "https://www.deepcool.com/products/Cooling/cpuaircoolers/AG300-Single-Tower-CPU-Cooler-1700-AM5/2022/16202.shtml"),
 ]
 COOLERS += [
+    (r"\bDEEPCOOL\b.*\bAK400\b(?!.*\b(?:DIGITAL|ZERO|PLUS)\b)", "DeepCool AK400",
+     "https://global.deepcool.com/products/Cooling/cpuaircoolers/AK400-Performance-CPU-Cooler-1851-1700-AM5/2024/15222.shtml"),
     (r"\bID[\s-]*COOLING\b.*\bSE[\s-]*214[\s-]*XT\b", "ID-COOLING SE-214-XT",
      "https://www.idcooling.com/product/detail?id=482"),
     (r"\bTHERMALRIGHT\b.*\bASSASSIN\s+X\s*120\s+REFINED\s+SE\b", "Thermalright Assassin X 120 Refined SE",
      "https://www.thermalright.com/product/assassin-x-120-refined-se/"),
+    (r"\bTHERMALRIGHT\b.*\bPHANTOM\s+SPIRIT\s+120\s+SE\b", "Thermalright Phantom Spirit 120 SE",
+     "https://www.thermalright.com/product/phantom-spirit-120-se/"),
     (r"\bARCTIC\b.*\bFREEZER\s+36\b(?![\s-]*S\b)", "ARCTIC Freezer 36",
      "https://www.arctic.de/us/Freezer-36"),
 ]
 COOLER_CLASSES = {'DeepCool AG300': 1, 'DeepCool AG400': 2, 'ID-COOLING SE-214-XT': 2,
-                  'Thermalright Assassin X 120 Refined SE': 2, 'ARCTIC Freezer 36': 3}
+                  'DeepCool AK400': 2, 'Thermalright Assassin X 120 Refined SE': 2,
+                  'Thermalright Phantom Spirit 120 SE': 3, 'ARCTIC Freezer 36': 3}
 QUALITY_SEARCHES = {
-    "psu": ["DeepCool PK550D", "Corsair CX550", "DeepCool PK650D", "Corsair CX650", "MSI MAG A650BN", "Corsair CX750", "MSI MAG A750GL"],
-    "storage": ["Netac NV3000 500GB", "Netac NV3000-Q 512GB", "KingSpec NX 512GB 2280", "Lexar NM620 512GB", "Crucial P3 Plus 500GB", "WD Blue SN580 500GB", "Samsung 980 500GB", "Kingston KC3000 512GB", "Crucial BX500 480GB", "Kingston A400 480GB", "Samsung 870 EVO 500GB", "Kingston KC600 512GB"],
-    "cooler": ["ID-COOLING SE-214-XT", "Thermalright Assassin X 120 Refined SE", "DeepCool AG400", "DeepCool AG300", "ARCTIC Freezer 36"],
+    "psu": ["DeepCool PK750D", "DeepCool PN750M", "DeepCool PK550D", "Corsair CX550", "DeepCool PK650D", "Corsair CX650", "MSI MAG A650BN", "Corsair RM650e", "Seasonic CORE GX-650", "Corsair CX750", "MSI MAG A750GL", "Corsair RM750e", "Seasonic CORE GX-750"],
+    "storage": ["Netac NV3000 500GB", "Netac NV3000-Q 512GB", "KingSpec NX 512GB 2280", "Lexar NM620 512GB", "Crucial P3 Plus 500GB", "WD Blue SN580 500GB", "WD_BLACK SN770 500GB", "Samsung 980 500GB", "Kingston KC3000 512GB", "Crucial BX500 480GB", "Kingston A400 480GB", "Samsung 870 EVO 500GB", "Kingston KC600 512GB"],
+    "cooler": ["ID-COOLING SE-214-XT", "Thermalright Assassin X 120 Refined SE", "Thermalright Phantom Spirit 120 SE", "DeepCool AK400", "DeepCool AG400", "DeepCool AG300", "ARCTIC Freezer 36"],
 }
 ACCESSORIES = re.compile(
     r"креплен|крепёж|крепеж|кронштейн|защ[её]лк|backplate|mounting|bracket|retention|"
@@ -110,6 +127,7 @@ def capacity_gb(title):
     return values[0] if values else None
 
 
+@memoized_check
 def quality_check(offer, socket=None):
     title = offer.name
     attrs = json.loads(offer.attributes)
@@ -193,7 +211,9 @@ def quality_check(offer, socket=None):
         return None, "Серия SSD не входит в список моделей с подтверждёнными характеристиками."
     if offer.category == 'cooler':
         for pattern, model, url in COOLERS:
-            supported = {'AM4', 'AM5', 'LGA1700'} if model == 'ARCTIC Freezer 36' else SOCKETS
+            supported = ({'AM4', 'AM5', 'LGA1700', 'LGA1851'} if model in
+                         ('ARCTIC Freezer 36', 'DeepCool AK400', 'Thermalright Phantom Spirit 120 SE')
+                         else SOCKETS)
             if re.search(pattern, title, re.I) and socket in supported:
                 if attrs.get('sockets') and socket not in attrs['sockets']:
                     return None, "Крепления в этой комплектации не подходят сокету сборки."

@@ -1,0 +1,212 @@
+{
+  "generated_at": "2026-11-15",
+  "cpu_requirement_parse_coverage": {
+    "games": 16441,
+    "minimum_cpu_requirements": 15865,
+    "recommended_cpu_requirements": 7433,
+    "explicit_model_requirement_fields": 7809,
+    "family_requirement_fields": 3247,
+    "abstract_or_unparsed_requirement_fields": 12242
+  },
+  "source_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+  "runtime_catalog_games": 16447,
+  "source_games": 16623,
+  "source_reference_gpus": 12,
+  "source_gpu_catalog_rows": 1381,
+  "source_gpu_catalog_type_counts": {
+    "Desktop": 433,
+    "Unknown": 593,
+    "Workstation": 14,
+    "Mobile": 338,
+    "Desktop, Mobile": 3
+  },
+  "source_gpu_rows_without_positive_g3d_score": 0,
+  "matched_games": 16441,
+  "match_method_counts": {
+    "confirmed_alias": 2,
+    "exact_name": 10,
+    "steam_app_id": 2,
+    "exact_source_url": 16427
+  },
+  "unmatched_or_review_games": 6,
+  "review_items": [
+    {
+      "game_id": "GTA V",
+      "catalog_name": "GTA V",
+      "reason": "ambiguous_alias",
+      "candidate_titles": [
+        "GTA V",
+        "Grand Theft Auto V",
+        "GTA 5"
+      ],
+      "fuzzy_candidates_for_manual_review": [
+        {
+          "name": "Grand Theft Auto V",
+          "release_year": "2013",
+          "steam_app_id": "271590",
+          "source_url": "https://pcgamebenchmarks.com/game/grand-theft-auto-v-1002",
+          "similarity_candidate_score": 1.0
+        },
+        {
+          "name": "Grand Theft Auto V",
+          "release_year": "2015",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/grand-theft-auto-v-220914",
+          "similarity_candidate_score": 1.0
+        },
+        {
+          "name": "Grand Theft Auto V",
+          "release_year": "2022",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/grand-theft-auto-v-124227",
+          "similarity_candidate_score": 1.0
+        },
+        {
+          "name": "Grand Theft Auto IV",
+          "release_year": "2008",
+          "steam_app_id": "12210",
+          "source_url": "https://pcgamebenchmarks.com/game/grand-theft-auto-iv-717",
+          "similarity_candidate_score": 0.968
+        },
+        {
+          "name": "Grand Theft Auto 2",
+          "release_year": "1999",
+          "steam_app_id": "12180",
+          "source_url": "https://pcgamebenchmarks.com/game/grand-theft-auto-2-804",
+          "similarity_candidate_score": 0.933
+        }
+      ]
+    },
+    {
+      "game_id": "Fortnite",
+      "catalog_name": "Fortnite",
+      "reason": "ambiguous_exact_title",
+      "candidate_titles": [
+        "Fortnite"
+      ],
+      "fuzzy_candidates_for_manual_review": [
+        {
+          "name": "Fortnite",
+          "release_year": "2020",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/fortnite-1855",
+          "similarity_candidate_score": 1.0
+        },
+        {
+          "name": "Fortnite",
+          "release_year": "2018",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/fortnite-213529",
+          "similarity_candidate_score": 1.0
+        }
+      ]
+    },
+    {
+      "game_id": "Call of Duty: Warzone",
+      "catalog_name": "Call of Duty: Warzone",
+      "reason": "ambiguous_exact_title",
+      "candidate_titles": [
+        "Call of Duty: Warzone"
+      ],
+      "fuzzy_candidates_for_manual_review": [
+        {
+          "name": "Call of Duty: Warzone",
+          "release_year": "2020",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/call-of-duty-warzone-121568",
+          "similarity_candidate_score": 1.0
+        },
+        {
+          "name": "Call of Duty: Warzone",
+          "release_year": "2022",
+          "steam_app_id": "1962663",
+          "source_url": "https://pcgamebenchmarks.com/game/call-of-duty-warzone-201505",
+          "similarity_candidate_score": 1.0
+        }
+      ]
+    },
+    {
+      "game_id": "Resident Evil 4 Remake",
+      "catalog_name": "Resident Evil 4 Remake",
+      "reason": "no_exact_or_confirmed_alias_match",
+      "candidate_titles": [
+        "Resident Evil 4 Remake"
+      ],
+      "fuzzy_candidates_for_manual_review": [
+        {
+          "name": "Resident Evil 4",
+          "release_year": "2005",
+          "steam_app_id": "2050650",
+          "source_url": "https://pcgamebenchmarks.com/game/resident-evil-4-956",
+          "similarity_candidate_score": 0.812
+        },
+        {
+          "name": "Resident Evil 4",
+          "release_year": "2023",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/resident-evil-4-121904",
+          "similarity_candidate_score": 0.812
+        },
+        {
+          "name": "Resident Evil 4",
+          "release_year": "2011",
+          "steam_app_id": "254700",
+          "source_url": "https://pcgamebenchmarks.com/game/resident-evil-4-18508",
+          "similarity_candidate_score": 0.812
+        },
+        {
+          "name": "Resident Evil 4",
+          "release_year": "2005",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/resident-evil-4-133635",
+          "similarity_candidate_score": 0.812
+        },
+        {
+          "name": "Resident Evil 6 Remastered",
+          "release_year": "2016",
+          "steam_app_id": null,
+          "source_url": "https://pcgamebenchmarks.com/game/resident-evil-6-remastered-38843",
+          "similarity_candidate_score": 0.81
+        }
+      ]
+    },
+    {
+      "game_id": "Мир танков",
+      "catalog_name": "Мир танков",
+      "reason": "no_exact_or_confirmed_alias_match",
+      "candidate_titles": [
+        "Мир танков",
+        "танки",
+        "tanki",
+        "миртанков"
+      ],
+      "fuzzy_candidates_for_manual_review": [
+        {
+          "name": "Tanks",
+          "release_year": "2018",
+          "steam_app_id": "866420",
+          "source_url": "https://pcgamebenchmarks.com/game/tanks-94008",
+          "similarity_candidate_score": 0.8
+        }
+      ]
+    },
+    {
+      "game_id": "pcgb:baldurs-gate-iii-109930",
+      "catalog_name": "Baldur's Gate III",
+      "reason": "source_row_already_matched_to_another_game_id",
+      "candidate_titles": [
+        "Baldur's Gate III"
+      ]
+    }
+  ],
+  "external_model_estimate_records": 197292,
+  "games_with_external_fps": 16441,
+  "invalid_fps_points_skipped": 0,
+  "non_monotonic_games_rejected": 0,
+  "steam_app_id_coverage": 15439,
+  "minimum_requirements_coverage": 16343,
+  "recommended_requirements_coverage": 7760,
+  "release_year_coverage": 16402,
+  "engine_fps_cap_coverage": 154,
+  "note": "Every imported FPS point is an external model estimate, not a real measurement. Unmatched/fuzzy candidates are not imported."
+}

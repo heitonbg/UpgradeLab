@@ -10,9 +10,9 @@ from app.services.offers import title_category,model_signatures
 from app.services.storage_compatibility import nvme_board_evidence
 
 def canonical(value):return ' '.join(str(value).casefold().split())
-def reference_fields(db,listing):
+def reference_fields(db,listing,*,preloaded_refs=None):
     from app.services.catalog_access import filter_catalog
-    refs=list(db.scalars(select(StoreOffer).join(CatalogProduct,CatalogProduct.offer_id==StoreOffer.id).where(StoreOffer.category==listing.category,StoreOffer.name==listing.title)))
+    refs=(preloaded_refs if preloaded_refs is not None else list(db.scalars(select(StoreOffer).join(CatalogProduct,CatalogProduct.offer_id==StoreOffer.id).where(StoreOffer.category==listing.category,StoreOffer.name==listing.title))))
     refs=filter_catalog(db,refs)
     allowed={'socket','ram_type','form_factor','storage_slots','power_connectors','system_connector_requirements','nvme_2280','sockets','board_formats','psu_formats','length_mm','height_mm','max_gpu_length_mm','max_cooler_height_mm'}
     variants=[]
@@ -26,7 +26,7 @@ def reference_fields(db,listing):
     if any(v!=variants[0] for v in variants[1:]):return {},True
     return variants[0],False
 
-def assess_listing(db,listing):
+def assess_listing(db,listing,*,preloaded_refs=None,hardware_by_id=None):
     declared=listing.characteristics or {};missing=[];conflicts=[];catalog={};attrs={}
     category=listing.category
     inferred=title_category(listing.title)
@@ -37,13 +37,13 @@ def assess_listing(db,listing):
     if category in ('memory','motherboard'):
         stated=set(re.findall(r'DDR[345]',listing.title.upper()))
         if len(stated)>1 or stated and declared.get('ram_type') and declared['ram_type'] not in stated:conflicts.append('Тип RAM противоречит названию')
-    h=db.get(Hardware,listing.hardware_id) if listing.hardware_id else None
+    h=(hardware_by_id.get(listing.hardware_id) if hardware_by_id is not None else db.get(Hardware,listing.hardware_id)) if listing.hardware_id else None
     if h:
-        try:validate_model(db,listing)
+        try:validate_model(db,listing,hardware=h)
         except HTTPException:conflicts.append('Модель Hardware не соответствует объявлению')
         if category in ('CPU','GPU'):
             if declared.get('model'):
-                try:validate_model(db,SimpleNamespace(hardware_id=listing.hardware_id,category=category,title=declared['model']))
+                try:validate_model(db,SimpleNamespace(hardware_id=listing.hardware_id,category=category,title=declared['model']),hardware=h)
                 except HTTPException:conflicts.append('Полная модель в характеристиках противоречит Hardware')
             other='GPU' if category=='CPU' else 'CPU'
             if model_signatures(listing.title,other):conflicts.append('Название содержит несколько разных комплектующих')
@@ -63,7 +63,7 @@ def assess_listing(db,listing):
                 if declared.get(key) and catalog.get(key) and declared[key]!=catalog[key]:conflicts.append('Характеристики RAM противоречат каталогу')
                 if catalog.get(key):attrs.setdefault(key,catalog[key])
     elif category in ('CPU','GPU'):missing.append('Не выбрана однозначная модель Hardware')
-    trusted,ambiguous=reference_fields(db,listing)
+    trusted,ambiguous=reference_fields(db,listing,preloaded_refs=preloaded_refs)
     if ambiguous:conflicts.append('Доверенные технические профили противоречат друг другу')
     for key in ('socket','ram_type','form_factor'):
         if declared.get(key) and trusted.get(key) and declared[key]!=trusted[key]:conflicts.append('Характеристики противоречат доверенному профилю: '+key)

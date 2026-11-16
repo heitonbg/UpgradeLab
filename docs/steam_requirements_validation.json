@@ -1,0 +1,1160 @@
+{
+  "live_games": [
+    {
+      "appid": 1903340,
+      "game": "Expedition 33",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 28260,
+      "app_type": "game",
+      "returned_name": "Clair Obscur: Expedition 33",
+      "seconds": 0.803
+    },
+    {
+      "appid": 1091500,
+      "game": "Cyberpunk 2077",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 39614,
+      "app_type": "game",
+      "returned_name": "Cyberpunk 2077",
+      "seconds": 0.252
+    },
+    {
+      "appid": 1245620,
+      "game": "Elden Ring",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 32160,
+      "app_type": "game",
+      "returned_name": "ELDEN RING",
+      "seconds": 0.287
+    },
+    {
+      "appid": 1086940,
+      "game": "Baldurs Gate 3",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 42221,
+      "app_type": "game",
+      "returned_name": "Baldur's Gate 3",
+      "seconds": 0.298
+    },
+    {
+      "appid": 1174180,
+      "game": "Red Dead Redemption 2",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 16294,
+      "app_type": "game",
+      "returned_name": "Red Dead Redemption 2",
+      "seconds": 0.265
+    },
+    {
+      "appid": 990080,
+      "game": "Hogwarts Legacy",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 19333,
+      "app_type": "game",
+      "returned_name": "Hogwarts Legacy",
+      "seconds": 0.273
+    },
+    {
+      "appid": 620,
+      "game": "Portal 2",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 28282,
+      "app_type": "game",
+      "returned_name": "Portal 2",
+      "seconds": 0.269
+    },
+    {
+      "appid": 730,
+      "game": "CS2",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 18786,
+      "app_type": "game",
+      "returned_name": "Counter-Strike 2",
+      "seconds": 0.269
+    },
+    {
+      "appid": 570,
+      "game": "Dota 2",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 15841,
+      "app_type": "game",
+      "returned_name": "Dota 2",
+      "seconds": 0.258
+    },
+    {
+      "appid": 271590,
+      "game": "GTA V",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 67294,
+      "app_type": "game",
+      "returned_name": "Grand Theft Auto V Legacy",
+      "seconds": 0.312
+    },
+    {
+      "appid": 292030,
+      "game": "The Witcher 3",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 23466,
+      "app_type": "game",
+      "returned_name": "The Witcher 3: Wild Hunt — Remastered",
+      "seconds": 0.265
+    },
+    {
+      "appid": 1248130,
+      "game": "Farming Simulator 22",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 22737,
+      "app_type": "game",
+      "returned_name": "Farming Simulator 22",
+      "seconds": 0.284
+    },
+    {
+      "appid": 1145360,
+      "game": "Hades",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 21952,
+      "app_type": "game",
+      "returned_name": "Hades",
+      "seconds": 0.328
+    },
+    {
+      "appid": 413150,
+      "game": "Stardew Valley",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 23341,
+      "app_type": "game",
+      "returned_name": "Stardew Valley",
+      "seconds": 0.277
+    },
+    {
+      "appid": 105600,
+      "game": "Terraria",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 22483,
+      "app_type": "game",
+      "returned_name": "Terraria",
+      "seconds": 0.269
+    },
+    {
+      "appid": 400,
+      "game": "Portal",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 12548,
+      "app_type": "game",
+      "returned_name": "Portal",
+      "seconds": 0.257
+    },
+    {
+      "appid": 70,
+      "game": "Half-Life",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 8711,
+      "app_type": "game",
+      "returned_name": "Half-Life",
+      "seconds": 0.262
+    },
+    {
+      "appid": 220,
+      "game": "Half-Life 2",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 21416,
+      "app_type": "game",
+      "returned_name": "Half-Life 2",
+      "seconds": 0.35
+    },
+    {
+      "appid": 391540,
+      "game": "Undertale",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 10359,
+      "app_type": "game",
+      "returned_name": "Undertale",
+      "seconds": 0.317
+    },
+    {
+      "appid": 108600,
+      "game": "Project Zomboid",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": false,
+      "recommended_cpu": false,
+      "recommended_gpu": false,
+      "http_status": 200,
+      "bytes": 17085,
+      "app_type": "game",
+      "returned_name": "Project Zomboid",
+      "seconds": 0.258
+    },
+    {
+      "appid": 359550,
+      "game": "Rainbow Six Siege",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 27172,
+      "app_type": "game",
+      "returned_name": "Tom Clancy's Rainbow Six Siege",
+      "seconds": 0.276
+    },
+    {
+      "appid": 1172470,
+      "game": "Apex Legends",
+      "json_valid": true,
+      "pc_requirements": true,
+      "minimum": true,
+      "recommended": true,
+      "recommended_cpu": true,
+      "recommended_gpu": true,
+      "http_status": 200,
+      "bytes": 17332,
+      "app_type": "game",
+      "returned_name": "Apex Legends™",
+      "seconds": 0.307
+    }
+  ],
+  "integration": {
+    "before_fps": 55.0,
+    "before_scenario_available": false,
+    "after_http": 200,
+    "after_fps": 51.7,
+    "after_scenario_available": true,
+    "state": {
+      "status": "available",
+      "game_id": "pcgb:clair-obscur-expedition-33-280622",
+      "game": "Clair Obscur: Expedition 33",
+      "steam_app_id": 1903340,
+      "source_url": "https://store.steampowered.com/app/1903340/",
+      "source_type": "steam_developer_requirements",
+      "retrieved_at": "2026-11-16T07:44:57.987632Z",
+      "last_checked_at": "2026-11-16T07:44:57.987632Z",
+      "expires_at": "2026-12-16T07:44:57.987632Z",
+      "version": "9ad51ef09e7386df623c5c4a45feb01c67da305758501061aa3a73760c848e1c",
+      "requirements": {
+        "match_confidence": "high",
+        "minimum": {
+          "cpu": "Intel Core i7-8700K / AMD Ryzen 5 1600X",
+          "cpu_match": {
+            "families": [
+              {
+                "family": "i7",
+                "generation": null,
+                "vendor": "intel"
+              },
+              {
+                "family": "ryzen5",
+                "generation": null,
+                "vendor": "amd"
+              }
+            ],
+            "match_confidence": "high",
+            "match_provenance": "Exact normalized CPU SKU token to local Hardware catalog; duplicate catalog entries are represented as a PassMark score range. CPU Mark is a total CPU score, not Single Thread.",
+            "models": [
+              {
+                "signature": "i78700k",
+                "token": "Intel Core i7-8700K"
+              },
+              {
+                "signature": "ryzen51600x",
+                "token": "AMD Ryzen 5 1600X"
+              }
+            ],
+            "parse_type": "exact_model_references",
+            "parser": "pcgb_cpu_requirement_rules_v1",
+            "raw_text": "Intel Core i7-8700K / AMD Ryzen 5 1600X",
+            "reference_cpu_mark": 13268.5,
+            "reference_cpu_mark_range": [
+              12983.0,
+              13554.0
+            ],
+            "resolved_models": [
+              {
+                "catalog_entry_count": 1,
+                "cpu_mark": 13554.0,
+                "cpu_mark_range": [
+                  13554.0,
+                  13554.0
+                ],
+                "id": 308,
+                "match_type": "exact_catalog_model",
+                "matched_token": "Intel Core i7-8700K",
+                "name": "Intel Core i7-8700K @ 3.70GHz"
+              },
+              {
+                "catalog_entry_count": 1,
+                "cpu_mark": 12983.0,
+                "cpu_mark_range": [
+                  12983.0,
+                  12983.0
+                ],
+                "id": 322,
+                "match_type": "exact_catalog_model",
+                "matched_token": "AMD Ryzen 5 1600X",
+                "name": "AMD Ryzen 5 1600X"
+              }
+            ],
+            "status": "resolved_exact_models",
+            "unresolved_models": []
+          },
+          "directx": "Version 12",
+          "fields": {
+            "cpu": "Intel Core i7-8700K / AMD Ryzen 5 1600X",
+            "directx": "Version 12",
+            "gpu": "NVIDIA GeForce GTX 1060 6 GB / AMD Radeon RX 5600 XT 6 GB / Intel Arc A380 6 GB",
+            "memory": "8 GB RAM",
+            "notes": "SSD required. Minimum specs allow for 1080p 30FPS low settings gameplay.",
+            "os": "Windows 10",
+            "storage": "55 GB available space"
+          },
+          "frame_generation": null,
+          "fully_resolved": false,
+          "gpu": "NVIDIA GeForce GTX 1060 6 GB / AMD Radeon RX 5600 XT 6 GB / Intel Arc A380 6 GB",
+          "gpu_alternatives": [
+            "NVIDIA GeForce GTX 1060 6 GB",
+            "AMD Radeon RX 5600 XT 6 GB",
+            "Intel Arc A380 6 GB"
+          ],
+          "gpu_match": {
+            "match_confidence": "medium",
+            "match_provenance": "Exact normalized GPU SKU and PassMark G3D Mark from the local Hardware catalog; explicit VRAM variants must be present in the model name.",
+            "reference_gpu_mark": 9855.5,
+            "reference_gpu_mark_range": [
+              6332.0,
+              13379.0
+            ],
+            "resolved_models": [
+              {
+                "catalog_entry_count": 1,
+                "g3d_mark": 13379.0,
+                "g3d_mark_range": [
+                  13379.0,
+                  13379.0
+                ],
+                "id": 1573,
+                "match_type": "exact_catalog_model",
+                "matched_token": "AMD Radeon RX 5600 XT",
+                "name": "Radeon RX 5600 XT",
+                "vram_validation": "unknown_in_catalog"
+              },
+              {
+                "catalog_entry_count": 1,
+                "g3d_mark": 6332.0,
+                "g3d_mark_range": [
+                  6332.0,
+                  6332.0
+                ],
+                "id": 1665,
+                "match_type": "exact_catalog_model",
+                "matched_token": "Intel Arc A380",
+                "name": "Intel Arc A380",
+                "vram_validation": "unknown_in_catalog"
+              }
+            ],
+            "status": "partially_resolved",
+            "unresolved_models": [
+              {
+                "reason": "exact_model_or_vram_variant_not_in_catalog",
+                "token": "NVIDIA GeForce GTX 1060 6 GB"
+              }
+            ],
+            "vram_validation": "partly_unknown"
+          },
+          "notes": "SSD required. Minimum specs allow for 1080p 30FPS low settings gameplay.",
+          "os": "Windows 10",
+          "rt": null,
+          "target_fps": 30,
+          "target_preset": "low",
+          "target_resolution": "1080p",
+          "text": "Minimum: Requires a 64-bit processor and operating system OS: Windows 10 Processor: Intel Core i7-8700K / AMD Ryzen 5 1600X Memory: 8 GB RAM Graphics: NVIDIA GeForce GTX 1060 6 GB / AMD Radeon RX 5600 XT 6 GB / Intel Arc A380 6 GB DirectX: Version 12 Storage: 55 GB available space Additional Notes: SSD required. Minimum specs allow for 1080p 30FPS low settings gameplay.",
+          "upscaling": null,
+          "vram_gb_values": [
+            6.0
+          ]
+        },
+        "official_target": {
+          "fps": 60,
+          "frame_generation": null,
+          "preset": "high",
+          "resolution": "1080p",
+          "rt": null,
+          "source_type": "developer_stated_target_not_measurement",
+          "upscaling": null
+        },
+        "parser_version": "steam_requirements_v1",
+        "parsing_status": "resolved",
+        "recommended": {
+          "cpu": "Intel Core i7-12700K / AMD Ryzen 7 5800X",
+          "cpu_match": {
+            "families": [
+              {
+                "family": "i7",
+                "generation": null,
+                "vendor": "intel"
+              },
+              {
+                "family": "ryzen7",
+                "generation": null,
+                "vendor": "amd"
+              }
+            ],
+            "match_confidence": "high",
+            "match_provenance": "Exact normalized CPU SKU token to local Hardware catalog; duplicate catalog entries are represented as a PassMark score range. CPU Mark is a total CPU score, not Single Thread.",
+            "models": [
+              {
+                "signature": "i712700k",
+                "token": "Intel Core i7-12700K"
+              },
+              {
+                "signature": "ryzen75800x",
+                "token": "AMD Ryzen 7 5800X"
+              }
+            ],
+            "parse_type": "exact_model_references",
+            "parser": "pcgb_cpu_requirement_rules_v1",
+            "raw_text": "Intel Core i7-12700K / AMD Ryzen 7 5800X",
+            "reference_cpu_mark": 30943.0,
+            "reference_cpu_mark_range": [
+              27656.0,
+              34230.0
+            ],
+            "resolved_models": [
+              {
+                "catalog_entry_count": 1,
+                "cpu_mark": 34230.0,
+                "cpu_mark_range": [
+                  34230.0,
+                  34230.0
+                ],
+                "id": 84,
+                "match_type": "exact_catalog_model",
+                "matched_token": "Intel Core i7-12700K",
+                "name": "Intel Core i7-12700K"
+              },
+              {
+                "catalog_entry_count": 1,
+                "cpu_mark": 27656.0,
+                "cpu_mark_range": [
+                  27656.0,
+                  27656.0
+                ],
+                "id": 130,
+                "match_type": "exact_catalog_model",
+                "matched_token": "AMD Ryzen 7 5800X",
+                "name": "AMD Ryzen 7 5800X"
+              }
+            ],
+            "status": "resolved_exact_models",
+            "unresolved_models": []
+          },
+          "directx": "Version 12",
+          "fields": {
+            "cpu": "Intel Core i7-12700K / AMD Ryzen 7 5800X",
+            "directx": "Version 12",
+            "gpu": "NVIDIA GeForce RTX 3060 Ti 8 GB / AMD Radeon RX 6800 XT 16 GB",
+            "memory": "16 GB RAM",
+            "notes": "SSD required. Recommended specs allow for 1080p 60FPS high settings gameplay.",
+            "os": "Windows 11",
+            "storage": "55 GB available space"
+          },
+          "frame_generation": null,
+          "fully_resolved": true,
+          "gpu": "NVIDIA GeForce RTX 3060 Ti 8 GB / AMD Radeon RX 6800 XT 16 GB",
+          "gpu_alternatives": [
+            "NVIDIA GeForce RTX 3060 Ti 8 GB",
+            "AMD Radeon RX 6800 XT 16 GB"
+          ],
+          "gpu_match": {
+            "match_confidence": "medium",
+            "match_provenance": "Exact normalized GPU SKU and PassMark G3D Mark from the local Hardware catalog; explicit VRAM variants must be present in the model name.",
+            "reference_gpu_mark": 22664.0,
+            "reference_gpu_mark_range": [
+              20210.0,
+              25118.0
+            ],
+            "resolved_models": [
+              {
+                "catalog_entry_count": 1,
+                "g3d_mark": 20210.0,
+                "g3d_mark_range": [
+                  20210.0,
+                  20210.0
+                ],
+                "id": 1502,
+                "match_type": "exact_catalog_model",
+                "matched_token": "NVIDIA GeForce RTX 3060 Ti",
+                "name": "GeForce RTX 3060 Ti",
+                "vram_validation": "unknown_in_catalog"
+              },
+              {
+                "catalog_entry_count": 1,
+                "g3d_mark": 25118.0,
+                "g3d_mark_range": [
+                  25118.0,
+                  25118.0
+                ],
+                "id": 1472,
+                "match_type": "exact_catalog_model",
+                "matched_token": "AMD Radeon RX 6800 XT",
+                "name": "Radeon RX 6800 XT",
+                "vram_validation": "unknown_in_catalog"
+              }
+            ],
+            "status": "resolved_exact_models",
+            "unresolved_models": [],
+            "vram_validation": "partly_unknown"
+          },
+          "notes": "SSD required. Recommended specs allow for 1080p 60FPS high settings gameplay.",
+          "os": "Windows 11",
+          "rt": null,
+          "target_fps": 60,
+          "target_preset": "high",
+          "target_resolution": "1080p",
+          "text": "Recommended: Requires a 64-bit processor and operating system OS: Windows 11 Processor: Intel Core i7-12700K / AMD Ryzen 7 5800X Memory: 16 GB RAM Graphics: NVIDIA GeForce RTX 3060 Ti 8 GB / AMD Radeon RX 6800 XT 16 GB DirectX: Version 12 Storage: 55 GB available space Additional Notes: SSD required. Recommended specs allow for 1080p 60FPS high settings gameplay.",
+          "upscaling": null,
+          "vram_gb_values": [
+            8.0,
+            16.0
+          ]
+        },
+        "source_type": "developer_published_requirements"
+      },
+      "task_status": "completed",
+      "attempts": 1,
+      "last_error": null,
+      "poll_after_seconds": 5,
+      "refresh_pending": false
+    },
+    "cache_http_median_ms": 2.26,
+    "cache_http_p95_ms": 2.521,
+    "hundred_selections_http_200": 100,
+    "hundred_selections_median_ms": 37.869,
+    "tasks_count": 1,
+    "worker_attempts": 1,
+    "after": {
+      "result_type": "estimated_system_fps",
+      "result_label": "Расчётный FPS",
+      "average_fps": 51.7,
+      "gpu_oriented_fps": 55.0,
+      "best_available_fps": 51.7,
+      "best_available_fps_basis": "estimated_system_fps",
+      "gpu_reference_range": null,
+      "gpu_reference_range_type": null,
+      "gpu_reference_alternative": null,
+      "one_percent_low": null,
+      "limiting_component": null,
+      "confidence": "very_low",
+      "confidence_label": "Приблизительная оценка видеокарты по внешней модели PCGameBenchmarks. Это не измерение и не прогноз FPS всей системы: результат зависит от CPU и конкретной сцены. Источник охватывает только 1080p High без RT, апскейлинга и генерации кадров; 1% Low и CPU-ограничение не оценивались.",
+      "game": "Clair Obscur: Expedition 33",
+      "settings": {
+        "resolution": "1080p",
+        "preset": "high",
+        "rt": false,
+        "upscaling": "off",
+        "frame_generation": false
+      },
+      "source_settings": {
+        "resolution": "1080p",
+        "preset": "High",
+        "rt": false,
+        "upscaling": "off",
+        "frame_generation": false
+      },
+      "sources": [
+        {
+          "title": "PCGameBenchmarks — Clair Obscur: Expedition 33 · GeForce RTX 4060",
+          "publisher": "PCGameBenchmarks",
+          "url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+          "dataset_url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+          "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+          "fps": 52,
+          "gpu": "GeForce RTX 4060",
+          "settings": "1080p High · нативный рендер",
+          "data_type": "external_model_estimate",
+          "license": "CC BY 4.0",
+          "attribution": "PCGameBenchmarks — https://pcgamebenchmarks.com",
+          "observed_date": "2026-11-01"
+        },
+        {
+          "title": "PCGameBenchmarks — Clair Obscur: Expedition 33 · GeForce RTX 5060",
+          "publisher": "PCGameBenchmarks",
+          "url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+          "dataset_url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+          "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+          "fps": 58,
+          "gpu": "GeForce RTX 5060",
+          "settings": "1080p High · нативный рендер",
+          "data_type": "external_model_estimate",
+          "license": "CC BY 4.0",
+          "attribution": "PCGameBenchmarks — https://pcgamebenchmarks.com",
+          "observed_date": "2026-11-01"
+        }
+      ],
+      "note": "Приблизительная оценка видеокарты по внешней модели PCGameBenchmarks. Это не измерение и не прогноз FPS всей системы: результат зависит от CPU и конкретной сцены. Источник охватывает только 1080p High без RT, апскейлинга и генерации кадров; 1% Low и CPU-ограничение не оценивались.",
+      "missing_data": [
+        "CPU-specific game performance and bottleneck curve",
+        "game scene and version"
+      ],
+      "ram_used_by_model": false,
+      "technical_details": {
+        "model": "fps_engine_v4_universal",
+        "model_version": "4.0",
+        "game": "Clair Obscur: Expedition 33",
+        "game_in_catalog": true,
+        "average_fps": 51.7,
+        "gpu_oriented_fps": 55.0,
+        "one_percent_low": null,
+        "status": "universal_fallback_estimate",
+        "confidence_level": "external_model_estimate",
+        "confidence": "very_low",
+        "measurement_type": "external_model_estimate",
+        "method": "requirements_anchored_v1_experimental",
+        "source_evidence": [
+          {
+            "title": "PCGameBenchmarks — Clair Obscur: Expedition 33 · GeForce RTX 4060",
+            "publisher": "PCGameBenchmarks",
+            "url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+            "dataset_url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+            "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+            "fps": 52,
+            "gpu": "GeForce RTX 4060",
+            "settings": "1080p High · нативный рендер",
+            "data_type": "external_model_estimate",
+            "license": "CC BY 4.0",
+            "attribution": "PCGameBenchmarks — https://pcgamebenchmarks.com",
+            "observed_date": "2026-11-01"
+          },
+          {
+            "title": "PCGameBenchmarks — Clair Obscur: Expedition 33 · GeForce RTX 5060",
+            "publisher": "PCGameBenchmarks",
+            "url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+            "dataset_url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+            "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+            "fps": 58,
+            "gpu": "GeForce RTX 5060",
+            "settings": "1080p High · нативный рендер",
+            "data_type": "external_model_estimate",
+            "license": "CC BY 4.0",
+            "attribution": "PCGameBenchmarks — https://pcgamebenchmarks.com",
+            "observed_date": "2026-11-01"
+          }
+        ],
+        "workload_source": "PCGameBenchmarks external model estimates",
+        "limiting_component": null,
+        "cpu_limit_assessed": false,
+        "cpu_frame_time_ms": null,
+        "gpu_frame_time_ms": null,
+        "cpu_frame_time_evidence": {
+          "status": "not_calibrated",
+          "calibrated": false,
+          "frame_time_ms": null,
+          "comparison_groups": 0,
+          "games_with_comparable_cpu_measurements": 0,
+          "independent_series_in_comparable_groups": 0,
+          "reason": "No calibrated game-specific CPU frame-time curve is available. Matched CPU variation alone cannot separate CPU time from a GPU-limited result."
+        },
+        "ram_used_by_model": false,
+        "missing_data": [
+          "CPU-specific game performance and bottleneck curve",
+          "game scene and version"
+        ],
+        "external_model_available": true,
+        "cpu_adequacy": {
+          "available": true,
+          "status": "between_minimum_and_recommended_ranges",
+          "cpu_name": "AMD Ryzen 5 5600",
+          "current_cpu_mark": 21488,
+          "minimum": {
+            "index_vs_reference_percent": 161.9,
+            "range_vs_reference_percent": [
+              158.5,
+              165.5
+            ],
+            "reference_cpu_mark": 13268.5,
+            "reference_cpu_mark_range": [
+              12983.0,
+              13554.0
+            ],
+            "reference_models": [
+              {
+                "id": 308,
+                "name": "Intel Core i7-8700K @ 3.70GHz",
+                "cpu_mark": 13554.0,
+                "cpu_mark_range": [
+                  13554.0,
+                  13554.0
+                ],
+                "catalog_entry_count": 1,
+                "matched_token": "Intel Core i7-8700K",
+                "match_type": "exact_catalog_model"
+              },
+              {
+                "id": 322,
+                "name": "AMD Ryzen 5 1600X",
+                "cpu_mark": 12983.0,
+                "cpu_mark_range": [
+                  12983.0,
+                  12983.0
+                ],
+                "catalog_entry_count": 1,
+                "matched_token": "AMD Ryzen 5 1600X",
+                "match_type": "exact_catalog_model"
+              }
+            ],
+            "reference_model_count": 2,
+            "reference_models_truncated": false,
+            "reference_status": "resolved_exact_models",
+            "reference_confidence": "high"
+          },
+          "recommended": {
+            "index_vs_reference_percent": 69.4,
+            "range_vs_reference_percent": [
+              62.8,
+              77.7
+            ],
+            "reference_cpu_mark": 30943.0,
+            "reference_cpu_mark_range": [
+              27656.0,
+              34230.0
+            ],
+            "reference_models": [
+              {
+                "id": 84,
+                "name": "Intel Core i7-12700K",
+                "cpu_mark": 34230.0,
+                "cpu_mark_range": [
+                  34230.0,
+                  34230.0
+                ],
+                "catalog_entry_count": 1,
+                "matched_token": "Intel Core i7-12700K",
+                "match_type": "exact_catalog_model"
+              },
+              {
+                "id": 130,
+                "name": "AMD Ryzen 7 5800X",
+                "cpu_mark": 27656.0,
+                "cpu_mark_range": [
+                  27656.0,
+                  27656.0
+                ],
+                "catalog_entry_count": 1,
+                "matched_token": "AMD Ryzen 7 5800X",
+                "match_type": "exact_catalog_model"
+              }
+            ],
+            "reference_model_count": 2,
+            "reference_models_truncated": false,
+            "reference_status": "resolved_exact_models",
+            "reference_confidence": "high"
+          },
+          "minimum_requirement": "Intel Core i7-8700K / AMD Ryzen 5 1600X",
+          "recommended_requirement": "Intel Core i7-12700K / AMD Ryzen 7 5800X",
+          "requirement_source": {
+            "name": "PCGameBenchmarks system requirements",
+            "url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+            "dataset_url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+            "snapshot_date": "2026-11-01",
+            "license": "CC BY 4.0"
+          },
+          "comparison_scale": "PassMark CPU Mark total score, relative to exact/family CPU requirement references",
+          "confidence": "low",
+          "unresolved_reference_models": [],
+          "note": "Ориентир по системным требованиям. CPU Mark — суммарный балл процессора, не Single Thread и не игровой FPS; он не используется для расчёта FPS или CPU bottleneck."
+        },
+        "note": "Приблизительная оценка видеокарты по внешней модели PCGameBenchmarks. Это не измерение и не прогноз FPS всей системы: результат зависит от CPU и конкретной сцены. Источник охватывает только 1080p High без RT, апскейлинга и генерации кадров; 1% Low и CPU-ограничение не оценивались.",
+        "gpu_estimate_details": {
+          "available": true,
+          "data_type": "external_model_estimate",
+          "source_name": "PCGameBenchmarks",
+          "source_url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+          "dataset_url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+          "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+          "snapshot_date": "2026-11-01",
+          "license": "CC BY 4.0",
+          "attribution": "PCGameBenchmarks — https://pcgamebenchmarks.com",
+          "source_game_name": "Clair Obscur: Expedition 33",
+          "source_game_id": "1903340",
+          "source_settings": {
+            "resolution": "1080p",
+            "preset": "High",
+            "rt": false,
+            "upscaling": "off",
+            "frame_generation": false
+          },
+          "fps": 55,
+          "unrounded_fps": 55.427,
+          "device_class": "desktop",
+          "method": "piecewise_log_score_interpolation",
+          "confidence": "low",
+          "target_gpu": "GeForce RTX 3060 Ti",
+          "target_g3d_score": 20283.0,
+          "gpu_match": {
+            "status": "exact_source_model_and_device_type",
+            "source_gpu_name": "GeForce RTX 3060 Ti",
+            "source_device_type": "Desktop",
+            "source_url": "https://pcgamebenchmarks.com/gpu/geforce-rtx-3060-ti"
+          },
+          "gpu_score_provenance": {
+            "source": "PCGameBenchmarks gpus.csv",
+            "metric": "PassMark G3D Mark",
+            "crosswalk": "exact_source_model_and_device_type",
+            "source_gpu_name": "GeForce RTX 3060 Ti",
+            "source_device_type": "Desktop",
+            "source_url": "https://pcgamebenchmarks.com/gpu/geforce-rtx-3060-ti",
+            "g3d_mark": 20283
+          },
+          "reference_points": [
+            {
+              "gpu": "GeForce RTX 4060",
+              "g3d_mark": 19530,
+              "fps": 52
+            },
+            {
+              "gpu": "GeForce RTX 5060",
+              "g3d_mark": 20836,
+              "fps": 58
+            }
+          ],
+          "engine_fps_cap": null,
+          "min_curve_log_elasticity": 0.785812,
+          "reason": null
+        },
+        "settings": {
+          "resolution": "1080p",
+          "preset": "high",
+          "rt": false,
+          "upscaling": "off",
+          "frame_generation": false
+        },
+        "source_settings": {
+          "resolution": "1080p",
+          "preset": "High",
+          "rt": false,
+          "upscaling": "off",
+          "frame_generation": false
+        },
+        "resolution_scaling": {
+          "method": "inverse_pixel_workload",
+          "source_resolution": "1080p",
+          "target_resolution": "1080p",
+          "validated": false
+        },
+        "requirements_anchored_estimate": {
+          "available": true,
+          "data_type": "experimental_requirements_anchored_estimate",
+          "model_version": "requirements_anchored_v1_experimental",
+          "scenario_fps": 51.7,
+          "scenario_fps_sensitivity_range": [
+            47.1,
+            55.1
+          ],
+          "range_type": "parameter_and_requirement_sensitivity_not_statistical_confidence_interval",
+          "cpu_gpu_reference_fps": 55.4,
+          "r_cpu": 0.6944,
+          "r_gpu": 0.8917,
+          "r_balance": 0.7568,
+          "cpu_factor": 0.9327,
+          "alpha": 0.25,
+          "eta_requested": 0.75,
+          "eta_effective": 0.75,
+          "eta_note": "Bounded by the lowest log-slope in the source GPU curve to preserve non-decreasing GPU scaling.",
+          "min_factor": 0.4,
+          "gpu_curve_min_log_elasticity": 0.785812,
+          "reference_cpu_mark": 30943.0,
+          "reference_cpu_mark_range": [
+            27656.0,
+            34230.0
+          ],
+          "reference_cpu_models": [
+            "Intel Core i7-12700K",
+            "AMD Ryzen 7 5800X"
+          ],
+          "reference_gpu_mark": 22664.0,
+          "reference_gpu_mark_range": [
+            20210.0,
+            25118.0
+          ],
+          "reference_gpu_models": [
+            "GeForce RTX 3060 Ti",
+            "Radeon RX 6800 XT"
+          ],
+          "selected_cpu_mark": 21488.0,
+          "selected_gpu_g3d_mark": 20210.0,
+          "selected_cpu": "AMD Ryzen 5 5600",
+          "selected_gpu": "GeForce RTX 3060 Ti",
+          "requirements": {
+            "cpu": "Intel Core i7-12700K / AMD Ryzen 7 5800X",
+            "gpu": "GeForce RTX 3060 Ti or Radeon RX 6800 XT",
+            "level": "recommended",
+            "source_url": "https://store.steampowered.com/app/1903340/",
+            "license": null,
+            "snapshot_date": "2026-11-16T07:44:57.987632Z"
+          },
+          "gpu_baseline": {
+            "source_name": "PCGameBenchmarks",
+            "source_url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+            "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+            "license": "CC BY 4.0",
+            "settings": {
+              "resolution": "1080p",
+              "preset": "High",
+              "rt": false,
+              "upscaling": "off",
+              "frame_generation": false
+            },
+            "fps": 55.4
+          },
+          "confidence": "very_low",
+          "one_percent_low": null,
+          "limiting_component": null,
+          "ram_used_by_model": false,
+          "note": "Экспериментальный сценарий: GPU-ориентир источника PCGameBenchmarks скорректирован отношением PassMark CPU/GPU к точным recommended требованиям. Системные требования не задают целевой FPS; PassMark CPU Mark не отражает игровую нагрузку и Single Thread. Сценарий не является измерением или калиброванным прогнозом всей системы.",
+          "developer_target": {
+            "fps": 60,
+            "frame_generation": null,
+            "preset": "high",
+            "resolution": "1080p",
+            "rt": null,
+            "source_type": "developer_stated_target_not_measurement",
+            "upscaling": null
+          },
+          "developer_target_used_as_measurement": false
+        }
+      },
+      "requirements_anchored_estimate": {
+        "available": true,
+        "data_type": "experimental_requirements_anchored_estimate",
+        "model_version": "requirements_anchored_v1_experimental",
+        "scenario_fps": 51.7,
+        "scenario_fps_sensitivity_range": [
+          47.1,
+          55.1
+        ],
+        "range_type": "parameter_and_requirement_sensitivity_not_statistical_confidence_interval",
+        "cpu_gpu_reference_fps": 55.4,
+        "r_cpu": 0.6944,
+        "r_gpu": 0.8917,
+        "r_balance": 0.7568,
+        "cpu_factor": 0.9327,
+        "alpha": 0.25,
+        "eta_requested": 0.75,
+        "eta_effective": 0.75,
+        "eta_note": "Bounded by the lowest log-slope in the source GPU curve to preserve non-decreasing GPU scaling.",
+        "min_factor": 0.4,
+        "gpu_curve_min_log_elasticity": 0.785812,
+        "reference_cpu_mark": 30943.0,
+        "reference_cpu_mark_range": [
+          27656.0,
+          34230.0
+        ],
+        "reference_cpu_models": [
+          "Intel Core i7-12700K",
+          "AMD Ryzen 7 5800X"
+        ],
+        "reference_gpu_mark": 22664.0,
+        "reference_gpu_mark_range": [
+          20210.0,
+          25118.0
+        ],
+        "reference_gpu_models": [
+          "GeForce RTX 3060 Ti",
+          "Radeon RX 6800 XT"
+        ],
+        "selected_cpu_mark": 21488.0,
+        "selected_gpu_g3d_mark": 20210.0,
+        "selected_cpu": "AMD Ryzen 5 5600",
+        "selected_gpu": "GeForce RTX 3060 Ti",
+        "requirements": {
+          "cpu": "Intel Core i7-12700K / AMD Ryzen 7 5800X",
+          "gpu": "GeForce RTX 3060 Ti or Radeon RX 6800 XT",
+          "level": "recommended",
+          "source_url": "https://store.steampowered.com/app/1903340/",
+          "license": null,
+          "snapshot_date": "2026-11-16T07:44:57.987632Z"
+        },
+        "gpu_baseline": {
+          "source_name": "PCGameBenchmarks",
+          "source_url": "https://pcgamebenchmarks.com/game/clair-obscur-expedition-33-280622",
+          "dataset_revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+          "license": "CC BY 4.0",
+          "settings": {
+            "resolution": "1080p",
+            "preset": "High",
+            "rt": false,
+            "upscaling": "off",
+            "frame_generation": false
+          },
+          "fps": 55.4
+        },
+        "confidence": "very_low",
+        "one_percent_low": null,
+        "limiting_component": null,
+        "ram_used_by_model": false,
+        "note": "Экспериментальный сценарий: GPU-ориентир источника PCGameBenchmarks скорректирован отношением PassMark CPU/GPU к точным recommended требованиям. Системные требования не задают целевой FPS; PassMark CPU Mark не отражает игровую нагрузку и Single Thread. Сценарий не является измерением или калиброванным прогнозом всей системы.",
+        "developer_target": {
+          "fps": 60,
+          "frame_generation": null,
+          "preset": "high",
+          "resolution": "1080p",
+          "rt": null,
+          "source_type": "developer_stated_target_not_measurement",
+          "upscaling": null
+        },
+        "developer_target_used_as_measurement": false
+      },
+      "requirements_enrichment": {
+        "game_id": "pcgb:clair-obscur-expedition-33-280622",
+        "status": "available",
+        "version": "9ad51ef09e7386df623c5c4a45feb01c67da305758501061aa3a73760c848e1c",
+        "refresh_pending": false,
+        "last_checked_at": "2026-11-16T07:44:57.987632Z",
+        "source_url": "https://store.steampowered.com/app/1903340/",
+        "source_type": "steam_developer_requirements"
+      },
+      "relative_hardware": {
+        "cpu": {
+          "score": 21488,
+          "percentile": 86.5,
+          "peer_count": 1434,
+          "scale": "PassMark score percentile within same hardware type",
+          "note": "Относительный аппаратный индекс; не является игровым FPS и не сопоставляется между CPU и GPU."
+        },
+        "gpu": {
+          "score": 20210,
+          "percentile": 91.3,
+          "peer_count": 785,
+          "scale": "PassMark G3D Mark percentile within GPU",
+          "note": "Относительный аппаратный индекс; не является игровым FPS и не сопоставляется между CPU и GPU."
+        },
+        "balanced_percentile_proxy": 88.9,
+        "note": "CPU и GPU ранжируются отдельно; общий proxy предназначен только для сравнения комплектующих, не для FPS."
+      }
+    },
+    "worker_working_set_mib": 112.43,
+    "worker_peak_mib": 117.53,
+    "backend_working_set_mib": 184.58,
+    "backend_peak_mib": 230.81,
+    "enqueue_http_ms": 13.895,
+    "worker_disabled_status": "queued",
+    "sqlite_status_median_ms": 0.3731,
+    "sqlite_status_p95_ms": 0.4252
+  }
+}

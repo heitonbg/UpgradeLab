@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from app.core.constants import GAME_PROFILES
 from app.schemas.calculate import AIOption, Bottleneck, CalcMode, GameName
-from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, fps_outlook, cs2_cpu_basis, ram_performance_factor
+from app.services.performance import cpu_capacity, gpu_capacity, estimate_fps, fps_outlook, cs2_cpu_basis
 
 
 def meaningful_upgrade(current_fps, after_fps):
@@ -54,19 +54,16 @@ def calculate(
 ) -> CalculateResult:
     profile = GAME_PROFILES[game][mode]
 
-    ram_boost = ram_performance_factor(game, cpu_name, ram_type, ram_channels)
+    # RAM affects compatibility and cost, not the FPS model.
+    ram_boost = 1.0
     
     # Memory affects CPU throughput; it must not increase a GPU-limited result.
     cpu_cap = cpu_capacity(cpu_raw, cpu_name, game, mode, ram_boost)
     gpu_cap = gpu_capacity(gpu_raw, gpu_name, game, mode)
     bottleneck = Bottleneck.CPU if cpu_cap < gpu_cap else Bottleneck.GPU
     current_fps = estimate_fps(cpu_raw, gpu_raw, gpu_name, game, mode, ram_boost, cpu_name)
-    cpu_gain = round((min(cpu_cap * 1.25, gpu_cap) - min(cpu_cap, gpu_cap)) * profile['overhead'])
-    gpu_gain = round((min(cpu_cap, gpu_cap * 1.25) - min(cpu_cap, gpu_cap)) * profile['overhead'])
     close = max(cpu_cap, gpu_cap) / max(1, min(cpu_cap, gpu_cap)) < 1.15
-    limiting_explanation = (('Возможности CPU и GPU близки: ограничение может меняться по сценам. ' if close else '') +
-        f'По модели увеличение возможности CPU на 25% даст около +{cpu_gain} FPS, GPU — около +{gpu_gain} FPS. '
-        'Это сравнение сценариев, а не измерение загрузки или оценка качества сборки.')
+    limiting_explanation = ('Возможности CPU и GPU близки: ограничение может меняться по сценам. ' if close else '')
 
     # 2.6. Расчёт общего бюджета (продажа + бюджет)
     effective_budget = budget or 0
@@ -161,7 +158,7 @@ def calculate(
                 )
 
     # Evaluate actual replacement outcomes, then apply the cash + resale budget.
-    has_budget_limit = budget is not None or sell_mode == "budget_plus_sell"
+    has_budget_limit = budget is not None
     search_budget = total_budget
 
     def fps_for(item):
@@ -169,22 +166,48 @@ def calculate(
             return estimate_fps(item['raw_score'], gpu_raw, gpu_name, game, mode, ram_boost, item.get('name', ''))
         return estimate_fps(cpu_raw, item['raw_score'], item['name'], game, mode, ram_boost, cpu_name)
 
+    def fps_limiter_for(item):
+        if bottleneck is Bottleneck.CPU:
+            cpu_cap = cpu_capacity(item['raw_score'], item.get('name', ''), game, mode, ram_boost)
+            gpu_cap = gpu_capacity(gpu_raw, gpu_name, game, mode)
+        else:
+            cpu_cap = cpu_capacity(cpu_raw, cpu_name, game, mode, ram_boost)
+            gpu_cap = gpu_capacity(item['raw_score'], item['name'], game, mode)
+        return 'CPU' if cpu_cap <= gpu_cap else 'GPU'
+
     candidates = [item for item in (compatible_cpus if bottleneck is Bottleneck.CPU else better_gpus)
                   if meaningful_upgrade(current_fps, fps_for(item))]
+    if bottleneck is Bottleneck.CPU:
+        from app.services.offers import signature
+        current_signature = signature(cpu_name, 'CPU')
+        unique_candidates = {}
+        for item in candidates:
+            model_signature = signature(item.get('name', ''), 'CPU')
+            if current_signature and model_signature == current_signature:
+                continue
+            identity = model_signature or f"{item.get('name', '').casefold()}:{item.get('id')}"
+            previous = unique_candidates.get(identity)
+            if previous is None or (item.get('raw_score', 0), -(item.get('id') or 0)) > (
+                    previous.get('raw_score', 0), -(previous.get('id') or 0)):
+                unique_candidates[identity] = item
+        candidates = list(unique_candidates.values())
     if game == GameName.CS2 and bottleneck is Bottleneck.CPU and cs2_cpu_basis(cpu_name):
         based = [item for item in candidates if cs2_cpu_basis(item.get('name', ''))]
         candidates = based or candidates
 
-    affordable = [item for item in candidates if item.get('avg_price') and
+    def has_purchase_price(item):
+        return bool(item.get('avg_price') and not item.get('price_is_reference'))
+
+    affordable = [item for item in candidates if has_purchase_price(item) and
                   (not has_budget_limit or item['avg_price'] <= search_budget)]
-    unknown = [item for item in candidates if not item.get('avg_price') and
+    unknown = [item for item in candidates if not has_purchase_price(item) and
                (not has_budget_limit or search_budget > 0)]
-    stretch = [item for item in candidates if item.get('avg_price') and
+    stretch = [item for item in candidates if has_purchase_price(item) and
                has_budget_limit and item['avg_price'] > search_budget]
     eligible = [*affordable, *unknown]
 
     def choose(items):
-        reached = [item for item in items if fps_for(item) >= target_fps and item.get('avg_price')]
+        reached = [item for item in items if fps_for(item) >= target_fps and has_purchase_price(item)]
         if reached:
             return min(reached, key=lambda item: (item['avg_price'], -fps_for(item), item['raw_score']))
         return max(items, key=lambda item: (fps_for(item), -(item.get('avg_price') or float('inf')),
@@ -195,10 +218,12 @@ def calculate(
     recommended = choose(affordable) if affordable else choose(unknown) if unknown and not has_budget_limit else None
     chosen = recommended
     if selected_upgrade_id:
-        chosen = next((item for item in eligible if item.get('id') == selected_upgrade_id), None)
+        selectable = candidates if sell_mode != 'budget_plus_sell' else eligible
+        chosen = next((item for item in selectable if item.get('id') == selected_upgrade_id
+                       and (sell_mode != 'budget_plus_sell' or has_purchase_price(item))), None)
         if chosen is None:
             from fastapi import HTTPException
-            raise HTTPException(400, 'Выбранный вариант апгрейда больше не доступен в текущем бюджете. Повторите расчёт.')
+            raise HTTPException(400, 'Выбранный вариант больше не доступен для этого расчёта. Повторите расчёт.')
 
     already_reached = current_fps >= target_fps
     if already_reached and not selected_upgrade_id:
@@ -210,6 +235,8 @@ def calculate(
         rec += f" {'Выбранный' if selected_upgrade_id else 'Рекомендуемый'} апгрейд: {chosen['name']}{label}."
         if has_budget_limit and not amount:
             rec += ' Цена неизвестна: соответствие бюджету не подтверждено.'
+        if chosen.get('price_is_reference'):
+            rec += ' Указан справочный ориентир PassMark; наличие и текущая цена не подтверждены.'
         after = fps_for(chosen)
         rec += (f' По центральному прогнозу {after} FPS цель {target_fps} FPS достигнута.'
                 if after >= target_fps else
@@ -222,7 +249,10 @@ def calculate(
         else:
             rec += ' Существенная замена с известной ценой в бюджете не найдена.'
             if unknown:
-                rec += ' Для вариантов без цены соответствие бюджету не подтверждено.'
+                if any(item.get('price_is_reference') for item in unknown):
+                    rec += ' Есть сохранённые ориентиры PassMark, но текущие предложения и соответствие бюджету не подтверждены.'
+                else:
+                    rec += ' Для вариантов без цены соответствие бюджету не подтверждено.'
 
     if ram_type and ram_channels == 1:
         rec += ' Проверьте возможность двухканального режима RAM на вашей плате.'
@@ -247,26 +277,44 @@ def calculate(
         seen.add(identity)
         fps = fps_for(item)
         amount = item.get('avg_price')
-        shortfall = max(0, amount - search_budget) if amount and has_budget_limit else 0
+        reference_only = bool(item.get('price_is_reference'))
+        shortfall = max(0, amount - search_budget) if amount and has_budget_limit and not reference_only else None if reference_only else 0
         card_gpu = item['name'] if bottleneck is Bottleneck.GPU else gpu_name
         alternatives.append({
             'id': item.get('id'), 'name': item['name'], 'component': bottleneck.value,
             'price': amount, 'fps': fps, 'fps_outlook': fps_outlook(fps, card_gpu, game, mode),
             'gain': fps-current_fps, 'target_reached': fps >= target_fps,
+            'fps_limited_by': fps_limiter_for(item),
+            'price_is_reference': reference_only,
+            **({'cpu_model_fps': round(cpu_capacity(item['raw_score'], item.get('name', ''), game, mode, ram_boost)
+                                  * GAME_PROFILES[game][mode]['overhead'])}
+               if bottleneck is Bottleneck.CPU else {}),
             'resale_value': current_component_price,
             'net_cost': max(0, amount-current_component_price) if amount else None,
             'budget_shortfall': shortfall,
-            'selection_allowed': not bool(shortfall),
+            'selection_allowed': not reference_only and not bool(shortfall),
         })
         if len(alternatives) == 3:
             break
 
     upgraded_fps = fps_for(chosen) if chosen else current_fps
+    # Describe the chosen real candidate; a hypothetical +25% score is not an upgrade.
+    if chosen:
+        predicted_after = fps_for(chosen)
+        gain = predicted_after - current_fps
+        percent = f" ({gain / current_fps * 100:+.1f}%)" if current_fps > 0 else ''
+        component = 'CPU' if bottleneck is Bottleneck.CPU else 'GPU'
+        limiting_explanation += (f"Замена {component} на {chosen['name']}: "
+            f"{current_fps} → {predicted_after} FPS, изменение {gain:+} FPS{percent}. "
+            'Остальной состав сохраняется в рамках расчёта. Это прогноз модели, не игровой замер.')
+    else:
+        limiting_explanation += 'Конкретная замена не выбрана; прирост FPS для апгрейда не подтверждён.'
+
     return CalculateResult(
         bottleneck=bottleneck, current_fps=current_fps, upgraded_fps=upgraded_fps,
-        recommendation=rec, avg_price=(chosen.get('avg_price') or 0) if chosen else 0,
-        within_budget=bool(chosen and chosen.get('avg_price') and has_budget_limit),
-        upgrade_component=(chosen['name'] + (f" ({chosen['avg_price']:,} ₽)" if chosen.get('avg_price')
+        recommendation=rec, avg_price=(chosen.get('avg_price') or 0) if chosen and has_purchase_price(chosen) else 0,
+        within_budget=bool(chosen and has_purchase_price(chosen) and has_budget_limit),
+        upgrade_component=(chosen['name'] + (f" ({chosen['avg_price']:,} ₽)" if has_purchase_price(chosen)
                            else ' (цена неизвестна)')) if chosen else None,
         ai_warning=ai_warning, current_component_price=current_component_price,
         total_budget=total_budget, mode=sell_mode, is_maxed_out=is_maxed_out,

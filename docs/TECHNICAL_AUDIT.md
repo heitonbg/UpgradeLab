@@ -378,3 +378,21 @@ The ordinary local runtime SQLite did not contain CatalogProduct rows and its le
 ## Каталог, TTL и реальный E2E — 2026-11-11
 
 Эта запись уточняет прежние ограничения закрытого каталога: владелец разрешил публичный некоммерческий показ данного прайса, automatic_download/commercial остаются отдельными правами. Regard catalog_import использует отдельное CATALOG_PRELIMINARY_HOURS=72: fresh до 24 часов, stale до окна — только предварительная оценка, затем historical. imported_at не заменяет дату цены; live TTL/подтверждение не продлены. Поиск, ручной выбор, автоматический подбор, upgrade и saved review используют этот контракт. Публичная витрина не отправляет пустой category; frontend разделяет in-flight hardware запрос. Права и database-bound analysis проверяются один раз на выборку без глобального кеша. Подробные измерения, семь исправленных тестов, исходные даты, 12 реальных расчётов и инструкция Amvera: [FULL_PRODUCT_READINESS.md](FULL_PRODUCT_READINESS.md).
+
+## FPS output fallback coverage — 2026-11-15
+
+The v4 API now supplies a numeric `best_available_fps` when a supported selected GPU has a usable score/source match. For supported titles it falls through from full-system evidence to GPU-only source references and a broad cross-game GPU catalog reference. This addresses blank FPS output; it does not imply full-system prediction accuracy. `average_fps` and target-attainment logic continue to accept only system evidence. The API preserves requested and source settings separately.
+
+For GPU scores outside the bounded PCGameBenchmarks curve, the resolver can return the nearest GPU anchor for that same title, tagged as an anchor rather than transferred FPS. The broad source-derived median/percentiles are across multiple games. A missing physical-GPU score/crosswalk can still prevent a number. The experimental requirements scenario now accepts FPSHQ baselines and exact minimum requirements when recommended requirements cannot be resolved; its output remains marked very low confidence and is not a measured/validated system FPS.
+
+The local FPSHQ file has 2,400 rows from 50 games and 16 GPU models (1,666 model, 728 aggregate, 6 measured labels). The 6 measured-labeled rows are not CPU/GPU pair measurements. On the RTX 5090 + Cyberpunk 2077 1440p High example, API response includes a legacy system estimate and separate FPSHQ GPU reference; API regression protects this separation. No new network dataset or writable DB import was performed in this iteration.
+
+
+## Steam requirements — 16.11.2026
+
+Реализованы SQLite-кеш, durable очередь, отдельный HTTPX worker и интеграция с FPS Engine без LLM/Chromium. На Amvera включается STEAM_WORKER_ENABLED=true (автоматически при AMVERA=1). Проверки и ограничения: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md). Остаётся проверка Linux lifecycle и точности прогнозов на независимых измерениях; deployment не выполнялся.
+
+
+### Steam lifecycle hardening, 16.11.2026
+
+Один Uvicorn --workers 1, supervised дочерний worker, общий явный DATABASE_URL /data, restart check 15 s, idle queue 10 s. Новые SQLite используют DELETE/FULL вместо принудительного WAL. Реальные browser E2E и Windows crash/restart пройдены. Linux/container и фактический storage Amvera не проверены из-за отсутствия Docker/WSL; подготовлен scripts.steam_linux_smoke. Подробности, RAM и команды: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md), steam_amvera_validation.json.

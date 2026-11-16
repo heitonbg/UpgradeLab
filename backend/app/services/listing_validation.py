@@ -3,10 +3,10 @@ from fastapi import HTTPException
 from app.db.models import Hardware
 from app.services.offers import signature, consistent_hardware_title, component_listing
 
-def validate_model(db, payload):
+def validate_model(db, payload, *, hardware=None):
     if not payload.hardware_id:
         return
-    hardware=db.get(Hardware,payload.hardware_id)
+    hardware=hardware if hardware is not None else db.get(Hardware,payload.hardware_id)
     category={'RAM':'memory'}.get(hardware.type,hardware.type) if hardware else None
     if hardware is None or category!=payload.category:
         raise HTTPException(422,'Модель не соответствует категории объявления')

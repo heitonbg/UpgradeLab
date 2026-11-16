@@ -62,7 +62,8 @@ def detect_gpu(payload: GpuDetectRequest, db: DBSession):
 
 @router.post("/detect-cpu", response_model=CpuDetectResponse)
 def detect_cpu(payload: CpuDetectRequest, db: DBSession):
-    cpu = match_model(list(db.scalars(select(Hardware).where(Hardware.type == "CPU"))), payload.cpu_name or "")
+    cpu = match_model(list(db.scalars(select(Hardware).where(
+        Hardware.type == "CPU", ~Hardware.name.ilike('Apple M%')))), payload.cpu_name or "")
     return CpuDetectResponse(cpu_id=cpu.id if cpu else None, cpu_name=cpu.name if cpu else None,
                              device_memory_gb=payload.device_memory,
                              message=None if cpu else "Загрузите модель CPU из Windows-отчёта или выберите её через поиск.")

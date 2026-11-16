@@ -7,10 +7,10 @@ from app.db.models import Listing,ListingOwner,User,Hardware,StoreOffer,ListingD
 from app.core.price_time import iso_utc,as_naive_utc
 from app.services.listing_validation import validate_model,seller_availability
 
-def valid_listing(db,listing):
+def valid_listing(db,listing,*,owner=None,user_exists=None):
     if not listing or listing.listing_type!='sale' or listing.condition=='Неисправное' or seller_availability(listing)!='seller_declared':return None
-    owner=db.get(ListingOwner,listing.id)
-    if not owner or not db.get(User,owner.user_id):return None
+    owner=owner if owner is not None else db.get(ListingOwner,listing.id)
+    if not owner or not (user_exists(owner.user_id) if user_exists else db.get(User,owner.user_id)):return None
     if listing.category not in ('CPU','GPU','memory','motherboard','storage','psu','case','cooler'):return None
     from app.services.store_providers import money
     try:price=money(listing.price)
@@ -18,20 +18,23 @@ def valid_listing(db,listing):
     if not 0<price<=100000000:return None
     return owner,price
 
-def live_internal(db,row):
+def live_internal(db,row,*,listings=None,owners=None,deliveries=None,users=None,assessments=None,reference_rows=None):
     if row.source!='upgradelab':return True
     try:
-        ident=json.loads(row.attributes)['listing_id'];listing=db.get(Listing,ident)
-        info=valid_listing(db,listing)
+        ident=json.loads(row.attributes)['listing_id'];listing=listings.get(ident) if listings is not None else db.get(Listing,ident)
+        owner=owners.get(ident) if owners is not None else None
+        user_exists=(lambda user_id:user_id in users) if users is not None else None
+        info=valid_listing(db,listing,owner=owner,user_exists=user_exists)
         if not info:return False
         if row.condition!=('new' if listing.condition=='Новое' else 'used'):return False
         from app.services.listing_specs import assess_listing
-        assessment=assess_listing(db,listing)
+        assessment=assessments.get(ident) if assessments is not None else None
+        if assessment is None:assessment=assess_listing(db,listing,preloaded_refs=reference_rows)
         stored=json.loads(row.attributes)
         if stored.get('listing_fingerprint')!=assessment['fingerprint']:return False
         if stored.get('optimizer_eligible') and not assessment['assessment']['optimizer_eligible']:return False
         if json.loads(row.attributes).get('seller_specs',{})!=listing.characteristics:return False
-        delivery=db.get(ListingDelivery,ident)
+        delivery=deliveries.get(ident) if deliveries is not None else db.get(ListingDelivery,ident)
         declared=json.loads(delivery.evidence) if delivery else None
         if json.loads(row.attributes).get('geography',{}).get('delivery')!=declared:return False
         return bool(info and listing.title==row.name and info[1]==json.loads(row.attributes).get('_costed_goods_price',row.price_rub) and listing.hardware_id==row.hardware_id

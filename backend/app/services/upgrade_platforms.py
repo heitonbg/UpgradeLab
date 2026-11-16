@@ -5,7 +5,7 @@ from app.core.price_time import is_fresh
 import json
 import re
 
-from app.services.automatic_builds import board_matches, memory_matches, memory_configuration, cpu_board_matches, part
+from app.services.automatic_builds import board_matches, memory_matches, memory_configuration, memory_candidates, cpu_board_matches, part
 from app.services.assembly_policy import cooling_requirement
 from app.services.component_quality import quality_check
 from app.services.calculator import meaningful_upgrade
@@ -14,14 +14,14 @@ from app.services.prices import public_price
 from app.services.upgrade_prices import upgrade_market_rows
 
 
-def platform_choices(payload, db, hardware, prices, current_cpu, gpu, current_fps, total_budget):
+def platform_choices(payload, db, hardware, prices, current_cpu, gpu, current_fps, total_budget, predictor=None):
     selected = payload.selected_platform.model_dump() if payload.selected_platform else None
     rows = upgrade_market_rows(db, payload.price_sources)
     capacity = payload.ram_manual.capacity_gb if payload.ram_manual else None
     if payload.ram_id:
         ram = next((item for item in hardware if item.id == payload.ram_id), None)
         capacity = ram.ram_capacity_gb if ram else None
-    capacity = max(8, capacity or 8)
+    capacity = max(16, capacity or 16)
     profiles = {'AM4': 'DDR4', 'LGA1200': 'DDR4', 'LGA1700': 'DDR4', 'AM5': 'DDR5'}
     results = []
     for cpu in hardware:
@@ -38,8 +38,10 @@ def platform_choices(payload, db, hardware, prices, current_cpu, gpu, current_fp
         profile = SimpleNamespace(socket=cpu.socket, ram_type=profiles[cpu.socket], ram_capacity_gb=capacity)
         boards = [row for row in rows if row.category == 'motherboard' and board_matches(row, profile)
                   and cpu_board_matches(cpu, row) and (not selected or row.id == selected['motherboard_offer_id'])]
-        memories = [row for row in rows if row.category == 'memory' and memory_matches(row, profile)
-                    and (not selected or row.id == selected['memory_offer_id'])]
+        memories = [candidate for candidate in memory_candidates(rows)
+                    if candidate.category == 'memory' and memory_matches(candidate, profile)
+                    and (not selected or candidate.id == selected['memory_offer_id']
+                         or getattr(candidate, 'bundle_offer_ids', [candidate.id])[0] == selected['memory_offer_id'])]
         coolers = []
         for row in rows:
             if row.category != 'cooler' or selected and row.id != selected['cooler_offer_id']:
@@ -60,9 +62,11 @@ def platform_choices(payload, db, hardware, prices, current_cpu, gpu, current_fp
         board, memory, cooler = (min(pool, key=lambda row: (row.price_rub, row.id))
                                  for pool in (boards, memories, coolers))
         memory_info = memory_configuration(memory)
-        ram_factor = (1 if memory_info['modules'] == 2 else .93) if payload.game.value == 'CS2' else (
-            1.07 if memory_info['modules'] == 2 else 1)
-        fps = estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, payload.game, payload.mode, ram_factor, cpu.name)
+        # RAM selection affects compatibility and price, never the FPS estimate.
+        prediction = predictor(cpu) if predictor else None
+        fps = prediction.get('average_fps') if predictor else estimate_fps(cpu.raw_score, gpu.raw_score, gpu.name, payload.game, payload.mode, 1.0, cpu.name)
+        if fps is None:
+            continue
         if not meaningful_upgrade(current_fps, fps):
             continue
         cpu_part = {'type': 'CPU', 'name': cpu.name, 'price': quote.price_rub,
@@ -72,14 +76,16 @@ def platform_choices(payload, db, hardware, prices, current_cpu, gpu, current_fp
             item['price_verified_at'] = None
             item['price_status'] = 'unconfirmed'
         price = sum(item['price'] for item in parts)
+        memory_offer_id = getattr(memory, 'bundle_offer_ids', [memory.id])[0]
         selection = {'cpu_id': cpu.id, 'motherboard_offer_id': board.id,
-                     'memory_offer_id': memory.id, 'cooler_offer_id': cooler.id}
+                     'memory_offer_id': memory_offer_id, 'cooler_offer_id': cooler.id}
         key = 'platform:' + ':'.join(str(value) for value in selection.values())
-        shortfall = max(0, price-total_budget) if payload.budget is not None or payload.sell_mode == 'budget_plus_sell' else 0
+        shortfall = max(0, price-total_budget) if payload.budget is not None else 0
         results.append({'key': key, 'id': cpu.id, 'kind': 'platform', 'component': 'CPU',
                         'name': cpu.name, 'price': price, 'fps': fps, 'gain': fps-current_fps,
                         'target_reached': fps >= payload.target_fps,
-                        'fps_outlook': fps_outlook(fps, gpu.name, payload.game, payload.mode),
+                        'prediction': prediction,
+                        'fps_outlook': None if predictor else fps_outlook(fps, gpu.name, payload.game, payload.mode),
                         'parts': parts, 'platform_selection': selection,
                         'socket': cpu.socket, 'ram_type': profile.ram_type,
                         'ram_capacity_gb': memory_info['capacity_gb'],

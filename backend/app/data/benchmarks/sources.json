@@ -32,10 +32,28 @@
     {
       "name": "FPSHQ",
       "url": "https://fpshq.com/data/",
-      "license": "CC-BY-4.0 stated by data documentation",
-      "robots": "Disallow /api/; exceptions are limited to named landing/og-test paths, not general REST",
-      "decision": "not_imported",
-      "notes": "Data page web access 403. No alternate hostname/proxy or forbidden API attempted. Median export combines review-derived rescaling and observations; not equivalent to raw measured pairs."
+      "license": "CC-BY-4.0, verified in dataset metadata",
+      "robots": "Public static files under /data/ used; restricted /api/ was not accessed",
+      "decision": "partial_imported_and_reference_only",
+      "files": [
+        {
+          "path": "fpshq_model_top50_raw.json",
+          "version": "2026.11.12",
+          "sha256": "61ab76be08f835e43eda72c8f3e8c1a762cf2b055505b307cba1854235420edd",
+          "rows": 2400,
+          "measured_imported": 6,
+          "aggregate_reference": 728,
+          "model_excluded": 1666
+        },
+        {
+          "path": "fpshq_game_fps_medians_raw.json",
+          "version": "2026.10.14",
+          "sha256": "7fb5515ecf6172650d617db6ba8d85ad6986c51b7f83a8a378617f93e057327e",
+          "rows": 195,
+          "mode": "separate broad GPU-class reference, not exact CPU/GPU measured data"
+        }
+      ],
+      "notes": "FPSHQ explicitly distinguishes measured points, review aggregates, and model estimates. Only six measured rows are imported into the incomplete-measurement dataset; 195 game medians are exposed separately with attribution. No FPSHQ rows are treated as exact pair evidence or model calibration data."
     },
     {
       "name": "BenchPress Data",

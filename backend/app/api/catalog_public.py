@@ -101,13 +101,31 @@ def catalog_readiness(db: DBSession, response: Response):
     """Public catalogue availability, separate from /api/health."""
     from app.services.catalog_freshness import catalog_price_state
     response.headers['Cache-Control'] = 'no-store'
+    import os
+    from app.core.config import settings
+    bootstrap_enabled = os.getenv('REGARD_BOOTSTRAP_ON_START', 'false').strip().lower() in ('1', 'true', 'yes')
+    network_enabled = settings.regard_download_enabled
     access = db.get(CatalogAccess, 'regard')
     rights = validated_rights(access) if access else None
+    automatic_download_allowed = bool(rights and rights.automatic_download)
+    download_status = ('enabled' if bootstrap_enabled and network_enabled and automatic_download_allowed
+                       else 'bootstrap_disabled' if not bootstrap_enabled
+                       else 'network_disabled' if not network_enabled
+                       else 'permission_missing')
+    download = {'status': download_status, 'bootstrap_enabled': bootstrap_enabled,
+                'network_enabled': network_enabled,
+                'permission_granted': automatic_download_allowed,
+                'daily_scheduler_enabled': settings.regard_daily_sync_enabled}
+    if not access:
+        return {'source': 'regard', 'ready': False, 'status': 'not_imported',
+                'products': 0, 'usable_offers': 0, 'automatic_download': download}
     if not access or not access.public_enabled or access.fixture or not rights or not rights.public_display:
         return {'source': 'regard', 'ready': False, 'status': 'not_authorized',
-                'products': 0, 'usable_offers': 0}
+                'products': 0, 'usable_offers': 0, 'automatic_download': download}
     rows = db.execute(select(CatalogProduct, StoreOffer.id).outerjoin(StoreOffer, CatalogProduct.offer_id == StoreOffer.id).where(CatalogProduct.source == 'regard'))
+    from app.core.price_time import as_utc, iso_utc
     products = usable = 0
+    newest_price = None
     for row, offer_id in rows:
         try:
             payload = json.loads(row.payload)
@@ -116,10 +134,15 @@ def catalog_readiness(db: DBSession, response: Response):
         if payload.get('missing_from_feed'):
             continue
         products += 1
+        observed = as_utc(payload.get('source_updated_at'))
+        if observed is not None and (newest_price is None or observed > newest_price):
+            newest_price = observed
         if (offer_id and (payload.get('eligible') or payload.get('preliminary_eligible'))
                 and payload.get('availability') != 'out_of_stock'
                 and catalog_price_state(payload.get('source_updated_at'))['optimizer_eligibility']):
             usable += 1
     return {'source': 'regard', 'ready': usable > 0,
             'status': 'ready' if usable else 'empty_or_historical',
-            'products': products, 'usable_offers': usable}
+            'products': products, 'usable_offers': usable,
+            'latest_source_price_at': iso_utc(newest_price),
+            'automatic_download': download}

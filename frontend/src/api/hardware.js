@@ -1,9 +1,13 @@
 import { request } from './client'
 
-// Hidden calculator panels share the same request while it is in progress.
-// Responses are never cached: a later call still observes the current prices.
+// Selector records contain hardware attributes, not live prices. Reuse them
+// across calculator modes to avoid repeating the same large catalog request.
 let pending
-export function getHardware() {
-  if (!pending) pending = request('/api/hardware').finally(() => { pending = null })
-  return pending
+let cached
+let cachedAt = 0
+const CACHE_MS = 5 * 60 * 1000
+export function getHardware({refresh=false}={}) {
+  if (!refresh && cached && Date.now()-cachedAt < CACHE_MS) return Promise.resolve(cached)
+  if (!pending) pending = request('/api/hardware/selectors').finally(() => { pending = null })
+  return pending.then(data=>{cached=data;cachedAt=Date.now();return data})
 }

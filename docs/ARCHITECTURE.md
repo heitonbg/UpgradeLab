@@ -1,5 +1,11 @@
 # Текущая архитектура
 
+## FPS данные и пользовательские измерения — 2026-11-12
+
+`GET /api/benchmarks` отдаёт только собранные измеренные когорты. `GET /api/benchmarks/game-reference` отдельно читает лицензированный FPSHQ game medians JSON и не выдаёт их за конкретную CPU/GPU-связку. Пользовательские прогоны хранятся в SQLite `benchmark_submissions`: создаются как `pending`, доступны владельцу, ограничены пятью отправками в сутки; только email из `BENCHMARK_REVIEWER_EMAILS` может одобрить/отклонить их. Одобренные строки доступны через отдельный `/api/benchmarks/community` без смешения с publisher aggregates. Источники статических снапшотов входят в backend package; updater запускается вручную, на startup сетевых обращений нет.
+
+Автоподбор `objective=performance` использует GPU percentile как первый аппаратный proxy для игр, кроме CPU-зависимого CS2/1080p Low, где первым идёт CPU. `balanced` сохраняет ранжирование по слабейшему нормализованному измерению. Оба подхода остаются эвристиками; ни один не утверждает достижение FPS для полной сборки без измерения.
+
 Аудит кода 2026-11-09. Монолит FastAPI/SQLAlchemy/SQLite и React 18/Vite. Отдельные workers, Redis и Celery отсутствуют и для первой итерации не нужны.
 
 ## Основные потоки
@@ -180,3 +186,84 @@ SafeSession.get_to записывает ответ 200 в ограниченны
 Для `objective=performance` интерфейс и `/api/assemble` используют полный бюджет восьми деталей. CPU/GPU/RAM ранжируются по аппаратному bottleneck proxy; 1 ТБ/2 ТБ SSD выбирается среди совместимых предложений по цене за ГБ и полной стоимости. `target_reached=null` сохраняет границу между аппаратным выбором и неподтверждённым игровым FPS. Детали и ограничения: [GAMING_OPTIMIZER_V3.md](GAMING_OPTIMIZER_V3.md).
 
 Измерения проходят офлайн `benchmark_data` → `benchmark_aggregation` → `aggregates.json`. Сырые записи и ссылки на источники сохраняются. Агрегаты пока не включены в production FPS из-за недостатка независимых сопоставимых серий: [BENCHMARK_AGGREGATION.md](BENCHMARK_AGGREGATION.md).
+# Local hardware rankings and geography
+
+PassMark CPU/GPU benchmark tabs link to the original CPU Mark and G3D Mark tables; UpgradeLab does not republish those tables. PassMark states it does not license its data for public comparison, ranking, recommendation, or “can I run it” websites. Apple M CPU catalog records are excluded from selectors and calculated CPU lists.
+
+Пользовательский конфигуратор принимает вручную внесённые название, цену и HTTPS-ссылки на товар/изображение; он не запрашивает произвольные сайты. Новые share-ссылки сначала сохраняют неизменяемый публичный снимок в shared_configurations и копируют URL с непрозрачным идентификатором. Старые hash-ссылки продолжают читаться. Результаты автоматического подбора экспортируются в этот формат; ссылки на объявления биржи используют публичный id и открывают карточку в `/api/listings`. Ссылки, пользовательские цены и изображения не считаются проверенными ценами/совместимостью. Для автоматического извлечения данных нужен список разрешённых адаптеров и проверяемое соблюдение условий сайтов; не используем универсальный URL-fetch из браузерной формы.
+
+The offline city directory currently has 95 entries and is returned in full for an unfiltered `/api/cities` request. IDs are UpgradeLab-local identifiers. This is an expanded working directory, not a complete FIAS/official registry. Regard delivery mode permits discovery based on its published nationwide delivery service; no city-specific stock or shipping price is inferred. Unknown delivery cost keeps totals provisional.
+
+CPU-specific FPS ceilings in upgrade cards, RAM kit requirements, and expanded manufacturer-backed PSU/SSD/cooler profiles are documented in [COMPONENT_SELECTION_NOTES.md](COMPONENT_SELECTION_NOTES.md). An automatic or manual complete build now requires two RAM modules; an individual DIMM can form a priced pair only when current imported stock confirms quantity of at least two.
+
+## Конфигуратор и нагрузка интерфейса — 2026-11-13
+
+Навигация ведёт в один конфигуратор; режимы «Подбор ПК», «Апгрейд» и «Своя сборка» выбираются внутри него. Состояние режима хранится в query-параметре `scenario`, поэтому прямое открытие и история браузера восстанавливают тот же режим. Поиск предложений использует один `/api/offers/search` с явно выбранными источниками Regard и UpgradeLab; публичный просмотр объявлений остаётся отдельным экраном биржи.
+
+Игровые результаты читаются через `/api/benchmarks` с серверной фильтрацией игры, CPU, GPU, разрешения и серверной сортировкой до пагинации. Одобренные пользовательские измерения загружаются отдельно от перелистывания когорт; FPSHQ-сводки запрашиваются только по раскрытию блока. Справочник селекторов `/api/hardware/selectors` кешируется в памяти браузера на 5 минут, поскольку содержит только характеристики, не цены. Список объявлений загружается при открытии биржи, а не на каждой странице приложения. Это снижает повторные и крупные запросы, сохраняя ручные обновления списка.
+
+
+## Снимки, импорт пользовательских замеров и цель FPS — 2026-11-13
+
+POST /api/shared-builds требует аккаунт, сохраняет только публичный состав/пользовательские цены/расчётный FPS и возвращает случайный 128-битный id. Снимок дедуплицируется по владельцу и хешу. GET /api/shared-builds/{id} публичен, не раскрывает владельца и не пересчитывает цены. Собственный список и отзыв ссылки доступны отдельно; navigator.share больше не вызывается. Неподтверждённые цены и прогнозы не становятся магазинной сверкой. Для новых таблиц достаточно аддитивного create_all при старте; перед обновлением существующей /data SQLite оператор создаёт backup.
+
+POST /api/benchmarks/capture/preview и /capture/submit принимают ограниченный JSON-конверт с текстом CSV/JSON, именем для выбора формата и метаданными. Лимиты: файл 4 МиБ, запрос 8 МиБ, до 100000 кадров, минимум 100. Поддержаны UTF-8/BOM JSON CapFrameX с единственным Runs[0].CaptureData.MsBetweenPresents и CSV с явно названными интервалами кадров в мс; несколько процессов/swapchain и повреждённые интервалы отклоняются. Средний FPS — 1000/средний интервал; 1% Low — 1000/среднее самых медленных ceil(0.01*N) кадров, не P1. Неизвестные настройки остаются неизвестными. Сервер повторно считает метрики при отправке, хранит нормализованные frametime в закрытой таблице benchmark_captures; оригинальные пути/процессы не публикуются. Полный нормализованный захват доступен владельцу и модератору. Хеш последовательности защищает от повторной отправки; это не доказательство подлинности. Короткие захваты, почти постоянный frametime и большие паузы помечаются для проверки, не очищаются молча. Все результаты pending до существующей ручной модерации, в калибровку автоматически не попадают. Отдельные SQLite-квоты не зависят от очистки счётчиков входа: preview 20/час, разбор отправки 10/час, принятие 5/24 часа на аккаунт, HTTP 429/Retry-After.
+
+Новые запросы игрового интерфейса передают selection_policy=target_fps. Старые API-запросы без поля сохраняют hardware_proxy. Совместимая полная цена всех восьми категорий проверяется до ранжирования: при наличии вариантов с целевым прогнозом выбирается минимальная полная сумма, иначе лучший найденный FPS в бюджете. Баланс ограничений CPU/GPU используется при равной цене/прогнозе. Статические доли бюджета не отсекают компоненты этой политики. Память DDR4/DDR5 сохраняется при смене платформы, обязательны два модуля. Для недостижимой цели дополнительно рассматриваются только уже имеющиеся цены с лимитом расширенного бюджета 150%; найденная полная целевая сборка выше исходной суммы выдаётся отдельно как stretch_alternatives с доплатой. Она не подмешивается в обычные варианты. Глобальный минимум не доказан из-за shortlist и лимита времени; FPS остаётся старой некалиброванной моделью, target_reached по измерениям не устанавливается. У неполного плана свободный остаток больше не переводится целиком в резерв платы.
+
+
+### Автовыбор игровой платформы
+
+В целевом игровом режиме можно передать `socket=AUTO` и `ram_type=AUTO`; если пользователь задаёт DDR4/DDR5, набор автоматических сокетов сужается только до совместимых платформ. Backend рассматривает доступные полные комплекты AM4/DDR4, AM5/DDR5, LGA1700/DDR4 и LGA1700/DDR5, а также более старые совместимые варианты при малом бюджете. Альтернатива другой платформы содержит собственные CPU, плату и двухмодульный RAM kit; фиксированный CPU сохраняет прежнее ограничение сокета. Вариант без полной совместимой платформы не выдаётся как готовая сборка.
+
+## Curated benchmark storage and FPS candidate
+
+The checked-in measurements snapshot is the source of truth for licensed publisher runs. The additive benchmark_sources/benchmark_measurements tables preserve source URL, CC BY 4.0 attribution, snapshot SHA-256 manifest, series, settings and original record payload. CPU/GPU model keys are normalized with the existing hardware signature helper; reimport is idempotent and changed contents under an existing observation ID are rejected. User benchmark submissions and private captures stay in their separate moderation tables.
+
+The FPS v2 candidate runs beside the existing legacy calculation. It can show a measured exact-pair reference or interpolate frame time between measured resolutions for the same pair and settings. It does not extrapolate to other CPUs/GPUs and has not been promoted. BENCHMARK_IMPORT_ON_START=true enables an idempotent import of the local curated snapshot at startup; default local configuration leaves it off. GET /api/benchmarks/dataset-info reports import counts and GET /api/benchmarks/measurements exposes paginated source records.
+
+### Универсальная маршрутизация FPS Engine v4
+
+`game_catalog.catalog()` отделяет возможность выбрать игру от наличия опоры FPS. `/api/games/coverage` сообщает метаданные каталога и покрытие нативными измерениями. `/api/fps/predict` сохраняет прежний baseline и отдельно возвращает `candidate_v4`. Тот же resolver подключён к Builder и Upgrader. Точные опубликованные измерения приоритетны, профили прежней модели помечаются отдельно, а при отсутствии любой опоры FPS не выводится. При нехватке данных Builder ранжирует комплектующие по отдельным процентилям CPU/GPU и не обещает достижение FPS. RAM исключена из входных данных модели.
+
+Закреплённый PCGameBenchmarks snapshot содержит Steam AppID для 15 439 сопоставленных игр, 15 865 полей minimum CPU и 7 433 поля recommended CPU в 16 441 внешнем профиле. С текущим локальным Hardware-каталогом хотя бы одно CPU-требование разрешено для 4 771 игр, оба — для 2 864; CPU Mark используется только как низкоуверенный индекс соответствия требованиям. Пакет также несёт 197 292 внешние GPU-only оценки. Эти метаданные не являются CPU/GPU измерениями. Строгие нативные данные по-прежнему содержат четыре наблюдения одной игры, одной связки CPU/GPU и одной серии; системный FPS переносить на другие компоненты нельзя. API покрытия разделяет эти типы данных.
+
+### FPS Engine v4: внешний GPU-ориентир
+
+Порядок для полного FPS: точные парные измерения/допустимая интерполяция, затем явно обозначенный legacy-профиль. Для остальных игр candidate_v4 может содержать отдельное gpu_oriented_fps из PCGameBenchmarks, если совпали 1080p High native настройки, класс GPU и диапазон G3D. Такое значение никогда не заполняет average_fps, one_percent_low, CPU bottleneck или прирост всей системы. RAM не является коэффициентом. Полный provenance и условия отказа: [PCGAMEBENCHMARKS_IMPORT.md](PCGAMEBENCHMARKS_IMPORT.md).
+
+
+### FPS Engine v4 — evidence boundaries (2026-11-15)
+
+`resolve_fps_v4` is the shared evidence resolver for FPS prediction, Builder, and Upgrader. Its precedence is licensed pair measurement, explicitly labeled legacy system estimate, then explicitly labeled PCGameBenchmarks GPU-only estimate. The external model uses a per-game 1080p High native GPU score curve; it does not infer CPU FPS, whole-system FPS, 1% Low, RAM uplift, or other settings. Unknown, virtualized, mobile/workstation without a class-specific curve, source conflicts, and scores outside the bounded reference range abstain.
+
+The pair measurement evaluator can receive a filtered training-row set so validation can withhold a target resolution before calling the v4 resolver. No production request supplies that override. CPU frame-time values and bottleneck remain null until fixed-GPU CPU-comparison series and calibrated workload anchors exist.
+
+## Adaptive FPS public result
+
+`app.services.adaptive_fps` wraps the existing resolver for FPS API, Builder and Upgrader. It emits one result kind under `fps_result`: measured system result, model estimate, GPU-only orientation, or unavailable. Older engine-specific fields remain as API compatibility details; the frontend uses the unified result.
+
+Evidence order: matching licensed pair measurement, same-pair/same-conditions resolution interpolation, labeled legacy profile, then separately labeled GPU-only model. Unsupported classes/settings abstain. The resolver only supplies 1% Low from direct measurement and only supplies a limiting component when calibrated evidence explicitly allows it. Upgrade deltas require comparable evidence on both sides. RAM is retained as a test-context filter and never enters FPS math.
+
+### Numeric FPS evidence fallback — 2026-11-15
+
+The API also exposes `best_available_fps`/`best_available_fps_basis` so supported CPU/GPU selections receive the strongest numeric reference available. `average_fps` remains reserved for full-system measurements or model estimates; GPU-only references use `gpu_oriented_fps` and keep their source settings. The fallback tiers are pair measurement/interpolation, legacy model, same-settings FPSHQ, per-title PCGameBenchmarks, nearest per-title GPU anchor, then a cross-game catalog median. Only full-system evidence can establish system FPS or target attainment; title and catalog GPU references never establish CPU impact. The broad median fallback is based on different games, and its population percentiles are not a prediction interval.
+
+The experimental requirements-anchored scenario is an additional field. It may compare selected PassMark CPU/GPU marks with exact recommended or minimum requirement models, but remains separate from `average_fps` and target attainment. It is not calibrated. For absent/unusable hardware evidence, `best_available_fps` can remain null.
+
+
+### Universal estimate chain (2026-11-16)
+
+The public adaptive FPS entrypoint preserves measured pair/interpolated/legacy system results. Remaining GPU-only results feed an explicit system fallback: existing requirements-anchored scenario where resolvable, otherwise the median ceiling of existing game CPU curves. GPU resolution transfer uses inverse pixel workload from source resolution. A missing per-game curve uses the existing catalog population prior. API metadata retains the method and very_low confidence; these are uncalibrated estimates, never imported measurements. RAM does not enter the formula. /api/fps/predict, builder result presentation and catalog-game upgrader share the entrypoint. Universal builder candidate FPS also feeds selection for games without a retained legacy profile.
+
+Regard network bootstrap can authorize from a validated local operator rights file before any product has been imported. It still requires SOURCE_PERMISSIONS and the exact allowed HTTPS endpoint. Failure to import an old local XLSX no longer prevents fetching a new XLSX. The replacement is applied only after successful transactional import.
+
+
+## Steam requirements — 16.11.2026
+
+Реализованы SQLite-кеш, durable очередь, отдельный HTTPX worker и интеграция с FPS Engine без LLM/Chromium. На Amvera включается STEAM_WORKER_ENABLED=true (автоматически при AMVERA=1). Проверки и ограничения: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md). Остаётся проверка Linux lifecycle и точности прогнозов на независимых измерениях; deployment не выполнялся.
+
+
+### Steam lifecycle hardening, 16.11.2026
+
+Один Uvicorn --workers 1, supervised дочерний worker, общий явный DATABASE_URL /data, restart check 15 s, idle queue 10 s. Новые SQLite используют DELETE/FULL вместо принудительного WAL. Реальные browser E2E и Windows crash/restart пройдены. Linux/container и фактический storage Amvera не проверены из-за отсутствия Docker/WSL; подготовлен scripts.steam_linux_smoke. Подробности, RAM и команды: [STEAM_REQUIREMENTS.md](STEAM_REQUIREMENTS.md), steam_amvera_validation.json.

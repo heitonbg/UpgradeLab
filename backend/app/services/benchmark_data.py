@@ -155,6 +155,32 @@ def import_techfuel(archive):
             result.append(value.model_dump())
     return result
 
+
+def import_fpshq_measured(archive):
+    """Import only FPSHQ points explicitly marked measured, with unknowns intact."""
+    meta = archive.get('meta', {})
+    if meta.get('license') != 'CC BY 4.0' or meta.get('url') != 'https://fpshq.com/en/data/fps-model-top50/':
+        raise ValueError('Unapproved FPSHQ provenance or license')
+    result = []
+    for index, row in enumerate(archive['rows']):
+        if row.get('source') != 'measured':
+            continue
+        source_id = ':'.join(str(row[key]) for key in ('game_slug', 'gpu_slug', 'resolution', 'preset'))
+        result.append(Observation(
+            id='fpshq:' + source_id, game=row['game'], cpu=None, gpu=row['gpu'],
+            resolution=row['resolution'], preset=row['preset'].title(),
+            average_fps=row['fps'], one_percent_low=row.get('low1'),
+            data_type='measured', record_kind='summary', publisher='FPSHQ',
+            source_url=meta['url'], source_ids=[source_id], license='CC-BY-4.0',
+            attribution='FPSHQ — https://fpshq.com/en/data/fps-model-top50/',
+            series_id='fpshq:top50:' + str(meta['version']),
+            proof_level='source-labeled measured; original test run not linked',
+            notes=['CPU, RAM, game version, scene, RT, upscaling, frame generation and capture date are not published for this point.',
+                   'Published per-game/GPU summary, not an independent raw run; excluded from configuration calibration.',
+                   'FPSHQ configuration page: ' + row['url']],
+        ).model_dump())
+    return result
+
 def complete_settings(row):
     keys=('game_version','cpu','gpu','ram_gb','vram_gb','resolution','preset','rt','upscaling','frame_generation','scene','os')
     return all(row.get(k) is not None and row.get(k)!='' for k in keys)
@@ -187,5 +213,9 @@ def build_dataset(open_gpu_path=None,techfuel_path=None):
         sources.append({'publisher':'Open GPU Benchmarks','file':path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
     all_rows.extend(import_techfuel(json.loads(techfuel.read_text(encoding='utf-8'))))
     sources.append({'publisher':'TechFuelHQ','file':techfuel.name,'sha256':hashlib.sha256(techfuel.read_bytes()).hexdigest()})
+    fpshq=DIRECTORY/'fpshq_model_top50_raw.json'
+    if fpshq.exists():
+        all_rows.extend(import_fpshq_measured(json.loads(fpshq.read_text(encoding='utf-8'))))
+        sources.append({'publisher':'FPSHQ','file':fpshq.name,'sha256':hashlib.sha256(fpshq.read_bytes()).hexdigest()})
     rows,duplicates=deduplicate(all_rows)
     return {'schema_version':1,'sources':sources,'rows':rows,'quality':quality_report(rows,duplicates,excluded)}

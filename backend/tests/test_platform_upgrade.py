@@ -42,6 +42,34 @@ class PlatformUpgradeTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
+    def test_platform_sale_pays_for_package_without_increasing_single_component_budget(self):
+        payload={**self.payload,'budget':5000,'expected_platform_sale_price':5000}
+        result=post_calculate(CalculateRequest(**payload),self.db)
+        self.assertTrue(any(item.get('kind')=='platform' and item['selection_allowed'] for item in result.alternatives))
+        self.assertEqual(result.upgrade_kind,'platform')
+        self.assertEqual(result.total_budget,10000)
+        self.assertEqual(result.current_component_price,5000)
+
+    def test_platform_sale_preserves_unlimited_budget(self):
+        result=post_calculate(CalculateRequest(**{**self.payload,'budget':None,'sell_mode':'budget_plus_sell','expected_platform_sale_price':1000}),self.db)
+        self.assertTrue(any(item.get('kind')=='platform' and item['selection_allowed'] for item in result.alternatives))
+
+    def test_universal_game_can_select_complete_platform_with_package_sale(self):
+        from unittest.mock import patch
+        def predict(cpu, gpu, game, settings, **kwargs):
+            return {'average_fps':40 if cpu.id==1 else 100,'limiting_component':'CPU',
+                    'technical_details':{},'result_type':'estimated_system_fps','model_version':'test'}
+        payload={**self.payload,'game':'Platform fixture game','budget':5000,'expected_platform_sale_price':5000}
+        with patch('app.services.adaptive_fps.predict_adaptive_fps',side_effect=predict):
+            result=post_calculate(CalculateRequest(**payload),self.db)
+            package=next(item for item in result.alternatives if item.get('kind')=='platform')
+            selected=post_calculate(CalculateRequest(**payload,selected_platform=package['platform_selection']),self.db)
+        self.assertEqual(selected.upgrade_kind,'platform')
+        self.assertEqual(selected.avg_price,10000)
+        self.assertEqual(selected.total_budget,10000)
+        self.assertEqual(len(selected.upgrade_parts),4)
+        self.assertEqual(selected.fps_result['after']['average_fps'],100)
+
     def test_tiny_fx_sidegrade_is_rejected_and_old_cpu_is_not_boosted_by_curve(self):
         self.db.query(StoreOffer).delete()
         self.db.query(HardwarePrice).delete()
@@ -118,7 +146,7 @@ class PlatformUpgradeTests(unittest.TestCase):
         cooler=next(part for part in result.upgrade_parts if part['type']=='cooler')
         self.assertEqual(cooler['price'],1000)
 
-    def test_automatic_fx_resale_matches_unlinked_ads_and_makes_platform_affordable(self):
+    def test_avito_ads_do_not_inflate_fx_resale_budget(self):
         for ident,price,name in ((20,500,'Процессор AMD FX-6100 AM3+'),
                                  (21,600,'AMD FX 6100'),(22,700,'AMD FX6100 Six-Core')):
             self.db.add(StoreOffer(id=ident,source='avito',category='CPU',name=name,price_rub=price,
@@ -128,13 +156,10 @@ class PlatformUpgradeTests(unittest.TestCase):
             url='https://www.avito.ru/item_23',condition='used',observed_at=datetime.utcnow(),origin='public_page',attributes='{}'))
         self.db.commit()
         result=post_calculate(CalculateRequest(**{**self.payload,'budget':9500,'sell_mode':'budget_plus_sell'}),self.db)
-        self.assertEqual(result.resale_status,'estimated')
-        self.assertEqual(result.current_component_price,600)
-        self.assertEqual(result.resale_price['sample_count'],3)
-        self.assertEqual(result.total_budget,10100)
-        self.assertEqual(result.upgrade_kind,'platform')
-        self.assertTrue(result.within_budget)
-        self.assertEqual(result.net_upgrade_cost,9400)
+        self.assertEqual(result.resale_status,'unavailable')
+        self.assertEqual(result.current_component_price,0)
+        self.assertEqual(result.total_budget,9500)
+        self.assertFalse(result.within_budget)
 
     def test_missing_automatic_resale_is_unknown_not_zero_or_over_budget_verdict(self):
         result=post_calculate(CalculateRequest(**{**self.payload,'budget':8000,'sell_mode':'budget_plus_sell'}),self.db)
@@ -168,9 +193,8 @@ class PlatformUpgradeTests(unittest.TestCase):
                 origin='public_page',attributes='{}',hardware_id=None))
         self.db.commit()
         result=post_calculate(CalculateRequest(**{**self.payload,'sell_mode':'budget_plus_sell'}),self.db)
-        self.assertEqual(result.resale_status,'estimated')
-        self.assertEqual(result.current_component_price,200)
-        self.assertEqual(result.resale_price['sample_count'],3)
+        self.assertEqual(result.resale_status,'unavailable')
+        self.assertEqual(result.current_component_price,0)
 
     def test_one_fx_listing_is_enough_for_automatic_resale_and_is_not_an_average(self):
         self.db.add(StoreOffer(id=20,source='avito',category='CPU',name='Процессор AMD FX6100',price_rub=600,
@@ -178,12 +202,9 @@ class PlatformUpgradeTests(unittest.TestCase):
             origin='public_page',attributes='{}',hardware_id=None))
         self.db.commit()
         result=post_calculate(CalculateRequest(**{**self.payload,'budget':9500,'sell_mode':'budget_plus_sell'}),self.db)
-        self.assertEqual(result.current_component_price,600)
-        self.assertEqual(result.total_budget,10100)
-        self.assertEqual(result.resale_price['average_method'],'one_offer')
-        self.assertEqual(result.resale_price['sample_count'],1)
-        self.assertEqual(result.resale_price['price_url'],'https://www.avito.ru/item_12345678')
-        self.assertTrue(result.within_budget)
+        self.assertEqual(result.current_component_price,0)
+        self.assertEqual(result.total_budget,9500)
+        self.assertEqual(result.resale_status,'unavailable')
 
     def test_failed_avito_search_tries_compact_model_discovery_and_reads_a_real_offer(self):
         import time

@@ -1,0 +1,269 @@
+{
+  "hardware_catalog": {
+    "cpu_count": 1434,
+    "gpu_count": 785,
+    "database_open_mode": "read-only"
+  },
+  "gpu_coverage": {
+    "comparison_game": "CS2",
+    "supported_before_old_classifier": 328,
+    "supported_after_safe_crosswalk": 193,
+    "coverage_change_from_old_count": -135,
+    "reason_counts_before": {
+      "supported": 328,
+      "unsupported_device_class": 5,
+      "below_safe_reference_range": 452
+    },
+    "reason_counts_after": {
+      "supported": 193,
+      "no_workstation_reference_curve": 76,
+      "virtualized_gpu_has_no_matching_reference_curve": 61,
+      "no_separate_mobile_reference_curve": 4,
+      "gpu_device_class_is_unknown": 45,
+      "non_rendering_display_adapter": 39,
+      "above_safe_reference_range": 1,
+      "exact_source_gpu_device_type_conflicts_with_target_name": 54,
+      "below_safe_reference_range": 312
+    },
+    "old_supported_but_now_abstained_reasons": {
+      "no_workstation_reference_curve": 64,
+      "virtualized_gpu_has_no_matching_reference_curve": 31,
+      "gpu_device_class_is_unknown": 6,
+      "non_rendering_display_adapter": 19,
+      "above_safe_reference_range": 1,
+      "exact_source_gpu_device_type_conflicts_with_target_name": 18,
+      "below_safe_reference_range": 1
+    },
+    "classified_device_counts": {
+      "desktop": 452,
+      "workstation": 76,
+      "virtualized": 61,
+      "mobile": 4,
+      "unknown": 72,
+      "non_rendering": 39,
+      "integrated": 81
+    },
+    "supported_by_device_class": {
+      "desktop": 174,
+      "unknown": 9,
+      "integrated": 10
+    },
+    "source_crosswalk_counts": {
+      "exact_source_model_and_device_type": 308,
+      "source_device_type_unknown": 37,
+      "no_exact_source_model": 347,
+      "source_device_type_conflict": 91,
+      "ambiguous_source_model": 2
+    },
+    "exact_source_score_matches": 308,
+    "inferred_exact_source_device_type_matches_used": 27,
+    "newly_supported_count": 5,
+    "newly_supported_examples": [
+      {
+        "id": 1769,
+        "name": "Qualcomm Adreno X2-45 GPU",
+        "fps": 67,
+        "method": "piecewise_log_score_interpolation",
+        "gpu_match": {
+          "status": "no_exact_source_model",
+          "source_gpu_name": null,
+          "source_device_type": null,
+          "source_url": null
+        },
+        "score_source": {
+          "source": "UpgradeLab Hardware.raw_score",
+          "metric": "PassMark G3D Mark",
+          "crosswalk": "no_exact_source_model"
+        }
+      },
+      {
+        "id": 1825,
+        "name": "Radeon RX Vega 10 Ryzen 3 3200G",
+        "fps": 52,
+        "method": "bounded_log_extrapolation",
+        "gpu_match": {
+          "status": "no_exact_source_model",
+          "source_gpu_name": null,
+          "source_device_type": null,
+          "source_url": null
+        },
+        "score_source": {
+          "source": "UpgradeLab Hardware.raw_score",
+          "metric": "PassMark G3D Mark",
+          "crosswalk": "no_exact_source_model"
+        }
+      },
+      {
+        "id": 1849,
+        "name": "Radeon Ryzen 9 3950H Edition",
+        "fps": 45,
+        "method": "bounded_log_extrapolation",
+        "gpu_match": {
+          "status": "no_exact_source_model",
+          "source_gpu_name": null,
+          "source_device_type": null,
+          "source_url": null
+        },
+        "score_source": {
+          "source": "UpgradeLab Hardware.raw_score",
+          "metric": "PassMark G3D Mark",
+          "crosswalk": "no_exact_source_model"
+        }
+      },
+      {
+        "id": 1852,
+        "name": "Radeon Ryzen 5 4650U Mobile",
+        "fps": 45,
+        "method": "bounded_log_extrapolation",
+        "gpu_match": {
+          "status": "no_exact_source_model",
+          "source_gpu_name": null,
+          "source_device_type": null,
+          "source_url": null
+        },
+        "score_source": {
+          "source": "UpgradeLab Hardware.raw_score",
+          "metric": "PassMark G3D Mark",
+          "crosswalk": "no_exact_source_model"
+        }
+      },
+      {
+        "id": 1914,
+        "name": "Radeon RX Vega Ryzen 5 5600H",
+        "fps": 33,
+        "method": "bounded_log_extrapolation",
+        "gpu_match": {
+          "status": "no_exact_source_model",
+          "source_gpu_name": null,
+          "source_device_type": null,
+          "source_url": null
+        },
+        "score_source": {
+          "source": "UpgradeLab Hardware.raw_score",
+          "metric": "PassMark G3D Mark",
+          "crosswalk": "no_exact_source_model"
+        }
+      }
+    ],
+    "no_longer_supported_examples": [
+      {
+        "id": 1437,
+        "name": "RTX PRO 6000 Blackwell Workstation Edition",
+        "reason": "no_workstation_reference_curve",
+        "device_class": "workstation"
+      },
+      {
+        "id": 1442,
+        "name": "RTX PRO 4500 Blackwell",
+        "reason": "no_workstation_reference_curve",
+        "device_class": "workstation"
+      },
+      {
+        "id": 1443,
+        "name": "nVidia L40-48Q",
+        "reason": "virtualized_gpu_has_no_matching_reference_curve",
+        "device_class": "virtualized"
+      },
+      {
+        "id": 1444,
+        "name": "nVidia L40-4Q",
+        "reason": "virtualized_gpu_has_no_matching_reference_curve",
+        "device_class": "virtualized"
+      },
+      {
+        "id": 1447,
+        "name": "RTX PRO 5000 Blackwell",
+        "reason": "no_workstation_reference_curve",
+        "device_class": "workstation"
+      }
+    ],
+    "elapsed_seconds": 0.043,
+    "interpretation": "Счёт охвата относится к GPU с достаточным сопоставимым G3D баллом для одной эталонной игровой кривой, а не к количеству подтверждённых FPS всей системы."
+  },
+  "cpu_requirements": {
+    "source_parse_coverage": {
+      "games": 16441,
+      "minimum_cpu_requirements": 15865,
+      "recommended_cpu_requirements": 7433,
+      "explicit_model_requirement_fields": 7763,
+      "family_requirement_fields": 3291,
+      "abstract_or_unparsed_requirement_fields": 12244
+    },
+    "exactly_resolved_requirement_fields": 7202,
+    "partially_resolved_requirement_fields": 200,
+    "family_or_abstract_unresolved_fields": 15663,
+    "unique_exact_cpu_models_referenced": 361,
+    "unique_generation_family_cpu_models_referenced": 349,
+    "resolved_game_coverage_against_local_catalog": {
+      "games_with_cpu_requirements": 15890,
+      "games_with_minimum_requirement_reference": 4243,
+      "games_with_recommended_requirement_reference": 3392,
+      "games_with_any_requirement_reference": 4771,
+      "games_with_both_requirement_references": 2864,
+      "minimum_fields_resolved_exact_or_partial": 4112,
+      "recommended_fields_resolved_exact_or_partial": 3290,
+      "minimum_fields_resolved_by_generation_range": 131,
+      "recommended_fields_resolved_by_generation_range": 102,
+      "minimum_fields_unresolved": 11622,
+      "recommended_fields_unresolved": 4041
+    },
+    "resolver_status_counts": {
+      "resolved_exact_models": 7202,
+      "abstract_requirement": 10104,
+      "unresolved_family": 3058,
+      "unmatched": 361,
+      "partially_resolved": 200,
+      "unrecognized_requirement": 2140,
+      "resolved_family_range": 233
+    },
+    "sample_adequacy": [
+      {
+        "game": "Cyberpunk 2077",
+        "cpu": "AMD Ryzen 5 5600",
+        "cpu_mark": 21488,
+        "status": "between_minimum_and_recommended_ranges",
+        "minimum_index": 212.0,
+        "recommended_index": 62.1
+      },
+      {
+        "game": "Cyberpunk 2077",
+        "cpu": "Intel Core i5-12400F",
+        "cpu_mark": 19680,
+        "status": "between_minimum_and_recommended_ranges",
+        "minimum_index": 194.1,
+        "recommended_index": 56.9
+      },
+      {
+        "game": "Cyberpunk 2077",
+        "cpu": "AMD Ryzen 7 7800X3D",
+        "cpu_mark": 39419,
+        "status": "at_or_above_recommended_reference_range",
+        "minimum_index": 388.9,
+        "recommended_index": 114.0
+      }
+    ],
+    "interpretation": "Adequacy сравнивает суммарный PassMark CPU Mark моделей из системных требований; это не Single Thread, FPS или CPU bottleneck."
+  },
+  "all_game_batch": {
+    "external_profiles": 16441,
+    "gpu_test_target": "GeForce RTX 3060",
+    "status_counts": {
+      "reference_curve_12_of_12": 16441,
+      "numeric_gpu_oriented_estimate": 16441
+    },
+    "elapsed_seconds": 0.432,
+    "interpretation": "Проверяет пакетно существующий GPU-ориентир для 1080p High по одной GPU каталога; не является 16k независимыми игровыми тестами и не оценивает FPS всей системы."
+  },
+  "source": {
+    "url": "https://github.com/emilioagustin83/pc-game-fps-dataset",
+    "revision": "299e6f38ed48eda91235bbc451096f5e6fd62910",
+    "gpu_rows": 1381,
+    "gpu_type_counts": {
+      "Desktop": 433,
+      "Unknown": 593,
+      "Workstation": 14,
+      "Mobile": 338,
+      "Desktop, Mobile": 3
+    }
+  }
+}

@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from app.schemas.offers import Source
 
 class GameName(str, Enum):
@@ -28,6 +28,7 @@ class CalcMode(str, Enum):
     MODE_1080P_LOW = "1080p_low"
     MODE_1080P_HIGH = "1080p_high"
     MODE_1440P_HIGH = "1440p_high"
+    MODE_4K_HIGH = "4k_high"
 
 class AIOption(str, Enum):
     OFF = "off"
@@ -58,8 +59,18 @@ class CalculateRequest(GeoQuery):
     gpu_id: int = Field(gt=0)
     ram_id: int | None = Field(default=None, gt=0)
     ram_manual: RamManual | None = None
-    game: GameName
+    game: GameName | str
     mode: CalcMode
+
+    @field_validator('game', mode='before')
+    @classmethod
+    def normalize_known_game(cls, value):
+        if isinstance(value, GameName):
+            return value
+        try:
+            return GameName(str(value).strip())
+        except ValueError:
+            return str(value).strip()
     budget: int | None = Field(default=None, ge=0)
     ai_mode: AIOption = Field(default=AIOption.OFF)
     sell_mode: str = Field(default="budget_only", pattern="^(budget_only|budget_plus_sell)$")
@@ -69,12 +80,14 @@ class CalculateRequest(GeoQuery):
     selected_upgrade_id: int | None = Field(default=None, gt=0)
     price_lookup_id: int | None = Field(default=None, gt=0)
     expected_sale_price: int | None = Field(default=None, ge=0, le=10000000)
+    expected_platform_sale_price: int | None = Field(default=None, ge=0, le=10000000)
+    expected_platform_sale_price: int | None = Field(default=None, ge=0, le=10000000)
     selected_platform: PlatformUpgradeSelection | None = None
 
 class CalculateResponse(BaseModel):
-    bottleneck: Bottleneck
-    current_fps: int
-    upgraded_fps: int
+    bottleneck: Bottleneck | None = None
+    current_fps: int | None = None
+    upgraded_fps: int | None = None
     recommendation: str
     avg_price: int
     within_budget: bool = False
@@ -88,9 +101,13 @@ class CalculateResponse(BaseModel):
     upgrade_name: str | None = None
     upgrade_id: int | None = None
     target_fps: int = 60
-    target_reached: bool = False
+    target_reached: bool | None = False
     current_fps_outlook: dict | None = None
     upgraded_fps_outlook: dict | None = None
+    fps_v2_evidence: dict | None = None
+    fps_v3_evidence: dict | None = None
+    fps_v4_evidence: dict | None = None
+    fps_result: dict | None = None
     compatibility_notes: list[str] = Field(default_factory=list)
     alternatives: list[dict] = Field(default_factory=list)
     limiting_explanation: str | None = None
